@@ -31,4 +31,5 @@ and environment error. TestOps currently has **no tests** and `pytest` was insta
 side effect of this scaffolding. A reviewer asked to judge T3 against acceptance criteria with no
 suite in the repo can only read the diff and take the builder's word for it — which is the
 arrangement the factory exists to replace.
-| TESTOPS-10 | Classification coverage: 51% of the real corpus is `unplaced` | F1 | ready | **Resequenced ahead of the UI** — measured on run `cotw-levels-20261121T215534`: 48 of 94 assertions unclassified |
+| TESTOPS-10 | Classification coverage: 51% of the real corpus is `unplaced` | F1 | done | 48 → 0 unplaced, gaps unchanged; PR #4 merged after a PASS review |
+| TESTOPS-11 | Restraint: a claim is not `distinct` because one of its words is familiar | F1 | ready | Reviewer found "that count is correct for the store it was run against" promoted to `distinct` on the word "store" — the ticket's own example of genuine ambiguity |
