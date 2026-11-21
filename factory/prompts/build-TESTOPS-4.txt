@@ -1,0 +1,42 @@
+You are the builder on the TestOps factory. Implement TESTOPS-4 exactly.
+
+Read, in this order:
+  1. C:/Users/Chester/Projects/testops/factory/tickets/TESTOPS-4.md
+  2. C:/Users/Chester/Projects/testops/AGENTS.md
+  3. C:/Users/Chester/Projects/testops/factory/reports/2026-11-21/TESTOPS-3-review.md
+
+Repository: C:/Users/Chester/Projects/testops  (branch factory/testops-4-per-assertion)
+Python:     C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Suite:      53 tests must still pass; add tests for AC1..AC8.
+
+CONTEXT YOU NEED
+The Product Owner reviewed a case page and could not understand a single claim. The sentence
+"I4 claim needs a browser to be established; the suite asserts it over api" means nothing to his
+team. Two claims in one scenario were grouped into one "case" whose decision button would have
+silenced both. THIS TICKET IS THE FIX. Write the statement as though the reader has never heard of
+TestOps and will make a decision from it in thirty seconds.
+
+HARD CONSTRAINTS
+- Classification must follow the asserting step's text. The scenario title may be context; if it
+  disagrees with the step, the step wins. AC3 tests both directions — a title that lies must not
+  change the verdict.
+- No shorthand in reader-facing text. `I4`, `KP` and friends are for debugging and belong in
+  `interaction_code`.
+- Do not touch testops/web/. Do not alter v1 claims already in a store.
+- Every claim needs a proposed action that names the specific step or interaction to change. "Review
+  this test" is not an action.
+- Prove each criterion with a test that fails when the mechanism is removed. Report any mutation you
+  tried that was NOT caught, rather than deleting it quietly.
+
+VERIFY BEFORE REPORTING
+    env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
+      .venv/Scripts/python.exe -m pytest -q
+
+REPORT BACK with these headings:
+- What was built: files, one line each.
+- A worked example: take a scenario with three asserting steps, print the three statements and the
+  three proposed actions verbatim. The Lead will read these as the Product Owner would.
+- Criterion by criterion: AC1..AC9 with test names, or NOT SATISFIED and why.
+- Exact numbers: collected / passed / failed, wall time.
+- What you could not satisfy, and what you were tempted to do but did not.
+- Product problems noticed but not fixed.

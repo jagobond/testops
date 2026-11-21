@@ -2,7 +2,7 @@
 id: TESTOPS-3
 title: Claim schema v2 — one claim per assertion, with provenance and blind spots
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-2
 ---
