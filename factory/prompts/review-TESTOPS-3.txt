@@ -1,0 +1,33 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-3 against its acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-3-schema-v2`, tree clean.
+Ticket:     factory/tickets/TESTOPS-3.md
+Diff:       git diff feature/f1..HEAD
+Rules:      AGENTS.md
+Predecessor:factory/reports/2026-11-21/TESTOPS-2-review.md
+
+HARD RULES
+- Run the suite yourself:
+    env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
+      .venv/Scripts/python.exe -m pytest -q
+- Attack the two claims that matter most, independently of the builder's own tests:
+   1. AC4 — prove the refusal comes from the DATABASE, not from Python. Attempt a raw INSERT of a
+      v2 claim with NULL provenance on a store you built yourself.
+   2. AC3 / AC8 — build a store from the pre-v2 schema (git show feature/f1:testops/store/schema.sql),
+      put a claim in it, open it with the new code, and check the old claim is unchanged. Then set the
+      recorded schema_version above what the code knows and confirm the open fails without modifying
+      the file.
+  Say what you actually observed, including any probe of yours that was wrong.
+- Do not edit product code, tests or the ticket. You may write exactly one file:
+  factory/reports/2026-11-21/TESTOPS-3-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC9: HOLDS / WEAK / NOT MET, with evidence for each.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 400 words.
+
+ANTI-REPETITION: if you catch yourself restating a point, stop. Short and honest beats long.
+Never repeat a sentence verbatim.
