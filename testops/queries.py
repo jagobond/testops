@@ -19,6 +19,58 @@ def _json(s, default=None):
         return default if default is not None else {}
 
 
+# The four fields that answer "where is this asserted?". A claim is unverifiable without them, so
+# every read model carries them together and a v1 claim carries them as None - not as "" and not as 0.
+PROVENANCE_FIELDS = ("assertion_text", "assertion_path", "assertion_line", "assertion_commit")
+
+
+def _list_or_none(text: str | None, field: str):
+    """Decode a JSON list, keeping NULL and [] distinct.
+
+    NULL means "nothing was recorded"; [] means "nothing was missing". Coercing either into the other
+    turns absence into a result, which is the one thing this store may never do.
+    """
+    if text is None:
+        return None
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"claim.{field} holds unparseable JSON: {text!r}") from exc
+    if not isinstance(value, list):
+        raise ValueError(f"claim.{field} should hold a JSON list, found {value!r}")
+    return value
+
+
+def claim_view(row) -> dict:
+    """One claim as a screen sees it: statement, provenance and blind spots, always together.
+
+    The only constructor of a claim read model - callers never assemble these keys themselves, so no
+    page can render a claim that is missing the coordinates its reader needs to check it.
+    """
+    _, _, scenario = row["subject_ref"].partition("#")
+    return {
+        "id": row["id"],
+        "schema_version": row["schema_version"],
+        "verdict": row["verdict"],
+        "statement": row["statement"],
+        "confidence": row["confidence"],
+        "subject": row["subject_ref"],
+        "scenario": scenario,
+        "provenance": {field: row[field] for field in PROVENANCE_FIELDS},
+        "sources_missing": _list_or_none(row["sources_missing"], "sources_missing"),
+        "span": _list_or_none(row["span"], "span"),
+        "interaction_label": row["interaction_label"],
+        "interaction_code": row["interaction_code"],
+        "established_by": row["established_by"],
+        "proposed_action": row["proposed_action"],
+    }
+
+
+def claim_read(conn, claim_id: int) -> dict | None:
+    row = conn.execute("SELECT * FROM claim WHERE id = ?", (claim_id,)).fetchone()
+    return claim_view(row) if row else None
+
+
 def case_row(conn, case_id: str) -> dict | None:
     r = conn.execute("""SELECT c.*, r.status AS run_status, r.finished_at, s.artefact_versions
                         FROM case_ c LEFT JOIN run r ON r.id = c.run_id
@@ -45,12 +97,10 @@ def finding_rows(conn, case_id: str) -> list[dict]:
                                (cid,)).fetchone()
             detail = _json(inf["output"]) if inf else {}
             evidence = evidence_for_subject(conn, c["subject_ref"])
-            feature, _, scenario = c["subject_ref"].partition("#")
-            claims.append({"id": c["id"], "verdict": c["verdict"], "statement": c["statement"],
-                           "confidence": c["confidence"], "scenario": scenario,
-                           "subject": c["subject_ref"],
-                           "used_model": bool(detail.get("model") and detail.get("model") != "none"),
-                           "detail": detail, "evidence": evidence})
+            claim = claim_view(c)
+            claim.update({"used_model": bool(detail.get("model") and detail.get("model") != "none"),
+                          "detail": detail, "evidence": evidence})
+            claims.append(claim)
         out.append({"id": f["id"], "title": f["title"], "severity": f["severity"],
                     "fingerprint": f["fingerprint"], "claims": claims,
                     "suppressed": cases.suppressed(conn, f["fingerprint"]) is not None})
