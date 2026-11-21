@@ -1,0 +1,34 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-11 against its acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-11-restraint`, tree clean.
+Ticket:     factory/tickets/TESTOPS-11.md
+Diff:       git diff feature/f1..HEAD
+Predecessor:factory/reports/2026-11-21/TESTOPS-10-review.md  (your own previous review)
+
+HARD RULES
+- Run the suite and the corpus acceptance check yourself:
+    env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
+      .venv/Scripts/python.exe -m pytest -q
+    ... .venv/Scripts/python.exe scripts/replay_levels.py --snapshot cotw-levels-20261121-a3f19853 \
+          --baseline-run cotw-levels-20261121T215534 --acceptance
+- **Check the restraint rule is not a blanket.** 39 labels changed and 1 verdict moved. Read a sample
+  of the relabelled claims and say whether any is now described in a way a developer would find
+  misleading. A label is text on a page; it can be wrong even when the verdict is right.
+- **Judge the builder's pushback, not its obedience.** It declined AC5 and AC6 as literally
+  unsatisfiable and explained why. Decide whether that reasoning is sound or convenient, and say
+  which — that is the whole point of a reviewer.
+- Draw your own text samples (at least 4 assertions across verdicts) and print statement, label and
+  action verbatim. If any reads as machine output or repeats itself, that is a finding.
+- Do not edit product code, tests or the ticket. You may write exactly one file:
+  factory/reports/2026-11-21/TESTOPS-11-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC7 HOLDS / WEAK / NOT MET, and for AC5/AC6 whether the pushback is accepted.
+  ## Your own samples — verbatim statement, label and action for at least 4 claims.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 400 words.
+
+ANTI-REPETITION: never repeat a sentence verbatim. Stop when the points are made.

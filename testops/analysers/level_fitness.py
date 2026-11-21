@@ -1,4 +1,25 @@
-"""Level fitness v0.7 - one claim per assertion, in words a reader can act on.
+"""Level fitness v0.8 - one claim per assertion, in words a reader can act on.
+
+v0.8 adds restraint, after v0.7 wrote the failure itself:
+
+  * a claim that asserts a *meta* property - that a count is correct, that a report is accurate,
+    that a result is right - is not placed by any noun in it. "Store", "data", "result", "count"
+    and "correct" appear in almost any sentence, so a claim built on them says nothing about what
+    would settle it. Such a claim is placed only when it says what the judgement is made against
+    (it matches, equals or agrees with something); otherwise it goes back to `unplaced`, even
+    though its step is bound to a layer and the instrument fallback could place it. A claim
+    checked only in name is worse than an honest `unplaced`, because a reader trusts it;
+  * one verification pass yields one label. The instrument a claim is settled by now decides the
+    reader's phrase, from one table that also feeds the statement: a suite with no server behind it
+    (engine, storage) cannot tell a reader that "the response the server sends" settles anything, so
+    every claim in such a suite is labelled by the answer the instrument itself gives. The CotW
+    verification feature's twelve claims - "the pass fails", "the overall result is a failure",
+    "the clean store exits with the success status" and their siblings - now carry one label
+    instead of three wordings, while their interaction codes stay what the words and the binding
+    said. Codes are for scoring; the label is what a reader trusts;
+  * the statement's account of what settles a claim comes from that same table, so a label and a
+    statement cannot describe different instruments. A page claim in a browser suite no longer
+    tells the reader the response settles it.
 
 v0.7 answers the coverage miss v0.6 left: on the real CotW repository pair it classified 48 of 94
 claims `unplaced`, because the vocabulary only knew a handful of nouns. A person classified every
@@ -67,7 +88,7 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.7.0"
+version = "0.8.0"
 uses_model = False
 
 BEHAVIOUR = re.compile(r"\b(click(s|ed)?|submit(s|ted)?|type(s|d)?|fills?|enters?|press(es)?|selects?|"
@@ -91,6 +112,23 @@ HTTP = re.compile(r"\b(status|404|400|422|500|json|http|header|content-type|resp
 STORE = re.compile(r"\b(bytes?|byte-identical|persist(s|ed)?|stored|stores?|database|datastore|canon|"
                    r"hash|fingerprint|file|admits?|admitted|excludes?|excluded|commits?|transaction|"
                    r"records?|recorded|tables?)\b", re.I)
+
+# A claim that asserts a *meta* property - "that count is correct", "the report is accurate" -
+# judges something instead of saying what settles the judgement. The nouns such a claim leans on
+# ("count", "report", "result", "store", "data") appear in almost any sentence, so no noun in it
+# can place the claim. Only an explicit comparison makes it checkable, because a comparison is
+# something a test can actually run. This is restraint, not coverage: a claim checked only in name
+# is worse than an honest `unplaced`, because a reader trusts it.
+META_PROPERTY = re.compile(r"\b(is|are|was|were|stays?|remains?|seems?|appears?)\s+"
+                           r"(?:not\s+|only\s+|still\s+|also\s+)?(correct|accurate|right|wrong)\b", re.I)
+COMPARISON = re.compile(r"\b(matches?|matched|matching|equals?|identical to|the same as|"
+                        r"agrees? with|compares?|compared (with|against)|reconcil\w*|"
+                        r"differs? from|as many as|consistent with)\b", re.I)
+
+# The one reason an assertion stays unplaced after its instrument is known: the words made a
+# judgement and never said what the judgement is against, so no instrument could settle it.
+WHY_META = ("the words judge something correct or accurate and never say what it is compared "
+            "with, so nothing could settle it")
 
 NEEDS_BROWSER = {"I3", "I4"}
 
@@ -119,6 +157,14 @@ _READS = {
     "unknown": "reaches nothing that could establish it",
 }
 
+# What settles a claim at each interaction, as a noun phrase. The reader's label and the statement
+# are both built from this, so the two cannot describe different instruments.
+_SETTLED_BY = {
+    "I1": "the data as stored",
+    "I2": "the response the server sends",
+    "KP": "the page the server sends",
+}
+
 # Debugging shorthand that must never reach a reader. AC4.
 _CODE_TOKEN = re.compile(r"\b(I[1-4]|KP)\b")
 
@@ -134,6 +180,16 @@ def _assertion_phrase(clause: str) -> str:
     return f'the step "{clause}"' if _SUBJECTLESS.match(clause) else f"that {clause}"
 
 
+def _meta_without_comparison(text: str) -> bool:
+    """True when the words judge something (correct, accurate, right) and never say against what.
+
+    A comparison is the only thing a test can run, so without one the claim is unplaceable however
+    many nouns it contains - and it must not be rescued by the instrument fallback, which can only
+    name a layer, never a comparison.
+    """
+    return bool(META_PROPERTY.search(text)) and not COMPARISON.search(text)
+
+
 def classify_claims(text: str, context: str = "") -> list[tuple[str, str]]:
     """Return the interactions one assertion's words belong to, in a stable order.
 
@@ -145,12 +201,17 @@ def classify_claims(text: str, context: str = "") -> list[tuple[str, str]]:
     sentence genuinely asserts two different things; :func:`classify_step` reduces that to the
     single claim a step is allowed.
 
-    Order matters and is deliberate. A page-structure or accessibility claim is about the page even
-    when it also says "response body" or "returns"; a response claim is about the response even when
-    it also names the store it read; and a claim about a page's content, with no person acting, is
-    the page as served (``KP``) rather than data reaching a presentation (``I3``).
+    Order matters and is deliberate. A meta claim comes first: if the words judge something
+    correct without saying what it is compared with, no noun in the sentence can place it, and no
+    instrument can settle a judgement that names no comparison. Then a page-structure or
+    accessibility claim is about the page even when it also says "response body" or "returns"; a
+    response claim is about the response even when it also names the store it read; and a claim
+    about a page's content, with no person acting, is the page as served (``KP``) rather than data
+    reaching a presentation (``I3``).
     """
     out: list[tuple[str, str]] = []
+    if _meta_without_comparison(text):
+        return [("U", WHY_META)]
     markup, access = bool(MARKUP.search(text)), bool(ACCESSIBILITY.search(text))
     if markup:
         out.append(("KP", "the words name the page as served, which the response body settles"))
@@ -207,6 +268,13 @@ def classify_with_instrument(step_text: str, layer: str, context: str = "",
     ``storage``), or ``unknown`` when the step is unbound. The returned ``why`` always names which
     rule decided, so a reader can see that an instrument fallback was used.
 
+    Two refusals are deliberate. A meta claim (the words judge something correct without saying
+    what it is compared with) is never rescued by the instrument: the binding can name a layer but
+    it cannot name a comparison, so the claim stays unplaced however confidently it is bound. And a
+    response claim in a suite with no server behind it keeps its code - the words did name the
+    response the tool sends - but is labelled, and described, as the answer that instrument
+    actually gives; the reader must not be told about a server the run does not have.
+
     ``uses_browser`` says whether any step of the scenario drives a browser. A content claim
     (``I3``) is about data reaching a presentation, which only a browser can show someone: without
     one, the same content is whatever the step actually calls - the response an HTTP step sends, or
@@ -214,7 +282,7 @@ def classify_with_instrument(step_text: str, layer: str, context: str = "",
     about an API suite and made the interaction label mislead a reader.
     """
     interaction, why = classify_step(step_text, context)
-    if interaction == "U":
+    if interaction == "U" and why != WHY_META:
         claim = _INSTRUMENT_CLAIM.get(layer)
         if claim is not None:
             interaction, why = claim[0], f"the words place it nowhere, and {claim[1]}"
@@ -259,16 +327,45 @@ def _reads(instrument: str) -> str:
     return _READS.get(instrument, _READS["unknown"])
 
 
-def _statement(interaction: str, clause: str, verdict: str, instrument: str) -> str:
+def _label(interaction: str, instrument: str) -> str:
+    """The reader's phrase for what settles this claim, in the suite it actually ran in.
+
+    One table feeds both this and the statement, so a label cannot name one instrument while the
+    statement names another. A suite with no server behind it (engine, storage) gives its own
+    answer; telling a reader that "the response the server sends" settles a claim in a suite with
+    no server is the contradiction that made one verification pass read as three stories.
+    """
+    if interaction in NEEDS_BROWSER or interaction == "U":
+        return INTERACTION_LABEL[interaction]
+    if interaction in ("I1", "I2") and instrument == "engine":
+        return "settled by the engine's own answer about the stored data"
+    if interaction in ("I1", "I2") and instrument == "storage":
+        return "settled by the data as stored"
+    if interaction == "I1" and instrument in ("api", "controller"):
+        return "settled by the data as stored, read through the response the server sends"
+    return INTERACTION_LABEL[interaction]
+
+
+def _settles(interaction: str) -> str:
+    """What settles a claim at this interaction, as the subject of a sentence."""
+    phrase = _SETTLED_BY.get(interaction, INTERACTION_LABEL.get(interaction, "something settles that"))
+    return phrase[0].upper() + phrase[1:]
+
+
+def _statement(interaction: str, clause: str, verdict: str, instrument: str,
+               why: str = "") -> str:
     """What is asserted, what establishing it needs, and what the test actually did."""
     is_asserted = _assertion_phrase(clause)
     if verdict == "gap":
         return (f"This test asserts {is_asserted}. Only a browser works that out, and this test "
                 f"{_reads(instrument)} instead, so nothing checks it.")
     if verdict == "review":
-        return (f"This test asserts {is_asserted}. The response the server sends settles that, but this "
+        return (f"This test asserts {is_asserted}. {_settles(interaction)} settles that, but this "
                 f"test drives a browser, so it pays for a browser that decides nothing extra.")
     if verdict == "unplaced":
+        if why == WHY_META:
+            return (f"This step says \"{clause}\", which calls it correct without saying what it is "
+                    f"compared with, so nothing can be said about whether it is checked.")
         if interaction == "U":
             return (f"This step says \"{clause}\", which does not name data, a response, a page or "
                     f"anything a person sees, so nothing can be said about whether it is checked.")
@@ -282,7 +379,7 @@ def _statement(interaction: str, clause: str, verdict: str, instrument: str) -> 
             f"so the assertion is checked.")
 
 
-def _proposed_action(interaction: str, clause: str, verdict: str) -> str:
+def _proposed_action(interaction: str, clause: str, verdict: str, why: str = "") -> str:
     """One sentence naming the step to change. This is the field a case reviewer acts on."""
     if verdict == "gap":
         return (f"Move the step \"{clause}\" into a test that drives a browser, or delete it; at this "
@@ -291,6 +388,10 @@ def _proposed_action(interaction: str, clause: str, verdict: str) -> str:
         return (f"Rewrite the step \"{clause}\" to call the HTTP client instead of the browser; the "
                 f"response decides everything the browser is being used for.")
     if verdict == "unplaced":
+        if why == WHY_META:
+            return (f"Rewrite the step \"{clause}\" to say what it is compared with - the value, the "
+                    f"row or the report it should agree with - then re-run; a judgement with no "
+                    f"comparison in it cannot be checked at any level.")
         if interaction == "U":
             return (f"Rewrite the step \"{clause}\" to say whether it is about the data, the response, "
                     f"the page, or what a person sees, then re-run.")
@@ -354,7 +455,7 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                 detail = {
                     "claim": interaction,
                     "interaction_code": interaction,
-                    "interaction_label": INTERACTION_LABEL[interaction],
+                    "interaction_label": _label(interaction, instrument),
                     "assertion_text": step.text,
                     "assertion_path": feat.path,
                     "assertion_line": step.line,
@@ -363,7 +464,7 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                     "instrument": instrument,
                     "established_by": why,
                     "sources_missing": list(missing),
-                    "proposed_action": _proposed_action(interaction, clause, verdict),
+                    "proposed_action": _proposed_action(interaction, clause, verdict, why),
                     "evidence_key": evidence_key,
                     "uses_browser": uses_browser,
                     "needs_browser": interaction in NEEDS_BROWSER,
@@ -373,7 +474,7 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                 }
                 claims.append(Claim(
                     subject_ref=ref,
-                    statement=_statement(interaction, clause, verdict, instrument),
+                    statement=_statement(interaction, clause, verdict, instrument, why),
                     verdict=verdict,
                     confidence=0.8,
                     evidence=[Evidence(uri=uri_for_path(feat.path), line=step.line, note=step.text)],
