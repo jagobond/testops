@@ -2,7 +2,7 @@
 id: TESTOPS-11
 title: Restraint — a claim is not checked because one of its words is familiar
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-10
 ---

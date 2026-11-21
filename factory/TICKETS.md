@@ -17,7 +17,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-3 | Claim schema v2 — per-assertion subject, sources used and missing, `not_assessable` | F1 | done | 53 tests; PR #2 merged as 616d5d8 after a PASS review |
 | TESTOPS-4 | Level-fitness analyser emits one claim per assertion, with plain-language statement and proposed action | F1 | done | 84 tests; PR #3 merged as 595894e after a PASS review |
 | TESTOPS-5 | Source capability registry; Jira collector disconnected and invisible | F1 | blocked | After T4 — absence as a declared state |
-| TESTOPS-6 | Case page rebuilt around the six sections; provenance labels; codes to footnote | F1 | blocked | After TESTOPS-10: a page is only as useful as the claims it shows, and half of them currently say nothing |
+| TESTOPS-6 | Case page rebuilt around the six sections; provenance labels; codes to footnote | F1 | ready | **The visible outcome** — eleven criteria, six sections, evidence resolved from the claim's own coordinates |
 | TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | The suite a real team would keep |
 | TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | blocked | Reviewer concern 3 on TESTOPS-2: `test_packaging` imports via sys.path, so a broken `package-data` stays green |
 | TESTOPS-9 | Stale claim vocabulary: `schema.sql`, the `Claim` docstring and `analysers/base.py` describe verdicts (`optimal`/`overbuilt`/`necessary`) the analyser abandoned | F1 | blocked | Found by the TESTOPS-2 builder; schema comments that lie mislead every reader |
@@ -32,4 +32,5 @@ side effect of this scaffolding. A reviewer asked to judge T3 against acceptance
 suite in the repo can only read the diff and take the builder's word for it — which is the
 arrangement the factory exists to replace.
 | TESTOPS-10 | Classification coverage: 51% of the real corpus is `unplaced` | F1 | done | 48 → 0 unplaced, gaps unchanged; PR #4 merged after a PASS review |
-| TESTOPS-11 | Restraint: a claim is not `distinct` because one of its words is familiar | F1 | ready | Reviewer found "that count is correct for the store it was run against" promoted to `distinct` on the word "store" — the ticket's own example of genuine ambiguity |
+| TESTOPS-11 | Restraint: a claim is not `distinct` because one of its words is familiar | F1 | done | 90 distinct / 1 unplaced / 1 gap / 2 review; PR #5 merged as 1c1fca3 after a PASS review |
+| TESTOPS-12 | Labels finish the job, and the restraint rule stops being a be-verb pattern | F1 | blocked | After T6. TESTOPS-11 review concerns 1 and 2: eleven scenarios still carry two or three labels in one pass, and a compound sentence can unplace a checkable sibling |
