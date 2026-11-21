@@ -17,11 +17,11 @@ FEATURE_TEXT = """\
 Feature: panel api
   Scenario: the save button has an accessible name
     Given the panel endpoint accepts a save
-    Then the response status is 200
+    Then the save button has an accessible name
 
   Scenario: the panel response body carries stable fact anchors
     Given the panel endpoint accepts a save
-    Then the response status is 200
+    Then the response body carries stable fact anchors
 """
 
 GAP_SUBJECT = f"scenario:{FEATURE_PATH}#the save button has an accessible name"
@@ -34,7 +34,10 @@ def _bindings() -> list[stepbindings.Binding]:
         stepbindings.Binding(pattern="the panel endpoint accepts a save", verb="Given",
                              cls="PanelApiSteps", path="steps/PanelApiSteps.cs",
                              layer="api", suite="panelapi"),
-        stepbindings.Binding(pattern="the response status is 200", verb="Then",
+        stepbindings.Binding(pattern="the save button has an accessible name", verb="Then",
+                             cls="PanelApiSteps", path="steps/PanelApiSteps.cs",
+                             layer="api", suite="panelapi"),
+        stepbindings.Binding(pattern="the response body carries stable fact anchors", verb="Then",
                              cls="PanelApiSteps", path="steps/PanelApiSteps.cs",
                              layer="api", suite="panelapi"),
     ]
@@ -59,7 +62,7 @@ def test_browser_claim_asserted_over_http_is_a_gap():
     assert claim.verdict == "gap"
     assert claim.detail["uses_browser"] is False
     assert claim.detail["needs_browser"] is True
-    assert "needs a browser" in claim.statement
+    assert "Only a browser works that out" in claim.statement
     assert [evidence.uri for evidence in claim.evidence] == [
         f"github:fixture/fixture@deadbeef:{FEATURE_PATH}"]
 
