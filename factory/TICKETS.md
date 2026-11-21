@@ -13,12 +13,14 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | id | title | feature | status | note |
 |----|-------|---------|--------|------|
 | TESTOPS-1 | Factory scaffolding: git baseline, PRODUCT/ROLES/AGENTS, board | F0 | done | Lead work, no builder |
-| TESTOPS-2 | Test harness baseline: pytest, one real test, dev extras | F1 | ready | **First.** Nothing else can be judged until a suite exists; today there are zero tests and pytest is not a declared dependency |
-| TESTOPS-3 | Claim schema v2 — per-assertion subject, sources used and missing, `not_assessable` | F1 | blocked | Shape first; T4 depends on it |
+| TESTOPS-2 | Test harness baseline: pytest, one real test, dev extras | F1 | done | 17 tests; PR #1 merged into feature/f1 as 5c008b7 after a PASS review |
+| TESTOPS-3 | Claim schema v2 — per-assertion subject, sources used and missing, `not_assessable` | F1 | ready | Shape first; T4 depends on it |
 | TESTOPS-4 | Level-fitness analyser emits one claim per assertion, with plain-language statement and proposed action | F1 | blocked | After T3 |
 | TESTOPS-5 | Source capability registry; Jira collector disconnected and invisible | F1 | blocked | After T4 — absence as a declared state |
 | TESTOPS-6 | Case page rebuilt around the six sections; provenance labels; codes to footnote | F1 | blocked | After T5 |
 | TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | The suite a real team would keep |
+| TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | blocked | Reviewer concern 3 on TESTOPS-2: `test_packaging` imports via sys.path, so a broken `package-data` stays green |
+| TESTOPS-9 | Stale claim vocabulary: `schema.sql`, the `Claim` docstring and `analysers/base.py` describe verdicts (`optimal`/`overbuilt`/`necessary`) the analyser abandoned | F1 | blocked | Found by the TESTOPS-2 builder; schema comments that lie mislead every reader |
 
 Feature F1 = "a claim a developer can act on". F0 is scaffolding and carries no product outcome.
 
