@@ -65,6 +65,10 @@ def claim_view(row, repo: str | None = None) -> dict:
         "provenance": provenance,
         "permalink": blob_permalink(repo, provenance["assertion_commit"],
                                     provenance["assertion_path"], provenance["assertion_line"]),
+        # The observation rows this claim rests on. ``[]`` - not NULL - is the honest answer for a
+        # claim whose steps bound nothing: the column is NOT NULL, so an empty list is a recorded
+        # fact, and a page may say "the run bound nothing here" rather than "nothing was recorded".
+        "support": [int(v) for v in (_list_or_none(row["support"], "support") or [])],
         "sources_missing": _list_or_none(row["sources_missing"], "sources_missing"),
         "span": _list_or_none(row["span"], "span"),
         "interaction_label": row["interaction_label"],
@@ -152,14 +156,19 @@ def finding_rows(conn, case_id: str) -> list[dict]:
 
 
 def evidence_for_claim(conn, claim: dict) -> list[dict] | None:
-    """The observations recorded at a claim's own coordinates, and nothing else.
+    """The observations this claim rests on, and nothing else.
 
-    A v2 claim names a commit and a path; evidence is the artefacts of the claim's *own run* whose
-    uri carries that commit and that path, character for character. There is deliberately no
-    ``LIKE %feature%`` here: that lookup resolved a scenario name to any file whose path contained
-    it, which is how a claim in ``a/x.feature`` acquired links to ``b/x.y.feature`` and to
-    same-named files from other snapshots. Two claims about the same words in different files are
-    two different pieces of evidence, and a reader who follows the wrong one has been misled.
+    A v2 claim records, in ``support``, the observation rows its verdict was derived from - for a
+    level claim, the step definitions that bind its steps. Those rows are returned first and in the
+    claim's own order, so the page shows exactly what the analysis used. When the claim records no
+    support (nothing bound) the observations recorded at the claim's own coordinates are returned
+    instead: the scenario is still evidence, and a page must not imply that nothing was recorded.
+
+    A v2 claim names a commit and a path; the coordinate fallback matches artefacts of the claim's
+    *own run* whose uri carries that commit and that path, character for character. There is
+    deliberately no ``LIKE %feature%`` here: that lookup resolved a scenario name to any file whose
+    path contained it, which is how a claim in ``a/x.feature`` acquired links to ``b/x.y.feature``
+    and to same-named files from other snapshots.
 
     Returns ``None`` when the claim has no coordinates to resolve (a v1 claim): "nothing was
     recorded" and "nothing was found" are different facts, and the page renders them differently.
@@ -171,22 +180,63 @@ def evidence_for_claim(conn, claim: dict) -> list[dict] | None:
     run = conn.execute("SELECT snapshot_id FROM run WHERE id = ?", (claim["run_id"],)).fetchone()
     if not run:
         return None
+    snapshot = run["snapshot_id"]
+
+    supported = _observations_by_id(conn, claim.get("support") or [], snapshot)
+    if supported:
+        return supported
+
     wanted_commit, wanted_path = prov["assertion_commit"], prov["assertion_path"]
     out: list[dict] = []
     artefacts = conn.execute("SELECT id, uri, kind FROM artefact WHERE snapshot_id = ? ORDER BY id",
-                             (run["snapshot_id"],)).fetchall()
+                             (snapshot,)).fetchall()
     for a in artefacts:
         m = GITHUB.match(a["uri"])
         if not m or m["sha"] != wanted_commit or m["path"] != wanted_path:
             continue
-        for o in conn.execute("SELECT key, value FROM observation WHERE artefact_id = ? ORDER BY id",
+        for o in conn.execute("SELECT id, key, value FROM observation WHERE artefact_id = ? ORDER BY id",
                               (a["id"],)):
-            value = _json(o["value"])
-            line = value.get("line")
-            out.append({"uri": a["uri"], "kind": a["kind"], "key": o["key"], "line": line,
-                        "link": permalink(a["uri"], line), "where": short_location(a["uri"], line),
-                        "shows": _shows(o["key"], value)})
+            out.append(_evidence_item(o["key"], _json(o["value"]), a["uri"], a["kind"], o["id"]))
     return out
+
+
+def _observations_by_id(conn, ids: list[int], snapshot_id: str) -> list[dict]:
+    """The rows a claim names, in the claim's order, and only if they belong to its own snapshot.
+
+    A support id from another run would be an artefact of the wrong snapshot wearing this claim's
+    coordinates; it is skipped rather than shown.
+    """
+    out: list[dict] = []
+    for observation_id in ids:
+        row = conn.execute(
+            """SELECT o.id, o.key, o.value, a.uri, a.kind, a.snapshot_id
+                 FROM observation o JOIN artefact a ON a.id = o.artefact_id
+                WHERE o.id = ?""", (observation_id,)).fetchone()
+        if row is None or row["snapshot_id"] != snapshot_id:
+            continue
+        out.append(_evidence_item(row["key"], _json(row["value"]), row["uri"], row["kind"],
+                                  row["id"]))
+    return out
+
+
+def _evidence_item(key: str, value: dict, uri: str, kind: str, observation_id: int) -> dict:
+    line = value.get("line")
+    return {"id": observation_id, "uri": uri, "kind": kind, "key": key, "line": line,
+            "link": permalink(uri, line), "where": short_location(uri, line),
+            "shows": _shows(key, value)}
+
+
+# What a step definition's layer means, as the sentence a reader gets next to the link. The same
+# words the case page uses for the instrument, so a binding and a claim cannot describe the test
+# differently.
+BINDING_WORD = {
+    "storage": "reads the database",
+    "engine": "talks to the engine in-process",
+    "controller": "calls the application's own controllers in-process",
+    "api": "drives the HTTP API",
+    "ui": "drives a browser",
+    "unknown": "reaches no layer we could identify",
+}
 
 
 def _shows(key: str, value: dict) -> str:
@@ -198,6 +248,12 @@ def _shows(key: str, value: dict) -> str:
         steps = value.get("steps")
         count = f", {steps} step{'s' if steps != 1 else ''}" if isinstance(steps, int) else ""
         return f"the scenario \u201c{name}\u201d begins at {where}{count}"
+    if key.startswith("binding:"):
+        _, verb, pattern = key.split(":", 2)
+        layer = value.get("layer")
+        layer_words = BINDING_WORD.get(layer, BINDING_WORD["unknown"])
+        # No line number here: the link beside this sentence already ends at the binding's line.
+        return f"a {verb.capitalize()} step definition for \u201c{pattern}\u201d that {layer_words}"
     return f"an observation of {key}" + (f" at line {line}" if line else "")
 
 

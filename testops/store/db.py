@@ -49,11 +49,17 @@ def uj(s, default=None):
 
 
 def upsert_snapshot(conn, snapshot_id: str, project: str, created_at: str, versions: dict,
-                    schema_version: int = 1) -> None:
+                    schema_version: int = 1, meta: dict | None = None) -> None:
+    """Write a snapshot row.
+
+    ``meta`` records what a rebuild needs and the artefacts cannot say: which repository is the test
+    arm and which the product arm, and the sources the run knew it could not consult. ``None`` is
+    stored as ``{}`` - "nothing was recorded" - never as a clean bill of health.
+    """
     conn.execute(
-        "INSERT OR REPLACE INTO snapshot (id, project, created_at, artefact_versions, schema_version)"
-        " VALUES (?,?,?,?,?)",
-        (snapshot_id, project, created_at, j(versions), int(schema_version)),
+        "INSERT OR REPLACE INTO snapshot (id, project, created_at, artefact_versions, schema_version, meta)"
+        " VALUES (?,?,?,?,?,?)",
+        (snapshot_id, project, created_at, j(versions), int(schema_version), j(meta or {})),
     )
 
 
