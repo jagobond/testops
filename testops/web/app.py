@@ -300,7 +300,7 @@ def section_does(c: dict) -> list[str]:
         if support:
             out.append('<p>The observations this claim rests on, recorded in this run:</p>')
         else:
-            out.append('<p>Evidence recorded at this claim\u2019s own coordinates in this run:</p>')
+            out.append('<p>The observations that bear on this claim, recorded in this run:</p>')
         out.append('<ul class="ev">')
         for e in evidence:
             where = esc(e.get("where") or e.get("uri"))
@@ -308,7 +308,10 @@ def section_does(c: dict) -> list[str]:
                 where = f'<a href="{esc(e["link"])}">{where}</a>'
             else:
                 where = f'<span class="code">{where}</span>'
-            out.append(f'<li>{where} \u2014 {esc(e.get("shows"))}.</li>')
+            shows = esc(e.get("shows"))
+            if e.get("asserted"):
+                shows = f"the step that is asserted: {shows}"
+            out.append(f'<li>{where} \u2014 {shows}.</li>')
         out.append("</ul>")
     return out
 

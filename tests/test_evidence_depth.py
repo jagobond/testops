@@ -11,6 +11,12 @@ What is asserted here, from the store rather than from the returned objects:
   "no observations at these coordinates".
 - AC5: rebuilding from the snapshot id alone reproduces the original claims exactly, support ids
   included, because the ids are read back from the snapshot's own rows.
+- AC8: a claim's evidence contains only observations that bear on it - the binding for the asserting
+  step and the scenario that contains it. A claim at line 59 in a file of six scenarios shows no
+  observation from the other five.
+- AC9: the asserting step is listed first and named as such, before any surrounding context.
+- AC10: the number of observations rendered follows from relevance, not a quota - one relevant
+  observation renders one row.
 
 Every test builds its own store under ``tmp_path`` through the real ``run_level_fitness`` and the
 in-memory repository fixture; nothing reads ``data/testops.db``.
@@ -252,6 +258,151 @@ def test_the_case_page_shows_the_observations_a_claim_rests_on(tmp_path, monkeyp
     for item in items:
         assert "<a href=" in item and " \u2014 " in item, item
     assert "FactSheetSteps.cs" in body
+
+
+# --------------------------------------------------------------------------- AC8-AC10
+
+# The review's specimen, in miniature: six scenarios in one file, each starting where the review
+# saw one, and the accessibility assertion at line 59. The first five are noise that shares a file.
+MULTI_SCENARIO_FEATURE = """\
+Feature: fact sheet
+  A long description that gherkin ignores, used only to put the scenarios at the lines the review
+  saw: the unrelated scenarios start at 22, 29, 34, 41, 48 and 55, and the asserting step the page
+  is about sits at 59.
+  The description carries no steps, so it changes nothing about the claims.
+  It exists so the fixture reproduces the defect's coordinates rather than approximating them.
+  Padding is honest here: the defect is about lines, so the lines are the fixture.
+  Six scenarios, one file, one assertion that belongs to only one of them.
+  The rest is description.
+  The rest is description.
+  The rest is description.
+  The rest is description.
+  The rest is description.
+  The rest is description.
+  The rest is description.
+  The rest is description.
+  The rest is description.
+  The rest is description.
+  The rest is description.
+  The rest is description.
+
+  Scenario: an unrelated scenario about anchors
+    Given the fact sheet endpoint returns a sheet
+    When I request the character page
+    Then the response body carries stable fact anchors
+    And the citation is announced with a visible label
+
+
+  Scenario: another unrelated scenario about anchors
+    Given the fact sheet endpoint returns a sheet
+    When I request the character page
+    Then the response body carries stable fact anchors
+
+  Scenario: a third unrelated scenario
+    Given the fact sheet endpoint returns a sheet
+    When I request the character page
+    Then the response body carries stable fact anchors
+    And the citation is announced with a visible label
+
+
+  Scenario: a fourth unrelated scenario
+    Given the fact sheet endpoint returns a sheet
+    When I request the character page
+    Then the response body carries stable fact anchors
+    And the citation is announced with a visible label
+
+
+  Scenario: a fifth unrelated scenario
+    Given the fact sheet endpoint returns a sheet
+    When I request the character page
+    Then the response body carries stable fact anchors
+    And the citation is announced with a visible label
+
+
+  Scenario: The character page is server-rendered with stable fact anchors
+    Given the fact sheet endpoint returns a sheet
+    When I request the character page
+    Then the response body carries stable fact anchors
+    And each fact's citation sits inside an element an assistive technology can name
+"""
+
+OTHER_SCENARIOS = ("an unrelated scenario about anchors",
+                   "another unrelated scenario about anchors",
+                   "a third unrelated scenario",
+                   "a fourth unrelated scenario",
+                   "a fifth unrelated scenario")
+
+
+def _case_page_for_line(conn, line: int) -> str | None:
+    """The case page whose finding carries the claim asserted at ``line``."""
+    for row in conn.execute("SELECT case_id, claim_ids FROM finding ORDER BY id"):
+        for claim_id in json.loads(row["claim_ids"]):
+            claim = conn.execute("SELECT assertion_line FROM claim WHERE id = ?",
+                                 (claim_id,)).fetchone()
+            if claim and claim["assertion_line"] == line:
+                body = app.case_page(conn, row["case_id"])
+                return None if body is None else body.decode("utf-8")
+    return None
+
+
+def _clear_support(conn, run_id: str, line: int) -> None:
+    """A run written before support was wired: the coordinates are known, the support column is []."""
+    conn.execute("UPDATE claim SET support = '[]' WHERE run_id = ? AND assertion_line = ?",
+                 (run_id, line))
+    conn.commit()
+
+
+def test_a_claim_shows_no_observation_from_another_scenario_in_its_file(tmp_path, monkeypatch):
+    result, conn, _ = _run(tmp_path, monkeypatch, feature=MULTI_SCENARIO_FEATURE)
+    try:
+        _clear_support(conn, result.run_id, 59)
+        page = _case_page_for_line(conn, 59)
+    finally:
+        conn.close()
+
+    assert page is not None, "the accessibility claim at line 59 raised no case"
+    assert "each fact&#x27;s citation sits inside an element an assistive technology can name" in page
+    assert "The character page is server-rendered with stable fact anchors" in page
+    for other in OTHER_SCENARIOS:
+        assert other not in page, f"the page shows an observation from {other!r}"
+    for line in (22, 29, 34, 41, 48):
+        assert f"features/fact_sheet.feature:{line}" not in page, \
+            f"the page links to another scenario's line {line}"
+
+
+def test_the_asserting_step_is_listed_first_and_named_as_such(tmp_path, monkeypatch):
+    result, conn, _ = _run(tmp_path, monkeypatch, feature=MULTI_SCENARIO_FEATURE)
+    try:
+        _clear_support(conn, result.run_id, 59)
+        page = _case_page_for_line(conn, 59)
+    finally:
+        conn.close()
+
+    assert page is not None
+    items = re.findall(r"<li>(.*?)</li>", page, re.S)
+    assert items, "the claim rendered no evidence"
+    assert "the step that is asserted" in items[0], items[0]
+    assert "each fact&#x27;s citation sits inside an element an assistive technology can name" in items[0]
+    # The named asserting step comes before the scenario that contains it.
+    assert page.index("the step that is asserted") < page.index(
+        "the scenario \u201cThe character page")
+
+
+def test_one_relevant_observation_renders_one_row(tmp_path, monkeypatch):
+    result, conn, _ = _run(tmp_path, monkeypatch, feature=UNBOUND_FEATURE)
+    try:
+        row = _claims(conn, result.run_id)[0]
+        claim = queries.claim_read(conn, row["id"])
+    finally:
+        conn.close()
+
+    assert row["support"] == "[]"
+    assert claim is not None
+    # One scenario contains the assertion and nothing binds the step: one row, not a quota.
+    assert [e["key"] for e in claim["evidence"]] == ["scenario:nothing here is bound"]
+    rendered = app.section_does(claim)
+    items = re.findall(r"<li>(.*?)</li>", "".join(rendered), re.S)
+    assert len(items) == 1, items
 
 
 # --------------------------------------------------------------------------- AC5
