@@ -371,11 +371,14 @@ def decision_form(conn, row: dict, case_id: str, findings: list[dict]) -> list[s
 
     if n and terminal:
         d = suppressed_here
+        # Built outside the f-string: a backslash inside an f-string expression is a SyntaxError
+        # before Python 3.12, and 3.11 is the interpreter that serves this UI (TESTOPS-13).
+        note_suffix = esc(" \u2014 " + d["note"]) if d and d["note"] else ""
         out.append(f'<form class="decide" method="post" action="/case/{esc(case_id)}/state">')
         out.append(f'<p><strong>Suppressed</strong> \u2014 {n} finding{"s" if n != 1 else ""} in '
                    f'this case {"are" if n != 1 else "is"} hidden from future runs'
                    f'{esc(" (" + (d["actor"] if d else "") + ", " + age(d["at"]) + ")") if d else ""}'
-                   f'{esc(" \u2014 " + d["note"]) if d and d["note"] else ""}.</p>')
+                   f'{note_suffix}.</p>')
         out.append('<p><button name="state" value="open">Reopen \u2014 report this again</button></p>')
         out.append('<p class="quiet">Reopening deletes the suppression for this case, so the next '
                    'run raises it again. No other case is affected.</p>')
@@ -441,10 +444,13 @@ def case_page(conn, case_id: str) -> bytes | None:
                JOIN finding f ON f.fingerprint = s.fingerprint WHERE f.case_id = ?
                ORDER BY s.at DESC LIMIT 1""", (case_id,)).fetchone()
         if superseded:
+            # Outside the f-string: backslash in an f-string expression is a SyntaxError before
+            # 3.12 and 3.11 serves this UI (TESTOPS-13).
+            note_suffix = esc(" \u2014 " + superseded["note"]) if superseded["note"] else ""
             body.append(f'<p>Every finding in this case has been suppressed. '
                         f'Last decision: <strong>{esc(STATE_LABEL.get(superseded["state"], superseded["state"]))}</strong> '
                         f'by {esc(superseded["actor"])} {esc(age(superseded["at"]))}'
-                        f'{esc(" \u2014 " + superseded["note"]) if superseded["note"] else ""}.</p>')
+                        f'{note_suffix}.</p>')
         else:
             body.append('<p>This case is resolved: the analysis raised nothing to act on. That is a '
                         'result, not an error \u2014 and not a claim that the code is clean, only '
