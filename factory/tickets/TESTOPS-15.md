@@ -2,7 +2,7 @@
 id: TESTOPS-15
 title: Make the floor real — the suite runs on 3.11 in CI
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-14
 ---
