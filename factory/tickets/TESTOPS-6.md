@@ -2,7 +2,7 @@
 id: TESTOPS-6
 title: The case page — an argument a developer can act on
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-11
 ---
