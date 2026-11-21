@@ -2,7 +2,7 @@
 id: TESTOPS-4
 title: One claim per assertion, said in words a developer can act on
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-3
 ---
