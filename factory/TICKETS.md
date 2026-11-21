@@ -15,9 +15,9 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-1 | Factory scaffolding: git baseline, PRODUCT/ROLES/AGENTS, board | F0 | done | Lead work, no builder |
 | TESTOPS-2 | Test harness baseline: pytest, one real test, dev extras | F1 | done | 17 tests; PR #1 merged into feature/f1 as 5c008b7 after a PASS review |
 | TESTOPS-3 | Claim schema v2 — per-assertion subject, sources used and missing, `not_assessable` | F1 | done | 53 tests; PR #2 merged as 616d5d8 after a PASS review |
-| TESTOPS-4 | Level-fitness analyser emits one claim per assertion, with plain-language statement and proposed action | F1 | ready | **The ticket that fixes the owner's complaint about unreadable claims** |
+| TESTOPS-4 | Level-fitness analyser emits one claim per assertion, with plain-language statement and proposed action | F1 | done | 84 tests; PR #3 merged as 595894e after a PASS review |
 | TESTOPS-5 | Source capability registry; Jira collector disconnected and invisible | F1 | blocked | After T4 — absence as a declared state |
-| TESTOPS-6 | Case page rebuilt around the six sections; provenance labels; codes to footnote | F1 | blocked | After T5 |
+| TESTOPS-6 | Case page rebuilt around the six sections; provenance labels; codes to footnote | F1 | blocked | After TESTOPS-10: a page is only as useful as the claims it shows, and half of them currently say nothing |
 | TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | The suite a real team would keep |
 | TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | blocked | Reviewer concern 3 on TESTOPS-2: `test_packaging` imports via sys.path, so a broken `package-data` stays green |
 | TESTOPS-9 | Stale claim vocabulary: `schema.sql`, the `Claim` docstring and `analysers/base.py` describe verdicts (`optimal`/`overbuilt`/`necessary`) the analyser abandoned | F1 | blocked | Found by the TESTOPS-2 builder; schema comments that lie mislead every reader |
@@ -31,3 +31,4 @@ and environment error. TestOps currently has **no tests** and `pytest` was insta
 side effect of this scaffolding. A reviewer asked to judge T3 against acceptance criteria with no
 suite in the repo can only read the diff and take the builder's word for it — which is the
 arrangement the factory exists to replace.
+| TESTOPS-10 | Classification coverage: 51% of the real corpus is `unplaced` | F1 | ready | **Resequenced ahead of the UI** — measured on run `cotw-levels-20261121T215534`: 48 of 94 assertions unclassified |
