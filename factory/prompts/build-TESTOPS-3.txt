@@ -1,0 +1,34 @@
+You are the builder on the TestOps factory. Implement TESTOPS-3 exactly.
+
+Read, in this order:
+  1. C:/Users/Chester/Projects/testops/factory/tickets/TESTOPS-3.md
+  2. C:/Users/Chester/Projects/testops/AGENTS.md
+  3. C:/Users/Chester/Projects/testops/ROLES.md
+  4. C:/Users/Chester/Projects/testops/factory/reports/2026-11-21/TESTOPS-2-review.md  (the review that
+     immediately preceded you; its concerns 1 and 3 still apply to this tree)
+
+Repository: C:/Users/Chester/Projects/testops  (branch factory/testops-3-schema-v2)
+Python:     C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Suite:      17 tests must still pass. `python -m pytest -q`.
+
+HARD CONSTRAINTS
+- Do not modify anything under testops/analysers/ or testops/web/. If a criterion needs it, stop and
+  report.
+- Do not rewrite v1 claims. They keep schema_version 1 and empty provenance.
+- The refusal in AC4 must be enforced by the database (CHECK or NOT NULL with the right default), not
+  by a Python guard that a second caller can skip.
+- AC8 matters: a store written by a newer version must fail loudly, never be silently up-migrated
+  downwards.
+- Prove each criterion with a test whose failure is caused by breaking the thing it tests. A test that
+  passes when the constraint is removed is worse than no test, because it reads as coverage.
+
+VERIFY BEFORE REPORTING
+    env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
+      .venv/Scripts/python.exe -m pytest -q
+
+REPORT BACK with these headings, no exceptions:
+- What was built: files, one line each.
+- Criterion by criterion: AC1..AC9, each with its test name, or NOT SATISFIED and why.
+- Exact numbers: tests collected / passed / failed, wall time. Unrounded.
+- What you could not satisfy, and what you were tempted to do but did not.
+- Product problems noticed but not fixed: state them, do not fix them.
