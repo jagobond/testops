@@ -2,7 +2,7 @@
 id: TESTOPS-13
 title: The app cannot be imported by the interpreter that serves it
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-6
 ---
