@@ -1,0 +1,37 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-10 against its acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-10-coverage`, tree clean.
+Ticket:     factory/tickets/TESTOPS-10.md
+Diff:       git diff feature/f1..HEAD
+Rules:      AGENTS.md
+
+HARD RULES
+- Run the suite yourself:
+    env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
+      .venv/Scripts/python.exe -m pytest -q
+- **Attack the headline number.** "0 unplaced" is exactly the kind of result a builder can buy by
+  loosening definitions. Pick 8 of the formerly-unplaced assertions yourself, decide what each
+  should be from the step text and its step definition, and compare. If claims are being placed into
+  `distinct` merely because the instrument was identifiable, that is a finding: `distinct` means
+  "checked", and a claim that is checked only in name is worse than an honest `unplaced`.
+- **Attack the instrument fallback specifically.** Four claims used it. Find them, read the step
+  definitions, and say whether classifying by instrument instead of intent is defensible there. The
+  ticket forbids the scenario title as a substitute; check the same discipline holds for the binding.
+- **Check the hand labels are honest evidence.** The ticket required the builder to record its labels
+  before running the analyser. Look at the fixture: are the labels plausibly pre-registered, or do
+  they look written to match output? Do not accuse — describe what the file shows.
+- Verify AC5 on the newly classified claims: no code tokens, actions still name the step.
+- Do not edit product code, tests or the ticket. You may write exactly one file:
+  factory/reports/2026-11-21/TESTOPS-10-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC8 HOLDS / WEAK / NOT MET with evidence.
+  ## Your own sample — 8 assertions, your expected interaction, the analyser's, and whether the
+     difference matters to a reader.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 400 words.
+
+ANTI-REPETITION: if you catch yourself restating a point, stop. Never repeat a sentence verbatim.
