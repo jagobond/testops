@@ -1,4 +1,27 @@
-"""Level fitness v0.6 - one claim per assertion, in words a reader can act on.
+"""Level fitness v0.7 - one claim per assertion, in words a reader can act on.
+
+v0.7 answers the coverage miss v0.6 left: on the real CotW repository pair it classified 48 of 94
+claims `unplaced`, because the vocabulary only knew a handful of nouns. A person classified every
+one of them at once. The ruling this version implements:
+
+  * the words still decide first, and the vocabulary now covers what a claim about a store, a
+    report, a sheet, an API body or a served page actually says - reporting, naming, grouping,
+    counting, recording, refusing;
+  * a page claim no longer needs a person acting to be recognisable: "the page's search state is
+    not-searched" is the page as served, and v0.6 could only see it when the same step also said
+    "clicked";
+  * when the words name nothing settleable, the assertion's own step binding decides - a step
+    definition that only calls the HTTP client makes its claim an HTTP claim, one that drives a
+    browser makes it a browser claim. That is evidence about the instrument, never a substitute
+    for intent: the title is still never consulted, and a step with no binding stays `unplaced`
+    rather than being guessed at;
+  * each claim records, in `established_by`, the rule that classified it, in the reader's words.
+
+Widening the vocabulary must not manufacture findings, which is the failure mode that killed the
+v0.1 analyser. Only the accessibility rule and a browser interaction make a claim need a browser,
+so no new rule here can turn an API-suite claim into a `gap`.
+
+Level fitness v0.6 - one claim per assertion, in words a reader can act on.
 
 v0.5 was unreadable and title-driven. It classified a scenario from `name + every step
 concatenated`, so a scenario titled "...with stable fact anchors" whose third step asserted an
@@ -44,24 +67,30 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.6.0"
+version = "0.7.0"
 uses_model = False
 
 BEHAVIOUR = re.compile(r"\b(click(s|ed)?|submit(s|ted)?|type(s|d)?|fills?|enters?|press(es)?|selects?|"
                        r"navigates?|visits?|opens? the page|interacts?|drags?|hovers?)\b", re.I)
-PRESENTATION = re.compile(r"\b(render(s|ed)?|page|displayed (to|on)|visible|shown to|shows? (the|a) |markup|"
-                          r"element|heading|layout|screen|html)\b", re.I)
+PRESENTATION = re.compile(r"\b(render(s|ed)?|page|pages?|displayed (to|on)|visible|shown?|shows?|"
+                          r"markup|element|heading|layout|screen|html)\b", re.I)
 ACCESSIBILITY = re.compile(r"\b(accessible|assistive technolog(?:y|ies)|aria|label(?!led)|button text|"
                            r"screen reader|accessibility tree|landmark|alt text|wcag|css class|"
-                           r"document order)\b", re.I)
+                           r"document order|position in the document)\b", re.I)
 MARKUP = re.compile(r"\b(anchor(s|ed)?|data-[a-z-]+|attribute|element carrying|markup|server-rendered|"
-                    r"html source|response body)\b", re.I)
-CONTENT = re.compile(r"\b(lists?|every sheet|each fact|value|citation|subject|kind|fact count|book count|"
-                     r"the data|contents?|rows?|columns?|paragraph)\b", re.I)
+                    r"rendered by the server|html source|response body)\b", re.I)
+# What a claim about content says it does with the content: reporting, naming, grouping, counting,
+# recording. A claim that no vocabulary at all could place is the one that stays unplaced.
+CONTENT = re.compile(r"\b(lists?|listed|every sheet|each fact|every fact|value|citation|subject|kind|"
+                     r"fact count|book count|the data|contents?|rows?|columns?|paragraph|reports?|"
+                     r"reported|names?|named|groups?|grouped|entries|entry|counts?|numbers?|"
+                     r"appears?|order|proposals?|proposed|sheets?)\b", re.I)
 HTTP = re.compile(r"\b(status|404|400|422|500|json|http|header|content-type|response|endpoint|route|"
-                  r"api|returns? (a|an|the)? ?(json|list|object|error|null))\b", re.I)
-STORE = re.compile(r"\b(bytes?|byte-identical|persist(s|ed)?|stored|database|datastore|canon|hash|file|"
-                   r"admits?|admitted|excludes?|excluded|commits?|transaction)\b", re.I)
+                  r"api|error|refus(ed|es|al)|exit(s|ed)?( with)?|returns? (a|an|the)? ?"
+                  r"(json|list|object|error|null))\b", re.I)
+STORE = re.compile(r"\b(bytes?|byte-identical|persist(s|ed)?|stored|stores?|database|datastore|canon|"
+                   r"hash|fingerprint|file|admits?|admitted|excludes?|excluded|commits?|transaction|"
+                   r"records?|recorded|tables?)\b", re.I)
 
 NEEDS_BROWSER = {"I3", "I4"}
 
@@ -93,6 +122,17 @@ _READS = {
 # Debugging shorthand that must never reach a reader. AC4.
 _CODE_TOKEN = re.compile(r"\b(I[1-4]|KP)\b")
 
+# A step may continue the sentence before it ("And says the approval no longer covers the text"),
+# so it can arrive with no subject. "This test asserts that says ..." is not English; the step's
+# own words are quoted instead.
+_SUBJECTLESS = re.compile(r"^(says|shows|records|reports|names|lists|contains|holds|appears|renders|"
+                          r"returns|exits|reads|writes|includes|carries)\b", re.I)
+
+
+def _assertion_phrase(clause: str) -> str:
+    """The clause as the object of "This test asserts ...", keeping the sentence grammatical."""
+    return f'the step "{clause}"' if _SUBJECTLESS.match(clause) else f"that {clause}"
+
 
 def classify_claims(text: str, context: str = "") -> list[tuple[str, str]]:
     """Return the interactions one assertion's words belong to, in a stable order.
@@ -104,23 +144,30 @@ def classify_claims(text: str, context: str = "") -> list[tuple[str, str]]:
     Kept pure: no repository, no bindings, no model. More than one pair is returned only when one
     sentence genuinely asserts two different things; :func:`classify_step` reduces that to the
     single claim a step is allowed.
+
+    Order matters and is deliberate. A page-structure or accessibility claim is about the page even
+    when it also says "response body" or "returns"; a response claim is about the response even when
+    it also names the store it read; and a claim about a page's content, with no person acting, is
+    the page as served (``KP``) rather than data reaching a presentation (``I3``).
     """
     out: list[tuple[str, str]] = []
     markup, access = bool(MARKUP.search(text)), bool(ACCESSIBILITY.search(text))
     if markup:
-        out.append(("KP", "asserts the page as served, which the response body settles"))
+        out.append(("KP", "the words name the page as served, which the response body settles"))
     if access:
-        out.append(("I4", "asserts an accessibility property the browser computes"))
+        out.append(("I4", "the words name an accessibility property the browser computes"))
     if out:
         return out
+    if HTTP.search(text):
+        return [("I2", "the words name the response the tool sends")]
     if STORE.search(text):
-        return [("I1", "asserts a datastore guarantee")]
-    if HTTP.search(text) and not PRESENTATION.search(text):
-        return [("I2", "asserts an HTTP contract")]
+        return [("I1", "the words name a guarantee about the data as stored")]
     if PRESENTATION.search(text) and BEHAVIOUR.search(text):
-        return [("I4", "asserts what a person sees while acting")]
+        return [("I4", "the words name what a person sees while acting")]
+    if PRESENTATION.search(text):
+        return [("KP", "the words name the page as served")]
     if CONTENT.search(text):
-        return [("I3", "asserts data reaching the presentation")]
+        return [("I3", "the words name data reaching the presentation")]
     return []
 
 
@@ -135,6 +182,48 @@ def classify_step(step_text: str, context: str = "") -> tuple[str, str]:
     if not pairs:
         return "U", "the step's words name nothing that could settle it"
     return max(pairs, key=lambda pair: _STRENGTH[pair[0]])
+
+
+# The last resort, and evidence rather than guesswork: a step whose words place nothing is still
+# bound to a step definition, and that definition's instrument is a fact about the test. It can
+# never create a `gap` (a browser suite's fallback is a browser claim, a non-browser suite's is
+# not), and a step with no binding is not covered here - it stays unplaced, because nothing at all
+# is known about it.
+_INSTRUMENT_CLAIM = {
+    "ui": ("I4", "the step's definition drives a browser, so what a browser shows is what settles it"),
+    "api": ("I2", "the step's definition only calls the HTTP client, so the response settles it"),
+    "controller": ("I2", "the step's definition calls the application's controller in-process, "
+                         "so the answer it returns settles it"),
+    "engine": ("I1", "the step's definition only talks to the engine, so the engine's own answer settles it"),
+    "storage": ("I1", "the step's definition only reads the database, so the stored rows settle it"),
+}
+
+
+def classify_with_instrument(step_text: str, layer: str, context: str = "",
+                             *, uses_browser: bool = False) -> tuple[str, str]:
+    """The claim, from its words first and its step's instrument only when the words fail.
+
+    ``layer`` is the layer of the step's own binding (``ui``/``api``/``controller``/``engine``/
+    ``storage``), or ``unknown`` when the step is unbound. The returned ``why`` always names which
+    rule decided, so a reader can see that an instrument fallback was used.
+
+    ``uses_browser`` says whether any step of the scenario drives a browser. A content claim
+    (``I3``) is about data reaching a presentation, which only a browser can show someone: without
+    one, the same content is whatever the step actually calls - the response an HTTP step sends, or
+    the engine's own answer. v0.6 called all of these "the page the server sends", which was wrong
+    about an API suite and made the interaction label mislead a reader.
+    """
+    interaction, why = classify_step(step_text, context)
+    if interaction == "U":
+        claim = _INSTRUMENT_CLAIM.get(layer)
+        if claim is not None:
+            interaction, why = claim[0], f"the words place it nowhere, and {claim[1]}"
+    if interaction == "I3" and not uses_browser:
+        if layer in ("api", "controller"):
+            interaction, why = "I2", "the words name content, and with no user acting the response settles it"
+        elif layer in ("engine", "storage"):
+            interaction, why = "I1", "the words name content, and with no user acting the stored rows settle it"
+    return interaction, why
 
 
 def asserting_steps(steps) -> list:
@@ -172,23 +261,24 @@ def _reads(instrument: str) -> str:
 
 def _statement(interaction: str, clause: str, verdict: str, instrument: str) -> str:
     """What is asserted, what establishing it needs, and what the test actually did."""
+    is_asserted = _assertion_phrase(clause)
     if verdict == "gap":
-        return (f"This test asserts that {clause}. Only a browser works that out, and this test "
+        return (f"This test asserts {is_asserted}. Only a browser works that out, and this test "
                 f"{_reads(instrument)} instead, so nothing checks it.")
     if verdict == "review":
-        return (f"This test asserts that {clause}. The response the server sends settles that, but this "
+        return (f"This test asserts {is_asserted}. The response the server sends settles that, but this "
                 f"test drives a browser, so it pays for a browser that decides nothing extra.")
     if verdict == "unplaced":
         if interaction == "U":
             return (f"This step says \"{clause}\", which does not name data, a response, a page or "
                     f"anything a person sees, so nothing can be said about whether it is checked.")
-        return (f"This test asserts that {clause}, but none of its steps could be tied to a layer of "
+        return (f"This test asserts {is_asserted}, but none of its steps could be tied to a layer of "
                 f"the system, so nothing can be said about whether it is checked.")
     # distinct
     if interaction in NEEDS_BROWSER:
-        return (f"This test asserts that {clause}. It drives a browser, which is what works that out, "
+        return (f"This test asserts {is_asserted}. It drives a browser, which is what works that out, "
                 f"so the assertion is checked.")
-    return (f"This test asserts that {clause}. This test {_reads(instrument)}, which settles that, "
+    return (f"This test asserts {is_asserted}. This test {_reads(instrument)}, which settles that, "
             f"so the assertion is checked.")
 
 
@@ -227,6 +317,8 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                 continue
             suite = stepbindings.suite_of(feat.path)
             matched = [b for step in sc.steps if (b := stepbindings.match_step(bindings, step.text, suite))]
+            assert_binding = {step.line: stepbindings.match_step(bindings, step.text, suite)
+                              for step in asserting_steps(sc.steps)}
             span = sorted({b.layer for b in matched})
             instrument = stepbindings.highest([b.layer for b in matched]) if matched else "unknown"
             uses_browser = "ui" in span
@@ -234,11 +326,12 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
             seen: dict[str, int] = {}
 
             for step in asserting_steps(sc.steps):
-                interaction, why = classify_step(step.text, sc.name)
-                # Without a user acting there is no user-to-datastore claim: what the suite
-                # establishes is the served content.
-                if interaction == "I3" and not uses_browser:
-                    interaction, why = "KP", "asserts served content without a user acting"
+                # The words decide; the assertion's own step binding decides only when the words
+                # name nothing that could settle it.
+                binding = assert_binding.get(step.line)
+                interaction, why = classify_with_instrument(
+                    step.text, binding.layer if binding else "unknown", sc.name,
+                    uses_browser=uses_browser)
 
                 clause = _clause(step.text)
                 if instrument == "unknown" or interaction == "U":

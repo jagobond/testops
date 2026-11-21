@@ -1,0 +1,224 @@
+{
+  "about": [
+    "TESTOPS-10 AC3: twenty real assertions from the CotW run cotw-levels-20261121T215534,",
+    "hand-labelled before the analyser was changed. The sample is every fourth assertion in the",
+    "run's distinct assertion texts, sorted, first twenty - a rule fixed before any label was",
+    "written, so the sample was not chosen to flatter the result.",
+    "",
+    "The label is the interaction whose evidence settles the claim in the scenario it belongs to:",
+    "  I1  the store's own state (a row, a file the builder wrote, a fingerprint)",
+    "  I2  a response the tool sends (status, exit status, JSON body, an error naming the offender)",
+    "  KP  the page as served (rendered markup, a page's body text, a data-* attribute)",
+    "  I3  data reaching the presentation (never labelled here: with no browser it reads as KP)",
+    "  I4  what a browser computes (the accessibility tree, a control's reachability)",
+    "",
+    "'binding_layer' is the layer the step's own definition calls, read from Steps/*.cs, and",
+    "'uses_browser' is whether any step of the scenario drives a browser. Both are inputs the",
+    "analyser is allowed to use, recorded here so the test needs no repository."
+  ],
+  "source_run": "cotw-levels-20261121T215534",
+  "sample_rule": "sorted distinct assertion_text, every fourth, first twenty",
+  "labelled_before_change": true,
+  "samples": [
+    {
+      "assertion": "a report file is written that can be read without running the tool again",
+      "feature": "features/canon_verification.feature",
+      "scenario": "The report is a plain readable file naming every fact checked",
+      "binding_layer": "engine",
+      "uses_browser": false,
+      "expected_interaction": "I1",
+      "why": "the claim is that a file exists on disk and reads without the tool; the file is the evidence",
+      "baseline_verdict": "unplaced"
+    },
+    {
+      "assertion": "each entry carries an id, a display name and a fact count",
+      "feature": "features/canon_query_api.feature",
+      "scenario": "Searching characters returns id, display name and fact count",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "I2",
+      "why": "the entries are fields of the JSON body the list endpoint returns",
+      "baseline_verdict": "distinct"
+    },
+    {
+      "assertion": "each fact is shown with its quotation inline",
+      "feature": "features/approval_queue.feature",
+      "scenario": "Proposals are grouped into one sheet per entity with quotations inline",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "KP",
+      "why": "the step reads the served sheet page's visible text; no person acts on it",
+      "baseline_verdict": "distinct"
+    },
+    {
+      "assertion": "each fact's data-fact-id is the same on both loads",
+      "feature": "features/review_panel.feature",
+      "scenario": "Every rendered fact is anchored by a stable data-fact-id",
+      "binding_layer": "ui",
+      "uses_browser": true,
+      "expected_interaction": "KP",
+      "why": "the claim is an attribute of the served markup, read twice; the browser is not what decides it",
+      "baseline_verdict": "review"
+    },
+    {
+      "assertion": "each shows its value, its citation and the whole verbatim paragraph",
+      "feature": "features/review_panel.feature",
+      "scenario": "A sheet page renders every fact with value, citation and whole paragraph",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "KP",
+      "why": "the sheet page's body carries the value, citation and paragraph",
+      "baseline_verdict": "distinct"
+    },
+    {
+      "assertion": "every interactive control exposes an accessible name",
+      "feature": "features/review_panel.feature",
+      "scenario": "Every control has an accessible name",
+      "binding_layer": "ui",
+      "uses_browser": true,
+      "expected_interaction": "I4",
+      "why": "the name a control exposes is computed by the accessibility tree",
+      "baseline_verdict": "distinct"
+    },
+    {
+      "assertion": "every stored fact is reported as passing",
+      "feature": "features/canon_verification.feature",
+      "scenario": "A clean store is reported fact by fact as passing",
+      "binding_layer": "engine",
+      "uses_browser": false,
+      "expected_interaction": "I1",
+      "why": "the claim is about the pass's answer over the facts in the store",
+      "baseline_verdict": "unplaced"
+    },
+    {
+      "assertion": "it is not an empty successful response",
+      "feature": "features/canon_query_api.feature",
+      "scenario": "An unknown character id returns 404 naming the id",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "I2",
+      "why": "the response's status and body settle it",
+      "baseline_verdict": "distinct"
+    },
+    {
+      "assertion": "it names the table the fact was wrongly placed in",
+      "feature": "features/approval_record.feature",
+      "scenario": "A Tier 2 row found in the facts table is reported as a failure",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "I1",
+      "why": "the audit's report over stored rows is the evidence",
+      "baseline_verdict": "unplaced"
+    },
+    {
+      "assertion": "it reports the number of sheets",
+      "feature": "features/review_panel.feature",
+      "scenario": "Health reports the sheet count and fact count",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "I2",
+      "why": "the health endpoint's JSON body reports the count",
+      "baseline_verdict": "unplaced"
+    },
+    {
+      "assertion": "no finding names the unapproved proposal",
+      "feature": "features/approval_queue.feature",
+      "scenario": "An unapproved proposal is invisible to every detector",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "I1",
+      "why": "the detectors read the store; their findings are its content",
+      "baseline_verdict": "unplaced"
+    },
+    {
+      "assertion": "that fact is not in the canon store",
+      "feature": "features/approval_queue.feature",
+      "scenario": "Rejecting one fact within a sheet excludes only that fact",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "I1",
+      "why": "a fact id present or absent in the canon file",
+      "baseline_verdict": "distinct"
+    },
+    {
+      "assertion": "that fingerprint is not the claim text itself",
+      "feature": "features/approval_record.feature",
+      "scenario": "The record carries an approval fingerprint distinct from the claim",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "I1",
+      "why": "a value recorded in the stored row",
+      "baseline_verdict": "unplaced"
+    },
+    {
+      "assertion": "the Tier 2 fact is admitted",
+      "feature": "features/approval_record.feature",
+      "scenario": "The two rules do not satisfy each other",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "I1",
+      "why": "whether the row reached the store",
+      "baseline_verdict": "distinct"
+    },
+    {
+      "assertion": "the canon store contains one fact per admitted proposal",
+      "feature": "features/approval_queue.feature",
+      "scenario": "Approving a sheet admits each fact individually and records a batch review",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "I1",
+      "why": "a count of rows in the canon file",
+      "baseline_verdict": "distinct"
+    },
+    {
+      "assertion": "the clean store exits with the success status",
+      "feature": "features/canon_verification.feature",
+      "scenario": "Exit status alone distinguishes pass from failure",
+      "binding_layer": "engine",
+      "uses_browser": false,
+      "expected_interaction": "I2",
+      "why": "the exit status is the tool's answer, not a fact in the store",
+      "baseline_verdict": "unplaced"
+    },
+    {
+      "assertion": "the groups appear in publication order",
+      "feature": "features/canon_query_api.feature",
+      "scenario": "A character's facts are grouped by book in publication order",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "I2",
+      "why": "the order of the groups in the JSON body the facts endpoint returns",
+      "baseline_verdict": "unplaced"
+    },
+    {
+      "assertion": "the page claims no character name contains \"Qqqzzx\"",
+      "feature": "features/canon_search_states.feature",
+      "scenario": "The empty canon, the unmatched term and the unsearched list are three answers",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "KP",
+      "why": "a sentence in the served page's body",
+      "baseline_verdict": "unplaced"
+    },
+    {
+      "assertion": "the page's search state is \"not-searched\"",
+      "feature": "features/canon_search_states.feature",
+      "scenario": "The empty canon, the unmatched term and the unsearched list are three answers",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "KP",
+      "why": "a value the served page reports",
+      "baseline_verdict": "unplaced"
+    },
+    {
+      "assertion": "the rejected fact is not in the canon store",
+      "feature": "features/approval_queue.feature",
+      "scenario": "Rejecting one fact within a sheet excludes only that fact",
+      "binding_layer": "api",
+      "uses_browser": false,
+      "expected_interaction": "I1",
+      "why": "a fact id present or absent in the canon file",
+      "baseline_verdict": "distinct"
+    }
+  ]
+}
