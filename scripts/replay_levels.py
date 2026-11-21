@@ -32,6 +32,42 @@ from testops.surfaces import discover as surface_discovery  # noqa: E402
 TEST_SLUG = "jagobond/cotw-bdd"
 PRODUCT_SLUG = "jagobond/cotw-continuity"
 
+# TESTOPS-11's corpus-level criteria, asserted here rather than in a fixture because the point of
+# the ticket is what the analyser does to the real 94 claims. The meta claim is the one TESTOPS-10
+# promoted on the single word "store"; it must go back to `unplaced`, and restraint must not become
+# a blanket - no more than three claims may end up unplaced, and no real finding may move.
+META_CLAIM = "that count is correct for the store it was run against"
+CORPUS_CLAIMS = 94
+MAX_UNPLACED = 3
+FINDINGS = {"gap": 1, "review": 2}
+
+
+def accept(claims) -> list[str]:
+    """Return the corpus-level problems with this run, in the ticket's terms."""
+    problems: list[str] = []
+    if len(claims) != CORPUS_CLAIMS:
+        problems.append(f"the snapshot holds {len(claims)} claims, not {CORPUS_CLAIMS}; "
+                        f"the numbers below are not the ticket's numbers")
+
+    unplaced = [c for c in claims if c.verdict == "unplaced"]
+    if len(unplaced) > MAX_UNPLACED:
+        problems.append(f"{len(unplaced)} claims are unplaced, above the {MAX_UNPLACED} "
+                        f"the ticket allows: restraint became a blanket")
+
+    by_text = {c.detail["assertion_text"].strip(): c for c in claims}
+    meta = by_text.get(META_CLAIM)
+    if meta is None:
+        problems.append(f"the corpus no longer contains {META_CLAIM!r}")
+    elif meta.verdict != "unplaced":
+        problems.append(f"{META_CLAIM!r} is {meta.verdict}, not unplaced - it asserts a meta "
+                        f"property and says nothing about what the count is compared with")
+
+    for verdict, want in FINDINGS.items():
+        got = sum(1 for c in claims if c.verdict == verdict)
+        if got != want:
+            problems.append(f"{got} {verdict} verdicts, not {want}: restraint moved a real finding")
+    return problems
+
 
 def _uri_parts(uri: str) -> tuple[str, str, str] | None:
     """`github:slug@commit:path` -> (slug, commit, path). Anything else is not a repo file."""
@@ -119,6 +155,8 @@ def main(argv=None) -> int:
     ap.add_argument("--tests-snapshot", default="cotw-20261120-a3f19853")
     ap.add_argument("--json", default="", help="write every claim, as JSON, to this path")
     ap.add_argument("--baseline-run", default="", help="compare verdicts with this stored run")
+    ap.add_argument("--acceptance", action="store_true",
+                    help="assert TESTOPS-11's corpus-level criteria and fail if any is broken")
     args = ap.parse_args(argv)
 
     conn = db.connect()
@@ -128,6 +166,18 @@ def main(argv=None) -> int:
     for c in claims:
         counts[c.verdict] = counts.get(c.verdict, 0) + 1
     print(json.dumps({"stats": stats, "claims": len(claims), "verdicts": counts}, indent=1))
+
+    if args.acceptance:
+        problems = accept(claims)
+        for problem in problems:
+            print(f"ACCEPTANCE FAILED: {problem}")
+        if problems:
+            conn.close()
+            return 1
+        print(f"acceptance: {len(claims)} claims, "
+              f"{counts.get('unplaced', 0)} unplaced (max {MAX_UNPLACED}), "
+              f"{counts.get('gap', 0)} gap / {counts.get('review', 0)} review, "
+              f"{META_CLAIM!r} unplaced - PASS")
 
     if args.baseline_run:
         before = {row["assertion_text"]: row["verdict"] for row in conn.execute(
