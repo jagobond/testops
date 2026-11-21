@@ -63,6 +63,24 @@ def _missing_sources(project: Project) -> list[str]:
     return missing
 
 
+def _new_snapshot_id(conn, base: str) -> str:
+    """A snapshot id no stored snapshot already holds.
+
+    Two runs over the same commits on the same day are two looks, not an update of the first. The
+    old id scheme was ``project-date-commit`` and a second run of the day replaced the row - and then
+    added its own artefacts to what the first run's claims point at. A collision bumps a suffix; the
+    earlier snapshot and everything under it are left exactly as they were.
+    """
+    taken = {row[0] for row in conn.execute(
+        "SELECT id FROM snapshot WHERE id = ? OR id LIKE ?", (base, base + "-r%"))}
+    if base not in taken:
+        return base
+    number = 2
+    while f"{base}-r{number}" in taken:
+        number += 1
+    return f"{base}-r{number}"
+
+
 def _emit(conn, case_id: str, analyser_name: str, claim, severity: str = "medium") -> bool:
     """Insert a finding unless a human has already judged this evidence.
 
@@ -94,7 +112,7 @@ def run_duplication(project: Project, token: str) -> RunResult:
     if project.product.slug != project.test.slug:
         product = github.collect(project.product, token, role="product")
 
-    snapshot_id = f"{project.key}-{dt.date.today():%Y%m%d}-{test_repo.commit[:8]}"
+    snapshot_id = _new_snapshot_id(conn, f"{project.key}-{dt.date.today():%Y%m%d}-{test_repo.commit[:8]}")
     versions = {project.test.slug: test_repo.commit}
     if product:
         versions[project.product.slug] = product.commit
@@ -183,23 +201,42 @@ def run_duplication(project: Project, token: str) -> RunResult:
 
 
 def run_level_fitness(project: Project, token: str) -> RunResult:
-    """Collect both arms, discover the product's surfaces, judge each scenario's level."""
+    """Collect both arms, record both as artefacts, and judge each scenario's level.
+
+    A levels run is the run that has to be able to rebuild itself. The test arm's features and step
+    definitions are what every claim is *about*, so they are recorded here as artefacts of this
+    snapshot - not borrowed from a duplication snapshot taken at the same commit. The scenario and
+    step-binding observations are recorded too, and each claim carries the ids of the binding rows
+    its verdict rests on, so a case page has something to show at the claim's coordinates.
+    """
     env = load_env()
     conn = db.connect()
     test_repo = github.collect(project.test, token, role="test")
     product = github.collect(project.product, token, role="product")
 
-    snapshot_id = f"{project.key}-levels-{dt.date.today():%Y%m%d}-{test_repo.commit[:8]}"
+    snapshot_id = _new_snapshot_id(
+        conn, f"{project.key}-levels-{dt.date.today():%Y%m%d}-{test_repo.commit[:8]}")
+    missing_sources = _missing_sources(project)
     db.upsert_snapshot(conn, snapshot_id, project.key, _now(),
                        {project.test.slug: test_repo.commit, project.product.slug: product.commit},
-                       schema_version=2)
+                       schema_version=2,
+                       # What a rebuild needs and an artefact cannot say. Both are recorded now, so
+                       # rebuilding from this snapshot alone cannot invent a clean bill of health.
+                       meta={"sources_missing": missing_sources,
+                             "arms": {"test": project.test.slug, "product": project.product.slug}})
 
     texts, product_texts = {}, {}
-    for path, (sha, kind) in test_repo.files.items():
+    artefact_ids: dict[str, int] = {}
+    for path, (sha, kind) in sorted(test_repo.files.items()):
         texts[path] = blobs.text(sha)
-    for path, (sha, kind) in product.files.items():
+        artefact_ids[path] = db.add_artefact(
+            conn, snapshot_id, f"github:{project.test.slug}@{test_repo.commit}:{path}",
+            kind, sha, {"role": "test"})
+    for path, (sha, kind) in sorted(product.files.items()):
         product_texts[path] = blobs.text(sha)
-        db.add_artefact(conn, snapshot_id, f"github:{project.product.slug}@{product.commit}:{path}", kind, sha)
+        db.add_artefact(conn, snapshot_id,
+                        f"github:{project.product.slug}@{product.commit}:{path}",
+                        kind, sha, {"role": "product"})
 
     excludes: list[str] = []
     for path, text in texts.items():
@@ -208,14 +245,31 @@ def run_level_fitness(project: Project, token: str) -> RunResult:
 
     driver_map = stepbindings.build_driver_map(texts)
     features, bindings = [], []
+    # (binding path, verb, pattern) -> observation id. The analyser never sees the store; it is
+    # given the row ids by key so a claim can say which rows it rests on.
+    support_index: dict[tuple[str, str, str], int] = {}
     for path, text in sorted(texts.items()):
         kind = test_repo.files[path][1]
         if kind == "feature" and csproj.is_active(path, excludes):
             f = gherkin.parse(path, text)
             if f:
                 features.append(f)
+                for sc in f.scenarios:
+                    db.add_observation(conn, artefact_ids[path], "gherkin", "1.0.0",
+                                       f"scenario:{sc.name}",
+                                       {"line": sc.line, "steps": len(sc.steps),
+                                        "signature": sc.signature})
         elif kind == "stepdef":
-            bindings.extend(stepbindings.parse_file(path, text, driver_map))
+            parsed = stepbindings.parse_file(path, text, driver_map)
+            bindings.extend(parsed)
+            for binding in parsed:
+                observation = db.add_observation(
+                    conn, artefact_ids[path], "stepbinding", "1.0.0",
+                    f"binding:{binding.verb.lower()}:{binding.pattern}",
+                    {"verb": binding.verb, "pattern": binding.pattern, "class": binding.cls,
+                     "layer": binding.layer, "suite": binding.suite, "line": binding.line})
+                support_index.setdefault((binding.path, binding.verb, binding.pattern),
+                                         observation)
 
     surfaces = surface_discovery.discover(product_texts)
 
@@ -224,8 +278,9 @@ def run_level_fitness(project: Project, token: str) -> RunResult:
 
     budget = {"calls": 0, "tokens_in": 0, "tokens_out": 0}
     claims = level_fitness.analyse(features, bindings, surfaces, uri_for_path, budget,
-                                   sources_missing=_missing_sources(project),
-                                   commit=test_repo.commit)
+                                   sources_missing=missing_sources,
+                                   commit=test_repo.commit,
+                                   support_index=support_index)
 
     run_id = f"{project.key}-levels-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%S}"
     db.start_run(conn, run_id, project.key, snapshot_id, level_fitness.name, _now())
@@ -234,7 +289,7 @@ def run_level_fitness(project: Project, token: str) -> RunResult:
     # v2 row without them, so this loop cannot quietly fall back to a subject-only claim.
     for c in claims:
         cid = db.add_claim(conn, run_id, level_fitness.name, level_fitness.version, c.subject_ref,
-                           c.statement, c.verdict, c.confidence, [],
+                           c.statement, c.verdict, c.confidence, c.detail.get("support", []),
                            schema_version=2,
                            assertion_text=c.detail["assertion_text"],
                            assertion_path=c.detail["assertion_path"],

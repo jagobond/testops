@@ -87,6 +87,12 @@ def prepare(conn: sqlite3.Connection, schema_text: str) -> int:
         # the v1 claim schema, and 1 is the truth about it, not a stand-in for a missing value.
         conn.execute("ALTER TABLE snapshot ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1")
 
+    if _table_exists(conn, "snapshot") and not _has_column(conn, "snapshot", "meta"):
+        # Additive, and it rewrites no stored statement, so the schema version stays 2. '{}' is the
+        # truth about an older snapshot: it recorded nothing about its arms or blind spots, which is
+        # different from recording that nothing was missing - a rebuild refuses rather than guess.
+        conn.execute("ALTER TABLE snapshot ADD COLUMN meta TEXT NOT NULL DEFAULT '{}'")
+
     conn.executescript(schema_text)  # creates anything missing; a no-op on a current store
     _record_version(conn, CURRENT_VERSION)
     return CURRENT_VERSION

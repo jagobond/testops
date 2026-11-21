@@ -1,5 +1,11 @@
 """Level fitness v0.8 - one claim per assertion, in words a reader can act on.
 
+v0.8.1 records what each claim rests on. Every claim carries, in ``detail["support"]``, the ids of the
+step-binding observations its verdict was derived from: the binding of its own step first, then the
+bindings of the scenario's other steps, because the span and the instrument are a fact about the whole
+scenario. The ids come from the caller's observation index; the caller records the rows. The analysis
+itself is untouched - recording evidence must not change a verdict.
+
 v0.8 adds restraint, after v0.7 wrote the failure itself:
 
   * a claim that asserts a *meta* property - that a count is correct, that a report is accurate,
@@ -88,7 +94,7 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.8.0"
+version = "0.8.1"
 uses_model = False
 
 BEHAVIOUR = re.compile(r"\b(click(s|ed)?|submit(s|ted)?|type(s|d)?|fills?|enters?|press(es)?|selects?|"
@@ -402,14 +408,21 @@ def _proposed_action(interaction: str, clause: str, verdict: str, why: str = "")
 
 
 def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = None, *,
-            sources_missing=None, commit: str = "") -> list[Claim]:
+            sources_missing=None, commit: str = "",
+            support_index: dict[tuple[str, str, str], int] | None = None) -> list[Claim]:
     """One claim per asserting step, in deterministic order.
 
     ``sources_missing`` is the caller's record of which sources were never connected. It is copied
     onto every claim, and a caller that passes nothing records an explicit empty list: a claim may
     say "nothing was missing", it may never imply it.
+
+    ``support_index`` maps a binding's ``(path, verb, pattern)`` to the id of the observation row the
+    caller recorded for it. It is how a claim learns *which rows* back it without this module ever
+    touching the store. When it is omitted - or holds no row for a binding - the claim's support is
+    an explicit empty list: nothing was recorded, which is the truth, not zero evidence.
     """
     missing = [] if sources_missing is None else list(sources_missing)
+    index = support_index or {}
     claims: list[Claim] = []
 
     for feat in features:
@@ -430,6 +443,17 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                 # The words decide; the assertion's own step binding decides only when the words
                 # name nothing that could settle it.
                 binding = assert_binding.get(step.line)
+                # The assertion's own binding first: that is what the reader is pointed at. The
+                # scenario's other matched steps follow, because the span and the instrument - and
+                # therefore the verdict - are a fact about the whole scenario.
+                support: list[int] = []
+                for bound in [binding] + matched:
+                    if bound is None:
+                        continue
+                    observation = index.get((bound.path, bound.verb, bound.pattern))
+                    if observation is not None and observation not in support:
+                        support.append(observation)
+
                 interaction, why = classify_with_instrument(
                     step.text, binding.layer if binding else "unknown", sc.name,
                     uses_browser=uses_browser)
@@ -465,6 +489,7 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                     "established_by": why,
                     "sources_missing": list(missing),
                     "proposed_action": _proposed_action(interaction, clause, verdict, why),
+                    "support": support,
                     "evidence_key": evidence_key,
                     "uses_browser": uses_browser,
                     "needs_browser": interaction in NEEDS_BROWSER,

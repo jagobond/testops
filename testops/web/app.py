@@ -285,13 +285,22 @@ def section_does(c: dict) -> list[str]:
             out.append(f'<p>It {INSTRUMENT_WORD[used]}. It reaches {layer_words(span)}.</p>')
 
     evidence = c.get("evidence")
+    support = c.get("support") or []
     if evidence is None:
         out.append('<p class="quiet">Evidence for this claim was not recorded.</p>')
     elif not evidence:
-        out.append('<p class="quiet">This run recorded no observations at these coordinates, so the '
-                   'source link above is the only evidence there is.</p>')
+        if support:
+            out.append('<p class="quiet">This claim records the observations it rests on, but none '
+                       'of them could be read back from this store. That is a defect in the stored '
+                       'evidence, not an absence of it.</p>')
+        else:
+            out.append('<p class="quiet">This run recorded no observations at these coordinates, so '
+                       'the source link above is the only evidence there is.</p>')
     else:
-        out.append('<p>Evidence recorded at this claim\u2019s own coordinates in this run:</p>')
+        if support:
+            out.append('<p>The observations this claim rests on, recorded in this run:</p>')
+        else:
+            out.append('<p>The observations that bear on this claim, recorded in this run:</p>')
         out.append('<ul class="ev">')
         for e in evidence:
             where = esc(e.get("where") or e.get("uri"))
@@ -299,7 +308,10 @@ def section_does(c: dict) -> list[str]:
                 where = f'<a href="{esc(e["link"])}">{where}</a>'
             else:
                 where = f'<span class="code">{where}</span>'
-            out.append(f'<li>{where} \u2014 {esc(e.get("shows"))}.</li>')
+            shows = esc(e.get("shows"))
+            if e.get("asserted"):
+                shows = f"the step that is asserted: {shows}"
+            out.append(f'<li>{where} \u2014 {shows}.</li>')
         out.append("</ul>")
     return out
 

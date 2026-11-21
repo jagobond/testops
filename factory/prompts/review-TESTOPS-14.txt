@@ -1,0 +1,36 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-14 (including its addendum AC8-AC10)
+against the acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-14-evidence-depth`, tree clean.
+Ticket:     factory/tickets/TESTOPS-14.md   (read the addendum section; AC8-AC10 were added after the
+            Lead rendered the first build and found evidence attached by file rather than by claim)
+Diff:       git diff feature/f1..HEAD
+
+HARD RULES
+- Run the suite on both interpreters:
+    env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+    env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 \
+      C:/Users/Chester/AppData/Local/hermes/profiles/builder/cache/scratch/venv311/Scripts/python.exe -m pytest -q
+- **Test AC1 for real, which means the hard part: can a run be rebuilt with no network?** Take a
+  snapshot, rebuild from the snapshot id alone with networking made unusable to the process (do not
+  simply trust a code path), and compare the claims to the originals. If you cannot disable networking,
+  say exactly how you faked it and what that does not prove.
+- **Attack AC8 relevance cold.** Pick three claims in different feature files, render them, and ask of
+  each observation: does this bear on this claim? A row that merely shares a file is the defect the
+  addendum exists to fix.
+- Check AC6 is genuinely unchanged (94/90/1/1/2) and that no verdict moved to make evidence look tidy.
+- Check whether the page can still show stale, file-level evidence from an older run — the Lead hit
+  exactly that with a run written before the fix — and say whether that is acceptable or a defect.
+- Do not edit product code, tests or the ticket. You may write exactly one file:
+  factory/reports/2026-11-21/TESTOPS-14-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC10 HOLDS / WEAK / NOT MET with evidence.
+  ## Your own sample — three claims, their observations, and your relevance judgement on each row.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 400 words.
+
+ANTI-REPETITION: never repeat a sentence verbatim. Stop when the points are made.

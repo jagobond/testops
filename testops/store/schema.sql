@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS snapshot (
   project TEXT NOT NULL,
   created_at TEXT NOT NULL,
   artefact_versions TEXT NOT NULL,         -- json: {slug: commit_sha, ...}
-  schema_version INTEGER NOT NULL DEFAULT 1  -- claim schema in force when this snapshot was taken
+  schema_version INTEGER NOT NULL DEFAULT 1, -- claim schema in force when this snapshot was taken
+  meta TEXT NOT NULL DEFAULT '{}'          -- json: which arm is which, and what the run could not consult
 );
 
 CREATE TABLE IF NOT EXISTS artefact (

@@ -52,6 +52,9 @@ class Binding:
     # defined in two suites resolves to whichever file was parsed first, and every scenario collapses to one
     # instrument. That is what made all 154 CotW bindings look like API calls.
     suite: str = ""
+    # 1-based line of the [Given("...")] attribute, so evidence can link to the binding itself. 0 means
+    # the parser did not record it - never a line number it guessed.
+    line: int = 0
 
 
 def highest(layers) -> str:
@@ -112,8 +115,9 @@ def parse_file(path: str, text: str, driver_map: dict[str, str] | None = None) -
     m = re.search(r"\bclass\s+(\w+)", text)
     cls = m.group(1) if m else ""
     suite = _suite_of(path)
-    return [Binding(pattern=p, verb=v, cls=cls, path=path, layer=layer, suite=suite)
-            for v, p in BINDING.findall(text)]
+    return [Binding(pattern=match.group(2), verb=match.group(1), cls=cls, path=path, layer=layer,
+                    suite=suite, line=text.count("\n", 0, match.start()) + 1)
+            for match in BINDING.finditer(text)]
 
 
 def pattern_to_regex(pattern: str) -> re.Pattern:
