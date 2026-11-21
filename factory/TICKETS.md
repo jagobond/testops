@@ -12,8 +12,6 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 
 | id | title | feature | status | note |
 |----|-------|---------|--------|------|
-
-Feature F1 = "a claim a developer can act on". F0 is scaffolding and carries no product outcome.
 | TESTOPS-1 | Factory scaffolding: git baseline, PRODUCT/ROLES/AGENTS, board | F0 | done | Lead work, no builder |
 | TESTOPS-2 | Test harness baseline: pytest, one real test, dev extras | F1 | done | 17 tests; PR #1 merged into feature/f1 as 5c008b7 after a PASS review |
 | TESTOPS-3 | Claim schema v2 — per-assertion subject, sources used and missing, `not_assessable` | F1 | done | 53 tests; PR #2 merged as 616d5d8 after a PASS review |
@@ -30,6 +28,8 @@ Feature F1 = "a claim a developer can act on". F0 is scaffolding and carries no 
 | TESTOPS-14 | Evidence depth: a level run records only the product arm and its claims carry no observations | F1 | done | 195 observations, 0 claims empty; verdicts unmoved; PR #8 merged as 28894a5 after a PASS review |
 | TESTOPS-15 | Make the floor real: the suite runs on 3.11 in CI, not just on a machine where someone remembers | F1 | done | Proven fail-capable (run 44962212770): 3.11 leg red, 3.12 green; PR #10 merged |
 | TESTOPS-16 | Say which kind of nothing it is: "not recorded" vs "nothing bears on it" | F1 | done | 140 tests; PR #12 merged after a PASS review |
+
+Feature F1 = "a claim a developer can act on". F0 is scaffolding and carries no product outcome.
 
 ## Why the harness comes first
 
