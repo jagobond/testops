@@ -33,7 +33,10 @@ SIGNALS = (
              r"\bRestRequest\b", r"\bWebApiResponse\b", r"\bPostAsJsonAsync\b", r"\brequests\b",
              r"\bhttpx\b", r"\burlopen\b", r"System\.Net\.Http", r"\bcontinuity_driver\b",
              r"\bsubprocess\b")),
-    ("engine", (r"\bengine\s*\.", r"\bEngineClient\b", r"\badmit\s*\(", r"\bStore\b")),
+    ("engine", (r"\bengine\s*\.", r"\bEngineClient\b", r"\badmit\s*\(", r"\bStore\b",
+                # A suite that speaks to the product's own driver shim is testing the engine
+                # in-process, not over HTTP: the step definition runs the driver, not a client.
+                r"\bRunDriverAsync\b", r"\bDriverReply\b")),
     ("storage", (r"\bDbContext\b", r"\bRepository\b", r"\bSqlite\b", r"CREATE TABLE")),
 )
 
