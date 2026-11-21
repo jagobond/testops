@@ -36,5 +36,5 @@ arrangement the factory exists to replace.
 | TESTOPS-12 | Labels finish the job, and the restraint rule stops being a be-verb pattern | F1 | blocked | TESTOPS-11 review concerns 1 and 2: eleven scenarios still carry two or three labels in one pass, and a compound sentence can unplace a checkable sibling |
 | TESTOPS-13 | Python floor: the app cannot be imported by the 3.11 interpreter that serves it | F1 | done | 118 pass on 3.12, 114 pass + 4 skip on 3.11; PR #7 merged after a PASS review |
 | TESTOPS-14 | Evidence depth: a level run records only the product arm and its claims carry no observations | F1 | done | 195 observations, 0 claims empty; verdicts unmoved; PR #8 merged as 28894a5 after a PASS review |
-| TESTOPS-15 | Make the floor real: the suite runs on 3.11 in CI, not just on a machine where someone remembers | F1 | ready | T13 review: the guard covers the construct, not the floor — `itertools.batched` compiles clean on 3.11 and dies at runtime |
-| TESTOPS-16 | Say which kind of nothing it is: "not recorded" vs "nothing bears on it" | F1 | blocked | After T15. TESTOPS-14 review concern 3: `None` and `[]` collapse into one sentence |
+| TESTOPS-15 | Make the floor real: the suite runs on 3.11 in CI, not just on a machine where someone remembers | F1 | done | Proven fail-capable (run 44962212770): 3.11 leg red, 3.12 green; PR #10 merged |
+| TESTOPS-16 | Say which kind of nothing it is: "not recorded" vs "nothing bears on it" | F1 | ready | TESTOPS-14 review concern 3: `None` and `[]` collapse into one sentence |
