@@ -287,15 +287,34 @@ def section_does(c: dict) -> list[str]:
     evidence = c.get("evidence")
     support = c.get("support") or []
     if evidence is None:
-        out.append('<p class="quiet">Evidence for this claim was not recorded.</p>')
+        # v1 claims carry no coordinates at all: there is no run to count observations in, and
+        # saying "this run recorded none" would invent a run that never existed.
+        if c.get("schema_version") != 2:
+            out.append('<p class="quiet">Evidence for this claim was not recorded: it was recorded '
+                       'before provenance was captured, so there is no run to look in and no '
+                       'coordinates to look at.</p>')
+        else:
+            out.append('<p class="quiet">Evidence for this claim was not recorded.</p>')
     elif not evidence:
+        recorded = c.get("observations_recorded")
         if support:
             out.append('<p class="quiet">This claim records the observations it rests on, but none '
                        'of them could be read back from this store. That is a defect in the stored '
                        'evidence, not an absence of it.</p>')
+        elif recorded == 0:
+            out.append('<p class="quiet">This run recorded no observations; it predates observation '
+                       'recording. Nobody was looking when this claim was made, so the source link '
+                       'above is the only evidence there is \u2014 and the emptiness here is not a '
+                       'sign the claim is clean.</p>')
+        elif isinstance(recorded, int):
+            out.append(f'<p class="quiet">Nothing in this run bears on this claim, so the source '
+                       f'link above is the only evidence there is. The run recorded {recorded} '
+                       f'observation{"s" if recorded != 1 else ""} in total; none of them is at '
+                       f'these coordinates.</p>')
         else:
-            out.append('<p class="quiet">This run recorded no observations at these coordinates, so '
-                       'the source link above is the only evidence there is.</p>')
+            out.append('<p class="quiet">Nothing in this run bears on this claim, so the source '
+                       'link above is the only evidence there is. How many observations the run '
+                       'recorded was not recorded.</p>')
     else:
         if support:
             out.append('<p>The observations this claim rests on, recorded in this run:</p>')

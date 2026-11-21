@@ -87,8 +87,35 @@ def claim_read(conn, claim_id: int) -> dict | None:
     project = _project_of_run(conn, row["run_id"])
     claim = claim_view(row, repo=_repo_for_coordinates(conn, project, row["assertion_commit"],
                                                        row["assertion_path"]))
+    return _attach_evidence(conn, claim)
+
+
+def _attach_evidence(conn, claim: dict) -> dict:
+    """Attach the evidence for a claim and the count it must be read against, together.
+
+    The two are one read: ``[]`` evidence on a run that recorded nothing means "nobody was looking",
+    and on a run that recorded plenty it means "we looked, none of it was here". A read model that
+    carried only the list would let a page collapse those two into one sentence again.
+    """
     claim["evidence"] = evidence_for_claim(conn, claim)
+    claim["observations_recorded"] = observations_in_snapshot(conn, claim)
     return claim
+
+
+def observations_in_snapshot(conn, claim: dict) -> int | None:
+    """How many observation rows the claim's own snapshot holds.
+
+    Counted over the claim's run's snapshot, not over the whole store: a claim is about one run,
+    and another run's observations say nothing about whether this one looked. Returns ``None``
+    when the claim's run has no snapshot row to count - "cannot say", never a zero.
+    """
+    run = conn.execute("SELECT snapshot_id FROM run WHERE id = ?", (claim["run_id"],)).fetchone()
+    if run is None:
+        return None
+    total = conn.execute(
+        """SELECT COUNT(*) FROM observation o JOIN artefact a ON a.id = o.artefact_id
+            WHERE a.snapshot_id = ?""", (run["snapshot_id"],)).fetchone()[0]
+    return int(total)
 
 
 def _project_of_run(conn, run_id: str) -> str | None:
@@ -148,8 +175,9 @@ def finding_rows(conn, case_id: str) -> list[dict]:
             detail = _json(inf["output"]) if inf else {}
             claim = claim_view(c, repo=_repo_for_coordinates(conn, project, c["assertion_commit"],
                                                              c["assertion_path"]))
+            claim = _attach_evidence(conn, claim)
             claim.update({"used_model": bool(detail.get("model") and detail.get("model") != "none"),
-                          "detail": detail, "evidence": evidence_for_claim(conn, claim)})
+                          "detail": detail})
             claims.append(claim)
         out.append({"id": f["id"], "title": f["title"], "severity": f["severity"],
                     "fingerprint": f["fingerprint"], "claims": claims,
