@@ -33,8 +33,8 @@ suite in the repo can only read the diff and take the builder's word for it — 
 arrangement the factory exists to replace.
 | TESTOPS-10 | Classification coverage: 51% of the real corpus is `unplaced` | F1 | done | 48 → 0 unplaced, gaps unchanged; PR #4 merged after a PASS review |
 | TESTOPS-11 | Restraint: a claim is not `distinct` because one of its words is familiar | F1 | done | 90 distinct / 1 unplaced / 1 gap / 2 review; PR #5 merged as 1c1fca3 after a PASS review |
-| TESTOPS-12 | Labels finish the job, and the restraint rule stops being a be-verb pattern | F1 | blocked | TESTOPS-11 review concerns 1 and 2: eleven scenarios still carry two or three labels in one pass, and a compound sentence can unplace a checkable sibling |
+| TESTOPS-12 | Labels finish the job, and the restraint rule stops being a be-verb pattern | F1 | ready | Accumulated polish: eleven scenarios with mixed labels, be-verb restraint, every statement opening "This test", plus the TESTOPS-16 wording nit |
 | TESTOPS-13 | Python floor: the app cannot be imported by the 3.11 interpreter that serves it | F1 | done | 118 pass on 3.12, 114 pass + 4 skip on 3.11; PR #7 merged after a PASS review |
 | TESTOPS-14 | Evidence depth: a level run records only the product arm and its claims carry no observations | F1 | done | 195 observations, 0 claims empty; verdicts unmoved; PR #8 merged as 28894a5 after a PASS review |
 | TESTOPS-15 | Make the floor real: the suite runs on 3.11 in CI, not just on a machine where someone remembers | F1 | done | Proven fail-capable (run 44962212770): 3.11 leg red, 3.12 green; PR #10 merged |
-| TESTOPS-16 | Say which kind of nothing it is: "not recorded" vs "nothing bears on it" | F1 | ready | TESTOPS-14 review concern 3: `None` and `[]` collapse into one sentence |
+| TESTOPS-16 | Say which kind of nothing it is: "not recorded" vs "nothing bears on it" | F1 | done | 140 tests; PR #12 merged after a PASS review |

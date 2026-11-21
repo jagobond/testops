@@ -2,7 +2,7 @@
 id: TESTOPS-16
 title: Say which kind of nothing it is
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-15
 ---
