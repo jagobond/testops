@@ -2,7 +2,7 @@
 id: TESTOPS-2
 title: Test harness baseline
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: none
 ---
