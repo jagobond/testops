@@ -1,0 +1,36 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-6 against its acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-6-case-page`, tree clean.
+Ticket:     factory/tickets/TESTOPS-6.md
+Diff:       git diff feature/f1..HEAD
+Rules:      AGENTS.md
+
+HARD RULES
+- Run the suite yourself:
+    env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
+      .venv/Scripts/python.exe -m pytest -q
+- **Render the page and read it as the Product Owner would.** Start the server on a spare port
+  (127.0.0.1, e.g. 8793), fetch a case page with the real specimen in the store
+  (case-cotw-levels-20261121T215534-01), and quote the rendered text of all six sections. If any
+  section is missing, contradicts another, or would confuse someone who has never heard of TestOps,
+  that is a finding.
+- Check AC2 and AC3 by reading the HTML: the permalink's commit must equal the claim's own commit, and
+  evidence must come from the claim's coordinates, not from a substring scan.
+- Check AC9 with a v1 claim (older runs, and the duplication analyser's findings) — it must render
+  "recorded before provenance was captured", not blank and not an exception.
+- The Lead noticed that section 3 often reads "This run recorded no observations at these
+  coordinates...". Decide whether that is an honest limitation of this ticket or a gap in what the
+  page claims to show, and say which.
+- Do not edit product code, tests or the ticket. You may write exactly one file:
+  factory/reports/2026-11-21/TESTOPS-6-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC11 HOLDS / WEAK / NOT MET with evidence.
+  ## The page as a reader sees it — your own quoted render, and a blunt judgement.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 400 words.
+
+ANTI-REPETITION: never repeat a sentence verbatim. Stop when the points are made.
