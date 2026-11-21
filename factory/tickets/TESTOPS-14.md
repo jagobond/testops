@@ -2,7 +2,7 @@
 id: TESTOPS-14
 title: A level run cannot rebuild itself, and its claims carry no observations
 feature: F1
-status: blocked
+status: done
 autonomy: build
 depends_on: TESTOPS-13
 ---
