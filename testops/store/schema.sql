@@ -1,10 +1,21 @@
 -- TestOps evidence store. Immutable rows, derived everything else.
+--
+-- schema_version 2: a claim is about one assertion and carries its own provenance. A v1 row keeps
+-- schema_version = 1 and NULL provenance for ever - it is the record of what was claimed before the
+-- record could express it, and rewriting it would destroy that record. The path from a v1 store
+-- lives in testops/store/migrate.py.
+
+CREATE TABLE IF NOT EXISTS schema_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL                      -- deliberately not json: readable with `sqlite3 file.db`
+);
 
 CREATE TABLE IF NOT EXISTS snapshot (
   id TEXT PRIMARY KEY,
   project TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  artefact_versions TEXT NOT NULL          -- json: {slug: commit_sha, ...}
+  artefact_versions TEXT NOT NULL,         -- json: {slug: commit_sha, ...}
+  schema_version INTEGER NOT NULL DEFAULT 1  -- claim schema in force when this snapshot was taken
 );
 
 CREATE TABLE IF NOT EXISTS artefact (
@@ -38,16 +49,39 @@ CREATE TABLE IF NOT EXISTS run (
   error TEXT
 );
 
+-- A v2 claim is about one assertion: which Gherkin step says it, where that step lives, and at
+-- which commit. The store refuses a v2 row without those three coordinates, so no caller can write
+-- a v2 claim a reader cannot check. Blanks are refused too: '' is not a path.
 CREATE TABLE IF NOT EXISTS claim (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   run_id TEXT NOT NULL REFERENCES run(id),
   analyser TEXT NOT NULL,
   analyser_version TEXT NOT NULL,
   subject_ref TEXT NOT NULL,               -- scenario:<feature>#<name> | issue:COTW-12
-  statement TEXT NOT NULL,
+  statement TEXT NOT NULL,                 -- the claim's own heading, in plain words
   verdict TEXT NOT NULL,                   -- optimal | overbuilt | necessary | unplaced | duplicate
   confidence REAL NOT NULL DEFAULT 0.0,
-  support TEXT NOT NULL DEFAULT '[]'       -- json: [observation ids]
+  support TEXT NOT NULL DEFAULT '[]',      -- json: [observation ids]
+  schema_version INTEGER NOT NULL DEFAULT 1,
+  assertion_text TEXT,                     -- the Gherkin step text, verbatim
+  assertion_path TEXT,                     -- repo-relative path of the feature file
+  assertion_line INTEGER,                  -- 1-based line of the step
+  assertion_commit TEXT,                   -- the commit the coordinates were read at
+  interaction_label TEXT,                  -- what a reader sees: "needs a browser"
+  interaction_code TEXT,                   -- I1..I4, KP - debugging shorthand, never primary text
+  span TEXT,                               -- json: [layers the instrument actually reached]
+  established_by TEXT,                     -- the analyser rule that establishes the claim
+  sources_missing TEXT,                    -- json: [source names] | NULL = not recorded at all
+  proposed_action TEXT,
+  CONSTRAINT claim_v2_requires_provenance CHECK (
+    schema_version = 1
+    OR (
+      schema_version = 2
+      AND assertion_path IS NOT NULL AND length(trim(assertion_path)) > 0
+      AND assertion_line IS NOT NULL
+      AND assertion_commit IS NOT NULL AND length(trim(assertion_commit)) > 0
+    )
+  )
 );
 
 CREATE TABLE IF NOT EXISTS inference (
