@@ -1,0 +1,106 @@
+-- TestOps evidence store. Immutable rows, derived everything else.
+
+CREATE TABLE IF NOT EXISTS snapshot (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  artefact_versions TEXT NOT NULL          -- json: {slug: commit_sha, ...}
+);
+
+CREATE TABLE IF NOT EXISTS artefact (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  snapshot_id TEXT NOT NULL REFERENCES snapshot(id),
+  uri TEXT NOT NULL,                       -- github:owner/name@sha:path  |  jira:COTW-12
+  kind TEXT NOT NULL,                      -- feature | stepdef | source | test | issue | run
+  blob_sha TEXT,
+  meta TEXT NOT NULL DEFAULT '{}',
+  UNIQUE(snapshot_id, uri)
+);
+
+CREATE TABLE IF NOT EXISTS observation (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  artefact_id INTEGER NOT NULL REFERENCES artefact(id),
+  extractor TEXT NOT NULL,
+  extractor_version TEXT NOT NULL,
+  key TEXT NOT NULL,                       -- scenario:Login works | ac_row:3
+  value TEXT NOT NULL                      -- json
+);
+
+CREATE TABLE IF NOT EXISTS run (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  snapshot_id TEXT NOT NULL,
+  analyser TEXT NOT NULL,
+  status TEXT NOT NULL,                    -- running | ok | failed | partial
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  budget TEXT NOT NULL DEFAULT '{}',
+  error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS claim (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL REFERENCES run(id),
+  analyser TEXT NOT NULL,
+  analyser_version TEXT NOT NULL,
+  subject_ref TEXT NOT NULL,               -- scenario:<feature>#<name> | issue:COTW-12
+  statement TEXT NOT NULL,
+  verdict TEXT NOT NULL,                   -- optimal | overbuilt | necessary | unplaced | duplicate
+  confidence REAL NOT NULL DEFAULT 0.0,
+  support TEXT NOT NULL DEFAULT '[]'       -- json: [observation ids]
+);
+
+CREATE TABLE IF NOT EXISTS inference (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  claim_id INTEGER NOT NULL REFERENCES claim(id),
+  model TEXT NOT NULL,
+  model_version TEXT NOT NULL,
+  prompt_hash TEXT NOT NULL,
+  input_refs TEXT NOT NULL DEFAULT '[]',
+  output TEXT NOT NULL,
+  tokens_in INTEGER NOT NULL DEFAULT 0,
+  tokens_out INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS case_ (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES run(id),
+  project TEXT NOT NULL,
+  analyser TEXT NOT NULL,
+  snapshot_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS finding (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  case_id TEXT NOT NULL REFERENCES case_(id),
+  title TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  claim_ids TEXT NOT NULL DEFAULT '[]'
+);
+
+CREATE TABLE IF NOT EXISTS case_state (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  case_id TEXT NOT NULL REFERENCES case_(id),
+  state TEXT NOT NULL,                     -- open | needs_fix | resolved | false_positive
+  actor TEXT NOT NULL,
+  at TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS suppression (
+  fingerprint TEXT PRIMARY KEY,
+  state TEXT NOT NULL,                     -- resolved | false_positive | accepted
+  actor TEXT NOT NULL,
+  at TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_artefact_snapshot ON artefact(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_obs_artefact ON observation(artefact_id);
+CREATE INDEX IF NOT EXISTS idx_claim_run ON claim(run_id);
+CREATE INDEX IF NOT EXISTS idx_finding_case ON finding(case_id);
+
+CREATE INDEX IF NOT EXISTS idx_case_state_case ON case_state(case_id);

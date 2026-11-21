@@ -1,0 +1,14 @@
+[project]
+name = "testops"
+version = "0.1.0"
+description = "Evidence-backed analysis of a repository pair"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools]
+packages = ["testops", "testops.store", "testops.collectors", "testops.extract",
+            "testops.surfaces", "testops.analysers", "testops.judgement",
+            "testops.cases", "testops.score"]
+
+[tool.setuptools.package-data]
+"testops" = ["store/schema.sql", "judgement/prompts/*.md"]
