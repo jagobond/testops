@@ -1,0 +1,118 @@
+name: CI
+
+# TESTOPS-15. The floor is a property of the repository, not of the Lead's memory: the suite runs on
+# the interpreter that serves the UI (3.11) and on the one a developer is most likely to have (3.12).
+#
+# Cost: three jobs per run (two matrix legs plus the render check), each rounded up to the nearest
+# billed minute, so ~3 minutes per run on a private repository. A superseded run is cancelled by the
+# concurrency group below and is billed only for the time it had already used.
+
+on:
+  push:
+    branches: [main, "feature/*"]
+  pull_request:
+    branches: [main, "feature/*"]
+
+concurrency:
+  # One run per branch (or PR) at a time: a second push cancels the first instead of queueing a
+  # second full matrix. Keyed on the ref, so two PRs never cancel each other.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHONNOUSERSITE: "1"
+
+jobs:
+  suite:
+    # The interpreter is in the check's own name, so a red check on a PR says which floor broke
+    # without anyone opening the Actions tab (AC4).
+    name: suite (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install the package with dev extras
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run the suite the way tests/README.md says to
+        shell: bash
+        run: |
+          set -o pipefail
+          # The same command a developer runs locally, with the interpreter from the matrix in
+          # place of .venv/Scripts/python.exe. The environment is stripped for the same reason:
+          # an inherited PYTHONPATH makes the result an environment error, not a pass.
+          env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
+            python -m pytest -q | tee "$RUNNER_TEMP/pytest-${{ matrix.python }}.log"
+
+      - name: Status line naming the interpreter
+        if: always()
+        env:
+          PYTHON_VERSION: ${{ matrix.python }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          {
+            echo "### pytest on Python ${PYTHON_VERSION}: ${JOB_STATUS}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Name the failing interpreter and the failing tests
+        if: failure()
+        shell: bash
+        run: |
+          log="$RUNNER_TEMP/pytest-${{ matrix.python }}.log"
+          {
+            echo ""
+            echo "#### suite (Python ${{ matrix.python }}) failed"
+            echo ""
+            if [ -f "$log" ]; then
+              grep -E '^(FAILED|ERROR)' "$log" \
+                || echo 'pytest reported no FAILED/ERROR lines; see the step log.'
+            else
+              echo 'pytest never ran: the install or setup step failed first. See the step log.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -f "$log" ] && grep -qE '^(FAILED|ERROR)' "$log"; then
+            while IFS= read -r line; do
+              echo "::error title=suite (Python ${{ matrix.python }})::${line}"
+            done < <(grep -E '^(FAILED|ERROR)' "$log")
+          else
+            echo "::error title=suite (Python ${{ matrix.python }})::the suite did not run or reported nothing; see this job's log"
+          fi
+
+  render:
+    # AC3: import and render, not compile. `from itertools import batched` compiles cleanly on 3.11
+    # and raises at import, which is past both sides of the compile guard in test_python_floor.py.
+    name: render case page (Python 3.11)
+    needs: suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install the package with dev extras
+        run: python -m pip install -e ".[dev]"
+
+      - name: Import the app and serve one real case page from the store fixture
+        run: |
+          env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
+            python .github/ci/render_case_page.py
