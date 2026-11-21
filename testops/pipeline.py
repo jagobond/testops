@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from . import blobs
 from .analysers import duplication, level_fitness
@@ -22,6 +22,9 @@ class RunResult:
     case_id: str
     claims: list
     stats: dict
+    # One case per actionable claim (TESTOPS-4). ``case_id`` keeps the first for callers that want
+    # a single handle; an analyser whose run raises nothing actionable has no case at all.
+    case_ids: list[str] = field(default_factory=list)
 
 
 def _now() -> str:
@@ -29,6 +32,35 @@ def _now() -> str:
 
 
 RAISES = {"review", "gap", "duplicate"}
+
+
+def _fingerprint(analyser_name: str, claim) -> str:
+    """Identity of the evidence behind a claim - never of its verdict.
+
+    ``evidence_key`` is the analyser's own name for the assertion (for a level claim: the
+    interaction plus the assertion's words), so two claims from one scenario no longer collide in
+    one case. Analysers that predate the field fall back to their coarser key.
+    """
+    return cases.fingerprint(analyser_name, claim.subject_ref,
+                             claim.detail.get("evidence_key")
+                             or claim.detail.get("claim")
+                             or claim.detail.get("signature")
+                             or claim.verdict)
+
+
+def _missing_sources(project: Project) -> list[str]:
+    """Sources this run never consulted, named rather than assumed clean.
+
+    Jira and ADO are absent at Quilter by policy. A level-fitness run reads the test repository and
+    the product repository only, so every claim records which requirement sources it could not
+    check against. "Nothing was found" is never what a missing source means.
+    """
+    missing: list[str] = []
+    if getattr(project, "jira_key", ""):
+        missing.append("jira")
+    if getattr(project, "ado_org", None):
+        missing.append("ado")
+    return missing
 
 
 def _emit(conn, case_id: str, analyser_name: str, claim, severity: str = "medium") -> bool:
@@ -42,8 +74,7 @@ def _emit(conn, case_id: str, analyser_name: str, claim, severity: str = "medium
     # evidence, not noise. A case that lists 42 clean scenarios is a report, and nobody reads reports daily.
     if claim.verdict not in RAISES:
         return False
-    fp = cases.fingerprint(analyser_name, claim.subject_ref,
-                           claim.detail.get("claim") or claim.detail.get("signature") or claim.verdict)
+    fp = _fingerprint(analyser_name, claim)
     if cases.suppressed(conn, fp):
         return False
     conn.execute(
@@ -160,7 +191,8 @@ def run_level_fitness(project: Project, token: str) -> RunResult:
 
     snapshot_id = f"{project.key}-levels-{dt.date.today():%Y%m%d}-{test_repo.commit[:8]}"
     db.upsert_snapshot(conn, snapshot_id, project.key, _now(),
-                       {project.test.slug: test_repo.commit, project.product.slug: product.commit})
+                       {project.test.slug: test_repo.commit, project.product.slug: product.commit},
+                       schema_version=2)
 
     texts, product_texts = {}, {}
     for path, (sha, kind) in test_repo.files.items():
@@ -191,29 +223,64 @@ def run_level_fitness(project: Project, token: str) -> RunResult:
         return f"github:{project.test.slug}@{test_repo.commit}:{path}"
 
     budget = {"calls": 0, "tokens_in": 0, "tokens_out": 0}
-    claims = level_fitness.analyse(features, bindings, surfaces, uri_for_path, budget)
+    claims = level_fitness.analyse(features, bindings, surfaces, uri_for_path, budget,
+                                   sources_missing=_missing_sources(project),
+                                   commit=test_repo.commit)
 
     run_id = f"{project.key}-levels-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%S}"
     db.start_run(conn, run_id, project.key, snapshot_id, level_fitness.name, _now())
-    case_id = f"case-{run_id}"
-    conn.execute(
-        "INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at, summary) VALUES (?,?,?,?,?,?,?)",
-        (case_id, run_id, project.key, level_fitness.name, snapshot_id, _now(),
-         db.j({"claims": len(claims), "surfaces": len(surfaces), "budget": budget, "emitted": 0})),
-    )
-    emitted = 0
+
+    # Every claim is written with the coordinates its reader needs to check it. The store refuses a
+    # v2 row without them, so this loop cannot quietly fall back to a subject-only claim.
     for c in claims:
         cid = db.add_claim(conn, run_id, level_fitness.name, level_fitness.version, c.subject_ref,
-                           c.statement, c.verdict, c.confidence, [])
+                           c.statement, c.verdict, c.confidence, [],
+                           schema_version=2,
+                           assertion_text=c.detail["assertion_text"],
+                           assertion_path=c.detail["assertion_path"],
+                           assertion_line=c.detail["assertion_line"],
+                           assertion_commit=c.detail["assertion_commit"],
+                           interaction_label=c.detail["interaction_label"],
+                           interaction_code=c.detail["interaction_code"],
+                           span=c.detail["span"],
+                           established_by=c.detail["established_by"],
+                           sources_missing=c.detail["sources_missing"],
+                           proposed_action=c.detail["proposed_action"])
         c.claim_id = cid
         db.add_inference(conn, cid, c.detail.get("model", "none"), c.detail.get("model", "none"),
                          c.detail.get("prompt_hash", ""), [], c.detail,
                          c.detail.get("tokens", 0), 0)
-        emitted += _emit(conn, case_id, level_fitness.name, c,
-                         "high" if c.verdict in ("review", "gap") else "info")
+
+    # One case per actionable claim, one finding each. Grouping two claims into one case is how a
+    # single decision used to silence both, so a case never holds more than one finding here. A
+    # claim a human has already ruled on raises nothing at all - not even an empty case.
+    actionable = [c for c in claims if c.verdict in RAISES]
+    case_ids: list[str] = []
+    for number, c in enumerate(actionable, start=1):
+        fp = _fingerprint(level_fitness.name, c)
+        if cases.suppressed(conn, fp):
+            continue
+        case_id = f"case-{run_id}-{number:02d}"
+        conn.execute(
+            "INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at, summary)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (case_id, run_id, project.key, level_fitness.name, snapshot_id, _now(),
+             db.j({"claim": c.detail.get("claim"), "verdict": c.verdict,
+                   "assertion_line": c.detail.get("assertion_line"),
+                   "claims": len(claims), "actionable": len(actionable),
+                   "surfaces": len(surfaces), "budget": budget})),
+        )
+        if _emit(conn, case_id, level_fitness.name, c,
+                 "high" if c.verdict in ("review", "gap") else "info"):
+            case_ids.append(case_id)
+        else:
+            conn.execute("DELETE FROM case_ WHERE id = ?", (case_id,))
     db.finish_run(conn, run_id, "ok", _now(), budget=budget)
     conn.commit()
     conn.close()
-    return RunResult(run_id=run_id, snapshot_id=snapshot_id, case_id=case_id, claims=claims,
+    return RunResult(run_id=run_id, snapshot_id=snapshot_id, case_id=(case_ids[0] if case_ids else ""),
+                     claims=claims, case_ids=case_ids,
                      stats={"features": len(features), "scenarios": sum(len(f.scenarios) for f in features),
-                            "surfaces": len(surfaces), "budget": budget})
+                            "claims": len(claims), "actionable": len(actionable),
+                            "cases": len(case_ids), "surfaces": len(surfaces), "budget": budget})
+
