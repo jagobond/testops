@@ -24,6 +24,8 @@ Design decisions that matter, from ui-design-v2 and the Product Owner's reading 
 """
 from __future__ import annotations
 
+from itertools import batched  # TEMP review probe: fails at import on 3.11 only
+
 import datetime as dt
 import html
 import re
