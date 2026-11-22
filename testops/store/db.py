@@ -103,7 +103,8 @@ def add_claim(conn, run_id: str, analyser: str, version: str, subject_ref: str,
               assertion_line: int | None = None, assertion_commit: str | None = None,
               interaction_label: str | None = None, interaction_code: str | None = None,
               span: list | None = None, established_by: str | None = None,
-              sources_missing: list | None = None, proposed_action: str | None = None) -> int:
+              sources_assessed: bool = False, sources_missing: list | None = None,
+              proposed_action: str | None = None) -> int:
     """Write one claim.
 
     ``schema_version`` defaults to 1, which is what the analysers written before TESTOPS-4 are: they
@@ -111,19 +112,29 @@ def add_claim(conn, run_id: str, analyser: str, version: str, subject_ref: str,
     if it does not, the *database* raises ``sqlite3.IntegrityError`` on the CHECK constraint. There is
     deliberately no Python check here - a guard in this function is a guard the next caller skips.
 
-    ``sources_missing``: ``[]`` means everything was consulted; ``None`` means nothing was recorded.
-    The two are stored and read back differently on purpose.
+    ``sources_assessed`` is the caller's record that a source registry was actually consulted for
+    this claim, and ``sources_missing`` is what it said. They are two facts, and the store keeps them
+    apart: ``sources_assessed=False`` is "not assessed" (the default, so a caller that records nothing
+    cannot produce a clean bill), ``sources_assessed=True`` with ``[]`` is "assessed, nothing was
+    missing", and ``sources_assessed=True`` with names is "assessed, these were not connected".
+
+    A list passed without ``sources_assessed=True`` is not an assessment - it is a default with no
+    record behind it - and is stored as ``None`` beside ``sources_assessed = 0``. Passing
+    ``sources_assessed=True`` with no list is incoherent and the database refuses it: "assessed" with
+    nothing to show is exactly the guarantee this column exists to prevent.
     """
+    if not sources_assessed:
+        sources_missing = None
     cur = conn.execute(
         "INSERT INTO claim (run_id, analyser, analyser_version, subject_ref, statement, verdict,"
         " confidence, support, schema_version, assertion_text, assertion_path, assertion_line,"
         " assertion_commit, interaction_label, interaction_code, span, established_by,"
-        " sources_missing, proposed_action)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        " sources_missing, sources_assessed, proposed_action)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (run_id, analyser, version, subject_ref, statement, verdict, float(confidence), j(support),
          int(schema_version), assertion_text, assertion_path, assertion_line, assertion_commit,
          interaction_label, interaction_code, jn(span), established_by, jn(sources_missing),
-         proposed_action),
+         1 if sources_assessed else 0, proposed_action),
     )
     return cur.lastrowid
 

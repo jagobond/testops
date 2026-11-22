@@ -43,9 +43,11 @@ class Snapshot:
     product_slug: str
     test_commit: str
     product_commit: str
-    sources_missing: list[str]
+    sources_missing: list[str] | None
     # The registry's verdict for this analyser's needed capabilities, rebuilt from the snapshot's
-    # own record. ``None`` means the snapshot predates the registry, not "nothing was missing".
+    # own record. ``None`` means the snapshot predates the registry, not "nothing was missing" -
+    # and it stays ``None`` in the rebuilt claims too: a rebuild that turned "no registry was
+    # recorded" into "nothing was missing" would print a clean bill the original run never gave.
     assessment: sources.Assessment | None = None
     test_files: dict[str, tuple[str, str]] = field(default_factory=dict)  # path -> (blob_sha, kind)
     product_texts: dict[str, str] = field(default_factory=dict)           # path -> text
@@ -103,11 +105,15 @@ def load(conn, snapshot_id: str) -> Snapshot:
         raise SnapshotNotSelfContained(
             f"snapshot {snapshot_id} does not pin both arms: versions are {versions!r}")
 
+    assessment = sources.assessment_for(meta, level_fitness.name)
     snap = Snapshot(id=snapshot_id, project=row["project"], created_at=row["created_at"],
                     test_slug=test_slug, product_slug=product_slug,
                     test_commit=test_commit, product_commit=product_commit,
-                    sources_missing=list(meta["sources_missing"]),
-                    assessment=sources.assessment_for(meta, level_fitness.name))
+                    # A snapshot that recorded the registry was assessed; its stored list is what the
+                    # assessment said. A snapshot without one recorded only a list, and carrying that
+                    # list forward would be carrying an answer nobody recorded a question for.
+                    sources_missing=(list(meta["sources_missing"]) if assessment is not None else None),
+                    assessment=assessment)
 
     stepdef_artefacts: list[tuple[int, str]] = []
     for art in conn.execute("SELECT id, uri, kind, blob_sha FROM artefact WHERE snapshot_id = ?"

@@ -437,21 +437,26 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
             support_index: dict[tuple[str, str, str], int] | None = None) -> list[Claim]:
     """One claim per asserting step, in deterministic order.
 
-    ``sources_missing`` is the caller's record of which sources were never connected. It is copied
-    onto every claim, and a caller that passes nothing records an explicit empty list: a claim may
-    say "nothing was missing", it may never imply it.
+    ``sources_missing`` is the caller's record of which sources were never connected, and *whether*
+    the caller looked at all. ``None`` - the default - means no registry was consulted for this claim,
+    and the claim records that: not assessed. A list, including an empty one, means the registry was
+    consulted and this is what it said; ``[]`` is "assessed, nothing was missing", never "not
+    recorded". The default must not be the clean bill, because a caller that forgets the argument
+    would otherwise write a guarantee nobody produced.
 
     ``assessment`` is the registry's verdict for the capabilities this analyser needs (see
     :data:`NEEDS`). It is copied onto every claim as a plain record, with the reason attached when a
     source nobody could consult is involved. ``None`` means the caller did not record an assessment,
-    which is different from an assessment of "nothing was missing" and is stored as ``None``.
+    and it travels with ``sources_missing=None``: an assessment without a list, or a list without
+    one, would be half a record.
 
     ``support_index`` maps a binding's ``(path, verb, pattern)`` to the id of the observation row the
     caller recorded for it. It is how a claim learns *which rows* back it without this module ever
     touching the store. When it is omitted - or holds no row for a binding - the claim's support is
     an explicit empty list: nothing was recorded, which is the truth, not zero evidence.
     """
-    missing = [] if sources_missing is None else list(sources_missing)
+    assessed = sources_missing is not None
+    missing = list(sources_missing) if assessed else None
     assessment_record = None if assessment is None else assessment.record()
     index = support_index or {}
     claims: list[Claim] = []
@@ -518,7 +523,8 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                     "span": span,
                     "instrument": instrument,
                     "established_by": why,
-                    "sources_missing": list(missing),
+                    "sources_assessed": assessed,
+                    "sources_missing": list(missing) if assessed else None,
                     "assessment": assessment_record,
                     "proposed_action": _proposed_action(interaction, clause, verdict, why),
                     "support": support,

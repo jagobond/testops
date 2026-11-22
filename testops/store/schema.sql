@@ -4,6 +4,12 @@
 -- schema_version = 1 and NULL provenance for ever - it is the record of what was claimed before the
 -- record could express it, and rewriting it would destroy that record. The path from a v1 store
 -- lives in testops/store/migrate.py.
+--
+-- schema_version 3: whether a claim's sources were assessed at all is stored, distinctly from which
+-- were missing. The default is "not assessed", so a claim written without an assessment record
+-- cannot read as a clean bill; the pairing of the two columns is a CHECK, not a convention. The row
+-- schema_version stays 1 or 2: it says what the row knows about the assertion, and this column says
+-- what it knows about the sources. Both are additive; neither rewrites a past statement.
 
 CREATE TABLE IF NOT EXISTS schema_meta (
   key TEXT PRIMARY KEY,
@@ -72,7 +78,8 @@ CREATE TABLE IF NOT EXISTS claim (
   interaction_code TEXT,                   -- I1..I4, KP - debugging shorthand, never primary text
   span TEXT,                               -- json: [layers the instrument actually reached]
   established_by TEXT,                     -- the analyser rule that establishes the claim
-  sources_missing TEXT,                    -- json: [source names] | NULL = not recorded at all
+  sources_missing TEXT,                    -- json: [source names] | NULL = not assessed, or not recorded
+  sources_assessed INTEGER NOT NULL DEFAULT 0, -- 1 = a registry was consulted for this claim
   proposed_action TEXT,
   CONSTRAINT claim_v2_requires_provenance CHECK (
     schema_version = 1
@@ -81,6 +88,17 @@ CREATE TABLE IF NOT EXISTS claim (
       AND assertion_path IS NOT NULL AND length(trim(assertion_path)) > 0
       AND assertion_line IS NOT NULL
       AND assertion_commit IS NOT NULL AND length(trim(assertion_commit)) > 0
+    )
+  ),
+  -- "Not assessed" is a state, not an empty list. A missing-source list is only readable as a fact
+  -- when the run recorded that it looked; without that record the list is a default, and a default
+  -- must not render as a guarantee. The database enforces the pairing, so no writer can store
+  -- "assessed" with nothing to show or an unassessed claim with a list that reads like an answer.
+  CONSTRAINT claim_sources_assessed_pairing CHECK (
+    sources_assessed IN (0, 1)
+    AND (
+      (sources_assessed = 0 AND sources_missing IS NULL)
+      OR (sources_assessed = 1 AND sources_missing IS NOT NULL)
     )
   )
 );

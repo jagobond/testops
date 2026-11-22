@@ -41,8 +41,11 @@ def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding
 
     ``sources_missing`` and ``assessment`` are the caller's registry-derived records, copied onto
     every claim exactly as the level analyser does. The analyser never names a source itself.
+    ``sources_missing=None`` means no registry was consulted, and the claim records "not assessed";
+    a list - including an empty one - means it was, and this is what it said.
     """
-    missing = [] if sources_missing is None else list(sources_missing)
+    assessed = sources_missing is not None
+    missing = list(sources_missing) if assessed else None
     assessment_record = None if assessment is None else assessment.record()
     groups: dict[str, list[tuple[gherkin.Feature, gherkin.Scenario, str]]] = defaultdict(list)
 
@@ -90,7 +93,9 @@ def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding
                                              note=f"{o[1].name} ({cheapest})") for o in others],
                         detail={"signature": signature, "layer": layer, "cheapest": cheapest,
                                 "group_size": len(members),
-                                "sources_missing": list(missing), "assessment": assessment_record},
+                                "sources_assessed": assessed,
+                                "sources_missing": list(missing) if assessed else None,
+                                "assessment": assessment_record},
                     ))
                 else:
                     # A repeat *at* the cheapest layer is waste too, and the earlier code dropped it
@@ -107,7 +112,8 @@ def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding
                                       Evidence(uri=uri_for_path(first[0].path), line=first[1].line,
                                                note=first[1].name)],
                             detail={"signature": signature, "layer": layer, "intra_level": True,
-                                    "sources_missing": list(missing),
+                                    "sources_assessed": assessed,
+                                    "sources_missing": list(missing) if assessed else None,
                                     "assessment": assessment_record},
                         ))
         elif len(members) > 1:
@@ -123,6 +129,8 @@ def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding
                               Evidence(uri=uri_for_path(first[0].path), line=first[1].line,
                                        note=first[1].name)],
                     detail={"signature": signature, "layer": layer, "intra_level": True,
-                            "sources_missing": list(missing), "assessment": assessment_record},
+                            "sources_assessed": assessed,
+                            "sources_missing": list(missing) if assessed else None,
+                            "assessment": assessment_record},
                 ))
     return claims

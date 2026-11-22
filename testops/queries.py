@@ -25,6 +25,13 @@ def _json(s, default=None):
 # every read model carries them together and a v1 claim carries them as None - not as "" and not as 0.
 PROVENANCE_FIELDS = ("assertion_text", "assertion_path", "assertion_line", "assertion_commit")
 
+# The three states a claim's source assessment can be in. They are distinct values because they are
+# distinct facts: "nobody looked", "looked, nothing missing", "looked, these were not connected". A
+# page that derives its sentence from anything but this value can put a guarantee on the wrong one.
+SOURCES_NOT_ASSESSED = "not_assessed"
+SOURCES_NONE_MISSING = "none_missing"
+SOURCES_SOME_MISSING = "some_missing"
+
 
 def _list_or_none(text: str | None, field: str):
     """Decode a JSON list, keeping NULL and [] distinct.
@@ -55,6 +62,7 @@ def claim_view(row, repo: str | None = None) -> dict:
     """
     _, _, scenario = row["subject_ref"].partition("#")
     provenance = {field: row[field] for field in PROVENANCE_FIELDS}
+    assessed, missing, sources_state = _sources_state(row)
     return {
         "id": row["id"],
         "run_id": row["run_id"],
@@ -72,13 +80,39 @@ def claim_view(row, repo: str | None = None) -> dict:
         # claim whose steps bound nothing: the column is NOT NULL, so an empty list is a recorded
         # fact, and a page may say "the run bound nothing here" rather than "nothing was recorded".
         "support": [int(v) for v in (_list_or_none(row["support"], "support") or [])],
-        "sources_missing": _list_or_none(row["sources_missing"], "sources_missing"),
+        # Three facts, three fields. ``sources_assessed`` says whether a registry was consulted at
+        # all; ``sources_missing`` is what it said (NULL when it was never asked); ``sources_state``
+        # names the combination so no caller has to infer it from a falsy list.
+        "sources_assessed": assessed,
+        "sources_missing": missing,
+        "sources_state": sources_state,
         "span": _list_or_none(row["span"], "span"),
         "interaction_label": row["interaction_label"],
         "interaction_code": row["interaction_code"],
         "established_by": row["established_by"],
         "proposed_action": row["proposed_action"],
     }
+
+
+def _sources_state(row) -> tuple[bool, list | None, str]:
+    """Decode the source-assessment pair, refusing a row whose two halves contradict each other.
+
+    ``sources_assessed = 0`` with a list is a list nobody recorded a question for; ``1`` with NULL is
+    "assessed" with nothing to show. The store's CHECK refuses both, so a row that holds either has
+    been written around the store - and reading it as a fact is exactly the guarantee this state
+    exists to prevent. Loud beats plausible here.
+    """
+    missing = _list_or_none(row["sources_missing"], "sources_missing")
+    assessed = bool(row["sources_assessed"])
+    if assessed and missing is None:
+        raise ValueError("claim.sources_assessed is set but claim.sources_missing is NULL: a claim "
+                         "cannot have been assessed without recording what the assessment said")
+    if not assessed and missing is not None:
+        raise ValueError(f"claim.sources_missing is {missing!r} but no assessment was recorded: a "
+                         "list without an assessment is a default, not a fact")
+    if not assessed:
+        return False, None, SOURCES_NOT_ASSESSED
+    return True, missing, (SOURCES_SOME_MISSING if missing else SOURCES_NONE_MISSING)
 
 
 def claim_read(conn, claim_id: int) -> dict | None:

@@ -334,7 +334,7 @@ def _store(root, name: str, registry: sources.Registry):
         assertion_path="features/fact_sheet.feature", assertion_line=3,
         assertion_commit=COMMIT, interaction_label="settled by the data as stored",
         interaction_code="I1", span=["api"], established_by="the words name a guarantee",
-        sources_missing=missing, proposed_action="No change.")
+        sources_assessed=True, sources_missing=missing, proposed_action="No change.")
     conn.execute("INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at,"
                  " summary) VALUES (?,?,?,?,?,?,?)",
                  (case, run, "fixture", "level_fitness", snapshot, TS, "{}"))

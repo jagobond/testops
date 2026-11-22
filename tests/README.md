@@ -41,7 +41,15 @@ The suite is deliberately small. It pins the invariants later tickets depend on:
   the source (`test_source_registry.py`);
 - no source needs a credential to be declared, and a run writes no credential into the snapshot
   (`test_source_registry.py`);
-- an empty `sources_missing` list stays distinguishable from NULL on read (`test_sources_missing.py`);
+- an empty `sources_missing` list stays distinguishable from NULL *and* is only a fact when an
+  assessment was recorded with it; a claim nobody assessed reads as "not assessed"
+  (`test_sources_missing.py`, `test_sources_assessed.py`);
+- a claim whose sources were never assessed, one assessed with nothing missing, and one assessed
+  with names missing each render their own exact sentence, from stored rows
+  (`test_sources_assessed.py`);
+- a v2 store migrates so that a claim with no registry in its snapshot becomes "not assessed",
+  while a registry-recorded claim keeps its assessment (`test_sources_assessed.py`, fixture in
+  `v2_store.py`);
 - the read model returns statement, provenance and blind spots in one call
   (`test_read_model.py`);
 - a v2 claim round-trips every new field through a fresh connection
