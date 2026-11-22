@@ -1,0 +1,30 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-40 - the ticket that makes a decision's cover honest.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t40 (branch `factory/testops-40-decision-cover`). Work only here.
+Ticket:  factory/tickets/TESTOPS-40.md
+Build:   factory/reports/2026-11-22/TESTOPS-40-build.md
+Context: factory/reports/2026-11-22/TESTOPS-37-review.md (the twin-index silence is concern 2 there).
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+The build adds a 40-word sentence beside the Decision control, pins commit- and data-insensitivity, and changes the
+identity of repeated assertions to `interaction|words#n@total`.
+
+HARD RULES
+- Run the suite from this worktree with the interpreter above.
+- **Judge the sentence against behaviour, not against itself.** Read it as a user about to click. Then construct cases:
+  decide a case, change the commit and re-run; change a data table; rename the scenario; move it to another file; add
+  a second identical assertion; delete one of two. For each, say: does the page's promise match what happens?
+  Any promise the product does not keep is a fail, in either direction (over-promising and under-promising).
+- **Attack `@total`.** It must not cause churn: changing an UNRELATED assertion in the same scenario, adding a prose
+  step, reordering non-identical steps, or adding a third different assertion must all keep a decision covering what it
+  covered. Prove each. Then show the promised re-ask: decide the second of two identical assertions, delete the first,
+  re-run - the reader must be asked again, not silently excused.
+- **The 11 regenerated page goldens are the quiet risk.** Diff each one and confirm the ONLY difference is the added
+  sentence. Report any golden where something else moved, and say whether that difference is legitimate.
+- **No line, no commit in the key:** grep the key construction; confirm a reformat of the file above the assertion does
+  not change it (test it, don't read it).
+- **Counts:** CotW 94/90/1/1/2, ReqOverflow 17/17.
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-40-review.md with: ## Verdict; ## The sentence vs behaviour (each case);
+  ## Attacking @total; ## The 11 goldens; ## Key construction; ## Counts; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 300 words.

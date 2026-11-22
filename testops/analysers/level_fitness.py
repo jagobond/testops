@@ -1,4 +1,15 @@
-"""Level fitness v0.10.2 - one claim per assertion, in words a reader can act on.
+"""Level fitness v0.10.3 - one claim per assertion, in words a reader can act on.
+
+v0.10.3 is TESTOPS-40: identical assertions carry their occurrence count in their identity.
+
+  * two assertions with the same words in one scenario are told apart by where they occur, and the
+    key now includes how many occurrences the scenario has (``interaction|words#n@total``). Delete
+    one twin and the survivor used to keep the number it had, so a decision recorded against the
+    first silently covered whichever assertion became first. With the count in the key, a scenario
+    that gains or loses an identical assertion re-keys every one of them and the decision asks to be
+    judged again instead of quietly moving to a different line. The key still holds no line and no
+    commit, so reformatting and a new deploy leave decisions alone;
+  * not one verdict moves. The identity is not the argument, and the corpus counts are pinned.
 
 v0.10.2 is TESTOPS-29: the action states the change, the statement states the reason, once each.
 
@@ -166,7 +177,7 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.10.2"
+version = "0.10.3"
 uses_model = False
 
 # What this analyser's verdict rests on, and what it would like to check itself against but does
@@ -632,18 +643,34 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                 continue
             suite = stepbindings.suite_of(feat.path)
             matched = [b for step in sc.steps if (b := stepbindings.match_step(bindings, step.text, suite))]
+            steps = asserting_steps(sc.steps)
             assert_binding = {step.line: stepbindings.match_step(bindings, step.text, suite)
-                              for step in asserting_steps(sc.steps)}
+                              for step in steps}
             span = sorted({b.layer for b in matched})
             instrument = stepbindings.highest([b.layer for b in matched]) if matched else "unknown"
             uses_browser = "ui" in span
             ref = f"scenario:{feat.path}#{sc.name}"
+
+            # Occurrence identity (TESTOPS-40). Two assertions with the same words in one scenario
+            # are told apart by where they occur, which makes the count part of the identity: if a
+            # scenario gains or loses an identical assertion, every occurrence in it is re-keyed and
+            # a decision recorded against one of them asks to be judged again. Without the count a
+            # decision on the first of two identical assertions silently covered whichever assertion
+            # happened to become first when the other was deleted.
+            classified = []
+            for step in steps:
+                binding = assert_binding.get(step.line)
+                interaction, why = classify_with_instrument(
+                    step.text, binding.layer if binding else "unknown", sc.name,
+                    uses_browser=uses_browser)
+                classified.append((step, binding, interaction, why,
+                                   f"{interaction}|{normalise(step.text)}"))
+            occurrences: dict[str, int] = {}
+            for entry in classified:
+                occurrences[entry[4]] = occurrences.get(entry[4], 0) + 1
             seen: dict[str, int] = {}
 
-            for step in asserting_steps(sc.steps):
-                # The words decide; the assertion's own step binding decides only when the words
-                # name nothing that could settle it.
-                binding = assert_binding.get(step.line)
+            for step, binding, interaction, why, base_key in classified:
                 # The assertion's own binding first: that is what the reader is pointed at. The
                 # scenario's other matched steps follow, because the span and the instrument - and
                 # therefore the verdict - are a fact about the whole scenario.
@@ -654,10 +681,6 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                     observation = index.get((bound.path, bound.verb, bound.pattern))
                     if observation is not None and observation not in support:
                         support.append(observation)
-
-                interaction, why = classify_with_instrument(
-                    step.text, binding.layer if binding else "unknown", sc.name,
-                    uses_browser=uses_browser)
 
                 clause = _clause(step.text)
                 if instrument == "unknown" or interaction == "U":
@@ -673,9 +696,13 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
 
                 # Identity of the assertion for suppression: the interaction and the assertion's own
                 # words, never its line, so reformatting the file does not resurrect a judged case.
-                base_key = f"{interaction}|{normalise(step.text)}"
+                # The occurrence count joins the key only when the words repeat in the scenario, so
+                # a scenario that gains or loses a twin re-keys its occurrences and the decision
+                # asks again instead of silently covering a different one (TESTOPS-40).
+                total = occurrences[base_key]
                 seen[base_key] = seen.get(base_key, 0) + 1
-                evidence_key = base_key if seen[base_key] == 1 else f"{base_key}#{seen[base_key]}"
+                evidence_key = (base_key if total == 1
+                                else f"{base_key}#{seen[base_key]}@{total}")
 
                 detail = {
                     "claim": interaction,

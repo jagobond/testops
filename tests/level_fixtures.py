@@ -136,18 +136,21 @@ public class FactSheetSteps {
 """
 
 
-def stub_pipeline(monkeypatch, pipeline, tmp_path, feature: str = PIPELINE_FEATURE):
+def stub_pipeline(monkeypatch, pipeline, tmp_path, feature: str = PIPELINE_FEATURE,
+                  stepdef: str = PIPELINE_STEPDEF):
     """Point the real pipeline at an in-memory repository and a throwaway store.
 
     Returns ``(store_path, connect)``: the path, and the real ``db.connect`` (which the pipeline's
     own patched version would otherwise shadow), so the caller can read back what the run wrote.
+    A second call against the same ``tmp_path`` changes the repository the next run reads, which is
+    how a test edits a feature between two runs over one store (TESTOPS-40).
     """
     from testops.collectors.github import Collected
     from testops.store import db
 
     path = tmp_path / "pipeline.db"
     real_connect = db.connect
-    texts = {"sha-feature": feature, "sha-steps": PIPELINE_STEPDEF}
+    texts = {"sha-feature": feature, "sha-steps": stepdef}
     files = {"features/fact_sheet.feature": ("sha-feature", "feature"),
              "steps/FactSheetSteps.cs": ("sha-steps", "stepdef")}
 
