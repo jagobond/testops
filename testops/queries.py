@@ -1183,8 +1183,74 @@ def _attach_snippets(conn, claim: dict) -> dict:
     """Attach the source excerpts after the evidence, which names the asserting binding."""
     claim["snippets"] = source_snippets(conn, claim)
     claim["counterpart"] = counterpart_for(conn, claim)
+    claim["also_reported"] = cross_references(conn, claim)
     return claim
 
+
+# ---------------------------------------------------------------- the other analyser's claim
+#
+# TESTOPS-36. The level-fitness and duplication analysers both examine the same asserting step and
+# raise separate claims with separate instructions. Keeping them separate is the decision; leaving
+# the reader to find the other page is the defect. This read model answers one question - which
+# other analysers have already raised a claim about this exact step? - from stored rows only.
+#
+# The identity is the claim's own coordinates: ``assertion_path``, ``assertion_line`` and
+# ``assertion_commit``. In this product each analyser writes its own snapshot over the same commit,
+# so the snapshot id is not shared and cannot be the key; the three coordinates are what both runs
+# recorded about the same line of the same file at the same commit. Nothing is re-analysed here: a
+# counterpart exists only because a stored claim row says so, and it is offered only when a case
+# exists to open. Anything else - a claim with no case, an analyser this build cannot run - is
+# silence, because a cross-reference that cannot be followed is a guess.
+
+def cross_references(conn, claim: dict) -> list[dict]:
+    """Other analysers' claims about the same asserting step, one per analyser, or ``[]``.
+
+    A reference carries the analyser, the verdict it reached, the id of the case a reader can open,
+    and - for a duplicate claim - the copy's ``file:line``, decoded from that claim's own
+    ``established_by``. ``[]`` means the store holds no followable counterpart, which a page renders
+    as nothing rather than as an empty section.
+    """
+    prov = claim.get("provenance") or {}
+    path, line, commit = (prov.get("assertion_path"), prov.get("assertion_line"),
+                          prov.get("assertion_commit"))
+    if claim.get("schema_version") != 2 or not path or not isinstance(line, int) or not commit:
+        return []
+    rows = conn.execute(
+        "SELECT id, analyser, verdict, established_by FROM claim"
+        " WHERE assertion_path = ? AND assertion_line = ? AND assertion_commit = ?"
+        "   AND analyser <> ? AND schema_version = 2"
+        " ORDER BY id",
+        (path, line, commit, claim.get("analyser") or "")).fetchall()
+    out: list[dict] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not is_registered(row["analyser"]) or row["analyser"] in seen:
+            continue
+        case_id = _case_for_claim(conn, row["id"])
+        if case_id is None:
+            continue
+        seen.add(row["analyser"])
+        copy = counterpart_coordinates({"verdict": row["verdict"],
+                                        "established_by": row["established_by"]})
+        out.append({"analyser": row["analyser"], "verdict": row["verdict"], "case_id": case_id,
+                    "claim_id": row["id"],
+                    "copy_path": copy[0] if copy else None,
+                    "copy_line": copy[1] if copy else None})
+    return out
+
+
+def _case_for_claim(conn, claim_id: int) -> str | None:
+    """The case whose finding names this claim, or ``None`` when it raised no case.
+
+    A claim is evidence; a case is a decision waiting for a person. Only the second has a page, and
+    a cross-reference to a claim nobody can open would be a dead link presented as evidence.
+    """
+    for row in conn.execute(
+            "SELECT f.case_id, f.claim_ids FROM finding f JOIN case_ c ON c.id = f.case_id"
+            " ORDER BY f.id"):
+        if claim_id in _json(row["claim_ids"], []):
+            return row["case_id"]
+    return None
 
 
 def recent(conn, project: str | None = None, limit: int = 25) -> list[dict]:

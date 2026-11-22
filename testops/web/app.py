@@ -17,12 +17,15 @@ What the page says now:
 
   1. a scan block - the judgement as a headline, one sentence saying what is wrong, and one line
      saying what to do, on its own row so the eye lands on it; then the quote's provenance
-  2. the step that is asserted - the feature file around it and the definition that runs it
-  3. for a duplicate, the copy the claim names - its file:line, scenario, steps with their data,
+  2. where another analyser raised a claim about the same asserting step, a short "Also reported
+     by ..." cross-reference with a link to that case, and one sentence saying what the two mean
+     together (TESTOPS-36)
+  3. the step that is asserted - the feature file around it and the definition that runs it
+  4. for a duplicate, the copy the claim names - its file:line, scenario, steps with their data,
      and the definition that runs the asserted step there (TESTOPS-32)
-  4. the other steps in this scenario, for context - never presented as evidence
-  5. what could not be checked - the sources that were never connected
-  6. the decision
+  5. the other steps in this scenario, for context - never presented as evidence
+  6. what could not be checked - the sources that were never connected
+  7. the decision
 
 The copy a duplicate claim names is evidence, so it is shown before the context list and never in
 its place: a page that withholds the copy has no way for a reader to check the claim.
@@ -170,6 +173,9 @@ pre.snippet .sline { display:block; white-space:pre; }
 pre.snippet .ln { display:inline-block; width:2.6rem; color:var(--dim); user-select:none; }
 pre.snippet .sline.hit { background:#f6e7c8; }
 pre.snippet mark.hit { background:transparent; color:inherit; font-weight:600; }
+aside.xref { margin:.2rem 0 1rem; padding:.55rem .85rem .6rem; background:#f6f4f0;
+             border-radius:5px; font-size:.94rem; }
+aside.xref p { margin:.15rem 0; }
 """
 
 
@@ -611,6 +617,85 @@ def pass_aside(claim: dict) -> list[str]:
         ", ".join(parts[:-1]) + ", and " + parts[-1]
     return [f'<p class="meta">This scenario holds other assertions that need something different '
             f'to settle them: {esc(listed)}.</p>']
+
+
+# ---------------------------------------------------------------- also reported by another analyser
+#
+# TESTOPS-36. Two analysers can judge the same asserting step and give separate instructions:
+# level fitness says to rewrite the step, duplication says to keep one of two copies. They stay
+# separate claims - a team may keep a duplicated pair and fix the level of one, or delete the copy
+# and never touch its level - but each page has to say the other exists, or a reader is holding
+# half of a decision. The section is two lines: what the other analyser found, and what the two
+# mean together. Both come from the stored claims (``queries.cross_references``); a page with no
+# counterpart renders nothing at all.
+
+# How the level analyser's verdict reads when it is the other page's finding. A verdict is named,
+# never re-described: the entry says what state the step is in, in the words a reader acts on.
+_OTHER_LEVEL = {
+    "review": "over-tested for what it asserts",
+    "gap": "not proved, because nothing runs what would settle it",
+    "unplaced": "not judged, because no instrument that settles it could be identified",
+    "distinct": "already asserted at the level it should be",
+}
+
+
+def _copy_where(ref: dict) -> str:
+    """The copy a duplicate claim names, in monospace, or the fact that it named none."""
+    path, line = ref.get("copy_path"), ref.get("copy_line")
+    if path and isinstance(line, int):
+        return f'<span class="code">{esc(path)}:{line}</span>'
+    return "a copy this run did not record"
+
+
+def _other_finding(ref: dict) -> str:
+    """One line saying what the other analyser found, from the stored verdict."""
+    if ref.get("analyser") == "duplication":
+        return f"the same step is also raised as a repeat of {_copy_where(ref)}."
+    if ref.get("analyser") == "level_fitness":
+        state = _OTHER_LEVEL.get(ref.get("verdict"), "judged at a level of its own")
+        return f"the same step is also raised as {state}."
+    return "the same step is also raised there."
+
+
+def _relationship(claim: dict, ref: dict) -> str | None:
+    """What the two findings mean together, in one sentence a reader can act on.
+
+    The sentence names the decision the two pages do not share: fixing the level leaves the
+    duplication in place, and choosing which copy to keep leaves the level of the survivor as it
+    was. ``None`` when this build has no such pair of analysers to explain - the page then carries
+    only the reference, never a sentence invented for the pair.
+    """
+    mine, theirs = claim.get("analyser"), ref.get("analyser")
+    if mine == "level_fitness" and theirs == "duplication":
+        return (f"This step is also reported as duplicating {_copy_where(ref)}; fixing the level "
+                f"here does not remove the duplication.")
+    if mine == "duplication" and theirs == "level_fitness":
+        state = _OTHER_LEVEL.get(ref.get("verdict"), "judged at a level of its own")
+        return (f"This step is also reported as {state}; deciding which copy to keep does not "
+                f"change the level the remaining test runs at.")
+    return None
+
+
+def also_reported_block(claim: dict) -> list[str]:
+    """The other analyser's claim about this step, and what the two mean together.
+
+    A cross-reference, not a second argument: the reader came for one claim, so this is at most
+    two lines per analyser and links to the page where that claim is decided. It is derived from
+    the stored claims, so a missing counterpart is silence rather than an inference.
+    """
+    refs: list[dict] = claim.get("also_reported") or []
+    if not refs:
+        return []
+    out = ['<aside class="xref">']
+    for ref in refs:
+        name = esc(analyser_text(ref.get("analyser")))
+        out.append(f'<p><strong>Also reported by {name}</strong>: {_other_finding(ref)} '
+                   f'<a href="/case/{esc(ref["case_id"])}">Read that case</a>.</p>')
+        sentence = _relationship(claim, ref)
+        if sentence:
+            out.append(f'<p>{sentence}</p>')
+    out.append("</aside>")
+    return out
 
 
 # ---------------------------------------------------------------- inline source
@@ -1192,12 +1277,14 @@ def claim_sections(c: dict) -> tuple[list[str], int]:
 
     1. a scan block - the judgement, the one wrong thing, and the action on its own line; the
        provenance footnote sits under it, never as a section of its own
-    2. the step that is asserted - the file around it and the definition that runs it
-    3. for a duplicate, the copy the claim names - its coordinates, scenario and definition, before
+    2. a cross-reference to another analyser's claim about the same step, when one exists, and one
+       sentence saying what the two mean together (TESTOPS-36); absent when there is none
+    3. the step that is asserted - the file around it and the definition that runs it
+    4. for a duplicate, the copy the claim names - its coordinates, scenario and definition, before
        any context (TESTOPS-32); the context list is about the claim's *own* scenario and can never
        stand in for the evidence
-    4. the other steps in this scenario, for context - separated from evidence, introduced together
-    5. what could not be checked
+    5. the other steps in this scenario, for context - separated from evidence, introduced together
+    6. what could not be checked
 
     Returns the sections and the number the decision section takes, so the numbering stays one
     sequence whether or not the copy is shown.
@@ -1209,6 +1296,7 @@ def claim_sections(c: dict) -> tuple[list[str], int]:
     out.extend(provenance_line(c))
     out.extend(assessment_note(c))
     out.extend(pass_aside(c))
+    out.extend(also_reported_block(c))
     out.extend([f'<h2 class="section">{number}. The step that is asserted</h2>'])
     number += 1
     out.extend(evidence_block(c))
