@@ -9,6 +9,10 @@ the same step bindings, the same 18 duplicate findings.
 Nothing is fetched: the files are content the run already collected. The helper stores them in the
 throwaway blob store of a test and hands the pipeline the same in-memory repository shape the other
 pipeline tests use.
+
+The corpus is somebody else's MIT-licensed code, not ours: `PROVENANCE.md` in the fixture directory
+names the upstream repository, the commit and exactly what was copied and left out, and `LICENSE`
+carries the upstream notice verbatim. Read those before changing anything here.
 """
 from __future__ import annotations
 
@@ -21,12 +25,16 @@ ROOT = Path(__file__).with_name("fixtures") / "reqoverflow"
 COMMIT = "78153818b81d7c9a324af81b4e95f65aead705b4"
 SUITE_COMMIT = COMMIT
 REPO_SLUG = "reqnroll/Sample-ReqOverflow"
+# The copied test files are all `.cs` or `.feature`. The fixture directory also holds `LICENSE` and
+# `PROVENANCE.md` for attribution; those are notices, not corpus, and must not reach the analyser.
+CORPUS_SUFFIXES = (".cs", ".feature")
 
 
 def texts() -> dict[str, str]:
     """Every corpus file, keyed by its repo-relative path with forward slashes."""
     return {path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8")
-            for path in sorted(ROOT.rglob("*")) if path.is_file()}
+            for path in sorted(ROOT.rglob("*"))
+            if path.is_file() and path.suffix in CORPUS_SUFFIXES}
 
 
 def files() -> dict[str, tuple[str, str]]:
