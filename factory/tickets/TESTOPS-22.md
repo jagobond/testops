@@ -2,7 +2,7 @@
 id: TESTOPS-22
 title: A quiet run is not a resolved case
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-21
 ---

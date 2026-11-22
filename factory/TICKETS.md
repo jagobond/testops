@@ -31,8 +31,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-17 | A clean bill requires having looked: no registry, no verdict | F1 | done | schema v3, 1005 old claims demoted to not-assessed; PR #14 merged after a PASS review |
 | TESTOPS-19 | The case page opens with the answer, and shows the code inline | F1 | done | 210 tests; snippets verified against commit bytes; PR #16 merged after a PASS review |
 | TESTOPS-21 | The duplication analyser still writes v1 claims, so its cases say nothing | F1 | done | 220 tests; 18 cases, 1 finding each, 18 distinct statements; PR #17 merged after a PASS review |
-| TESTOPS-22 | A quiet run is not a resolved case | F1 | ready | **Product Owner review** — "is this resolved because of a test?" A zero-finding run is not a decision |
-| TESTOPS-23 | The page narrates the analyser instead of telling the reader one story | F1 | blocked | **Product Owner review** "verbiage is still not right" — seven named faults, with the diagnosis written out |
+| TESTOPS-22 | A quiet run is not a resolved case | F1 | done | 228 tests; counts traced to stored rows; PR #18 merged after a PASS review |
 | TESTOPS-24 | Retention: keep every run explainable without keeping every byte four times | F1 | ready | Product Owner approved dedupe-by-hash; growth to be measured, not estimated |
 | TESTOPS-25 | The fixture is somebody else's MIT code, and we are not carrying its licence | F1 | ready | Found by the T21 reviewer: the corpus is a copy of Reqnroll's MIT sample with no notice |
 
