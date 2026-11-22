@@ -416,35 +416,118 @@ def _without_step(action: str, step: str | None) -> str:
 # but an action that says "Rewrite the step ... ; call the HTTP client first" carries an order
 # the cut would silently swallow, and the reader cannot detect a missing order.
 #
-#   1. A clause is a second instruction when it opens with an instruction verb - the imperative
-#      an analyser uses to tell someone to act on a step: "keep one", "move the step ...",
-#      "delete it". The reader can act on it alone, so it stays.
+#   1. A clause is a second instruction when it gives an order: an instruction verb in any
+#      inflection, either bare ("keep one", "move the step ...", "delete it") or carried by an
+#      obligation - "the second copy should be deleted", "it needs deleting", "it is worth
+#      keeping one copy". The reader can act on it alone, so it stays.
 #   2. A clause is a restatement - the reason for the clause before it - when it opens with a
 #      word that ties it back to that clause ("this level is the cheapest one that establishes
 #      it", "at this level nothing establishes what it asserts", "a judgement with no comparison
-#      in it cannot be checked") AND holds no instruction verb anywhere. Its subject is the
-#      sentence before it; on its own it names no one to act.
+#      in it cannot be checked") AND holds no order anywhere: no instruction verb in any
+#      inflection, and no obligation cue. Its subject is the sentence before it; on its own it
+#      names no one to act.
 #   3. Anything else is KEPT. The rule fails open on purpose. Dropping half an instruction is a
 #      loss a reader cannot see, and this product may not afford it; keeping an explanatory
 #      clause is untidy, and the reader can see it and skip it. The evidence to overrule the
 #      rule is a stored tail whose verb it does not recognise here.
 #
-# The two sets are closed and short because they are the analysers' own vocabulary. A new
+# Morphology matters here (AC7). Matching bare stems alone lost "should be deleted" and "worth
+# keeping": both are orders, and both walked past a stem list. So every stem in
+# INSTRUCTION_VERBS is expanded into its inflections - -s, -es, -ed, -d, -ing, a doubled final
+# consonant, and the irregulars this vocabulary actually uses - and a form is read as an order
+# unless it is the participle of a passive that states a fact and asks nothing: "the browser is
+# being used for ...", "cannot be checked at any level". Such a participle describes the head's
+# world; it names no one to act, which is the same reason a restatement is dropped. A passive
+# under an obligation ("should be deleted", "gets deleted") is an order, and ORDER_CUES makes
+# that distinction rather than the presence of a be-auxiliary.
+#
+# The sets are closed and short because they are the analysers' own vocabulary. A new
 # instruction verb an analyser writes belongs in INSTRUCTION_VERBS when it is added there.
 INSTRUCTION_VERBS = frozenset("""
     add bind call change check delete drop fix keep make merge move remove rename replace
     restore rewrite run split stop swap undo update use write
+""".split())
+# Obligation: a modal or a periphrasis that turns the verb after it into an order. These are what
+# make a passive or a gerund an instruction rather than a description.
+ORDER_CUES = frozenset("""
+    should must ought shall need needs needed require requires required worth supposed
+    gets get got have has had
 """.split())
 CONTINUATION_OPENERS = frozenset("""
     a an the this that these those there it they them their its which who whom whose
     at in on for with by from as because since so rather although though if when while
     none nothing no
 """.split())
+# Forms no suffix rule reaches, in the vocabulary above.
+IRREGULAR_FORMS = {
+    "bind": {"bound"},
+    "keep": {"kept"},
+    "make": {"made"},
+    "run": {"ran"},
+    "write": {"wrote", "written"},
+}
+_BE = frozenset("is are was were am be been being".split())
+_VOWELS = frozenset("aeiou")
 _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
+
+
+def _inflections(stem: str) -> set[str]:
+    """Every written form of a stem: -s, -es, -ed, -d, -ing, doubled consonant, irregulars."""
+    forms = {stem, stem + "s", stem + "es", stem + "ed", stem + "ing"}
+    if stem.endswith("e"):
+        forms |= {stem + "d", stem[:-1] + "ing"}
+    if (len(stem) > 2 and stem[-1] not in _VOWELS | {"w", "y"}
+            and stem[-2] in _VOWELS and stem[-3] not in _VOWELS):
+        forms |= {stem + stem[-1] + "ed", stem + stem[-1] + "ing"}
+    return forms | IRREGULAR_FORMS.get(stem, set())
+
+
+# Form -> the stem it belongs to, so the rule can name the verb it matched.
+INSTRUCTION_FORMS = {form: stem
+                     for stem in INSTRUCTION_VERBS
+                     for form in _inflections(stem)}
 
 
 def _words(text: str) -> list[str]:
     return [w.lower() for w in _WORD.findall(text)]
+
+
+def _passive_without_obligation(words: list[str], i: int) -> bool:
+    """Whether ``words[i]`` is the participle of a passive that describes rather than orders."""
+    if any(word in ORDER_CUES for word in words):
+        return False
+    return i > 0 and words[i - 1] in _BE
+
+
+def instruction_hits(text: str) -> list[str]:
+    """The instruction verbs the text uses to give an order, named by their stems.
+
+    A bare stem is an imperative wherever it stands. An inflected form is an order too, except
+    where it is the participle of a be-passive carrying no obligation - that describes the
+    sentence before it and asks the reader for nothing.
+    """
+    words = _words(text)
+    hits = []
+    for i, word in enumerate(words):
+        stem = INSTRUCTION_FORMS.get(word)
+        if stem is None:
+            continue
+        if word == stem or not _passive_without_obligation(words, i):
+            hits.append(stem)
+    return hits
+
+
+def descriptive_participles(text: str) -> list[str]:
+    """Instruction-verb forms the text uses descriptively: the participles a drop relies on."""
+    words = _words(text)
+    return [word for i, word in enumerate(words)
+            if word in INSTRUCTION_FORMS and word != INSTRUCTION_FORMS[word]
+            and _passive_without_obligation(words, i)]
+
+
+def order_cues(text: str) -> list[str]:
+    """The obligation words in the text, whether or not a verb of this vocabulary follows."""
+    return [word for word in _words(text) if word in ORDER_CUES]
 
 
 def second_half_is_instruction(tail: str) -> bool:
@@ -454,7 +537,9 @@ def second_half_is_instruction(tail: str) -> bool:
         return False
     if words[0] not in CONTINUATION_OPENERS:
         return True
-    return any(word in INSTRUCTION_VERBS for word in words[1:])
+    if any(word in ORDER_CUES for word in words):
+        return True
+    return bool(instruction_hits(tail))
 
 
 def _as_sentence(text: str) -> str:

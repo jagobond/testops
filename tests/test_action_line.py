@@ -5,12 +5,16 @@ The rule under test is ``app.second_half_is_instruction``, written where it is a
 evidence:
 
   * a tail that gives the reason for the clause before it - dropped, and the test names both
-    strings and shows why the tail cannot be acted on alone (AC2)
+    strings and shows why the tail cannot be acted on alone (AC2, AC8)
   * a tail that gives a second order - kept, and the action reads as two sentences, not a run-on
     (AC1, AC3)
+  * the eight orders the reviewer smuggled past a bare-stem rule, two of which were lost to
+    morphology: ``should be deleted`` and ``worth keeping`` (AC7)
+  * every inflection of every instruction verb, and the irregulars the vocabulary uses (AC7)
   * the same two shapes as the page renders them (AC3)
 
-AC4, the corpus floor, lives with the real run it measures: ``test_case_scan.py``.
+AC4, the corpus floor, lives with the real run it measures: ``test_case_scan.py``. So does AC9,
+the before/after drop count over that run.
 """
 from __future__ import annotations
 
@@ -59,6 +63,82 @@ def test_the_rule_fails_open_on_a_word_it_does_not_know():
     assert app.second_half_is_instruction(tail) is True
 
 
+# --------------------------------------------------------------- AC7: the reviewer's eight probes
+
+PROBES = [
+    "this should be split into two steps and the second deleted",
+    "move it and rename it",
+    "one copy to keep",
+    "keep it if the page does not need it",
+    "you should delete the second one",
+    "instead, delete the duplicate",
+    "the second copy should be deleted",     # lost to a bare-stem rule: passive voice
+    "it is worth keeping one copy",          # lost to a bare-stem rule: inflected verb
+]
+
+
+@pytest.mark.parametrize("tail", PROBES)
+def test_every_probe_the_reviewer_smuggled_reaches_the_reader(tail):
+    """AC7: all eight orders the reviewer put after a semicolon are on the page, none dropped.
+
+    Two of these were lost before the morphology fix - the passive "should be deleted" and the
+    inflected "keeping". Both are orders, and both are kept now. The assertion is on the rendered
+    action, not only on the rule, because a kept tail the page still cuts is the same loss.
+    """
+    claim = {"proposed_action": f"Raise this with the team: this copy repeats an assertion; "
+                                f"{tail}.", "provenance": {"assertion_text": STEP}}
+    visible = app.action_line(claim, STEP)
+    assert app.second_half_is_instruction(tail) is True, tail
+    assert tail[:1].upper() + tail[1:] + "." in visible, (tail, visible)
+    assert "; " not in visible, visible
+    assert visible.endswith(".") and visible.count(". ") == 1, visible
+
+
+@pytest.mark.parametrize("form,stem", [
+    ("deletes", "delete"), ("deleted", "delete"), ("deleting", "delete"),
+    ("removes", "remove"), ("removed", "remove"), ("removing", "remove"),
+    ("merges", "merge"), ("merged", "merge"),
+    ("renames", "rename"), ("renamed", "rename"), ("renaming", "rename"),
+    ("checks", "check"), ("checked", "check"), ("checking", "check"),
+    ("changes", "change"), ("changed", "change"), ("changing", "change"),
+    ("drops", "drop"), ("dropped", "drop"), ("dropping", "drop"),
+    ("stops", "stop"), ("stopped", "stop"), ("stopping", "stop"),
+    ("swaps", "swap"), ("swapped", "swap"), ("swapping", "swap"),
+    ("splits", "split"), ("split", "split"), ("splitting", "split"),
+    ("kept", "keep"), ("keeps", "keep"),
+    ("made", "make"), ("ran", "run"), ("bound", "bind"), ("written", "write"),
+])
+def test_an_instruction_verb_is_recognised_in_every_inflection(form, stem):
+    """AC7: -s, -es, -ed, -d, -ing, a doubled consonant and the vocabulary's irregulars."""
+    assert app.INSTRUCTION_FORMS.get(form) == stem
+
+
+@pytest.mark.parametrize("tail", [
+    "the second copy should be deleted",
+    "the second copy needs deleting",
+    "the second copy must be removed",
+    "it is worth keeping one copy",
+    "the copies get merged",
+])
+def test_a_passive_or_modal_order_is_an_instruction(tail):
+    """AC7: an obligation carries the order, so a passive is not read as a description."""
+    assert app.order_cues(tail), tail
+    assert app.instruction_hits(tail), tail
+    assert app.second_half_is_instruction(tail) is True
+
+
+def test_a_passive_with_no_obligation_describes_and_asks_nothing():
+    """The distinction the rule turns on: "is being used" states a fact, "should be used" orders."""
+    descriptive = "the response decides everything the browser is being used for."
+    ordering = "the response should be used instead of the browser."
+    assert app.descriptive_participles(descriptive) == ["used"]
+    assert app.instruction_hits(descriptive) == []
+    assert app.second_half_is_instruction(descriptive) is False
+    assert app.descriptive_participles(ordering) == []
+    assert app.instruction_hits(ordering) == ["use"]
+    assert app.second_half_is_instruction(ordering) is True
+
+
 # --------------------------------------------------------------------------- AC2: the dropped tail
 
 def _claims(text=None, bindings=None, path=None):
@@ -90,14 +170,16 @@ def _split(stored: str) -> tuple[str, str]:
 
 
 def test_a_dropped_tail_is_proved_a_restatement_by_showing_it_cannot_stand_alone():
-    """AC2: the test names the head and the tail and shows why the tail is not an instruction.
+    """AC2 and AC8: the test names the head and the tail and proves each condition of the drop.
 
     Three real analyser tails, one per verdict that writes one. Each is dropped, and the proof is
-    the overlap: the tail opens with a word that points back at the head - "this level", "at this
-    level", "the response" - and it carries no instruction verb anywhere, so the only order in the
-    string is the head's. If an analyser ever writes a second order after a semicolon, the first
-    test in this file is what keeps it, and the corpus floor in ``test_case_scan.py`` is what says
-    no page lost characters it kept.
+    AC8's three conditions, asserted here on the strings rather than trusted from a comment: the
+    tail opens with a word whose subject is the head, it holds no instruction verb in any
+    inflection, and it holds no modal or passive order. Where the vocabulary does appear - "being
+    used", "cannot be checked" - the test names it as a descriptive participle, so the drop is
+    shown to be a judgement about that word and not an oversight. If an analyser ever writes a
+    second order after a semicolon, the probe test above is what keeps it, and the corpus floor in
+    ``test_case_scan.py`` is what says no page lost characters it kept.
     """
     verdicts = {}
     for claim in _claims():
@@ -113,15 +195,23 @@ def test_a_dropped_tail_is_proved_a_restatement_by_showing_it_cannot_stand_alone
         match = re.match(r"[A-Za-z]+", tail)
         assert match is not None, f"the {verdict} tail opens with no word at all: {tail!r}"
         opener = match.group(0).lower()
-        wants = [word for word in re.findall(r"[A-Za-z][A-Za-z'-]*", tail.lower())
-                 if word in app.INSTRUCTION_VERBS]
 
+        # AC8, condition 1: the tail opens with a word whose subject is the head clause.
         assert opener in app.CONTINUATION_OPENERS, (
             f"the {verdict} tail is not proved a restatement: {head!r} / {tail!r} - it opens with "
             f"{opener!r}, which is not a word that points back at the head")
-        assert not wants, (
-            f"the {verdict} tail carries an instruction ({wants}) that dropping would lose: "
-            f"{head!r} / {tail!r}")
+        # AC8, condition 2: no instruction verb in any inflection.
+        assert app.instruction_hits(tail) == [], (
+            f"the {verdict} tail carries an instruction ({app.instruction_hits(tail)}) that "
+            f"dropping would lose: {head!r} / {tail!r}")
+        # AC8, condition 3: no modal or passive order. A participle here is descriptive, and the
+        # test names it so a future change to the passive rule fails here rather than in silence.
+        assert app.order_cues(tail) == [], (
+            f"the {verdict} tail carries a modal ({app.order_cues(tail)}): {head!r} / {tail!r}")
+        for participle in app.descriptive_participles(tail):
+            assert participle in app.INSTRUCTION_FORMS and participle not in app.INSTRUCTION_VERBS
+            assert participle in tail.lower()
+
         assert tail not in visible, (
             f"the {verdict} tail was proved a restatement and is still on the page: {visible!r}")
         assert visible == _proved_head(claim, head), (

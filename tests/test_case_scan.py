@@ -398,6 +398,60 @@ def test_no_action_on_the_real_run_is_cut_into_a_stub():
 
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
+def test_the_real_tails_still_drop_before_and_after_the_morphology_fix():
+    """TESTOPS-27 AC9: the morphology fix must not turn the real corpus into kept noise.
+
+    Measured on the pinned 94-claim run: every stored action has a tail after ``"; "``, and every
+    one of those tails is a restatement. The test runs two rules over the same 94 strings - the
+    bare-stem rule that was there before this change (``_bare_stem_drop``, kept here as the
+    before) and the rule the page uses now (the after) - and demands the same count from both. The
+    vocabulary in the stored tails is real: ``is being used`` and ``cannot be checked`` are
+    participles of instruction verbs, and a rule that counted any inflection anywhere would keep
+    them. Under that rule the drop count falls; under this one it does not, and the verdicts stay
+    94 claims / 90 distinct / 1 unplaced / 1 gap / 2 review.
+    """
+    def _bare_stem_drop(tail: str) -> bool:
+        words = app._words(tail)
+        if not words:
+            return True
+        if words[0] not in app.CONTINUATION_OPENERS:
+            return False
+        return not any(word in app.INSTRUCTION_VERBS for word in words[1:])
+
+    conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        run = conn.execute(
+            "SELECT run_id FROM claim WHERE analyser = 'level_fitness'"
+            " GROUP BY run_id ORDER BY COUNT(*) DESC, run_id DESC LIMIT 1").fetchone()["run_id"]
+        counts = {row["verdict"]: row["n"] for row in conn.execute(
+            "SELECT verdict, COUNT(*) AS n FROM claim WHERE run_id = ? GROUP BY verdict", (run,))}
+        tails, before, after, kept_any = [], 0, 0, []
+        for row in conn.execute("SELECT id FROM claim WHERE run_id = ? ORDER BY id", (run,)):
+            claim = queries.claim_read(conn, row["id"]) or {}
+            whole = (claim.get("proposed_action") or "").strip()
+            head, sep, tail = whole.partition("; ")
+            if not sep or not tail.strip():
+                continue
+            tail = tail.strip()
+            tails.append(tail)
+            before += _bare_stem_drop(tail)
+            if app.second_half_is_instruction(tail):
+                kept_any.append(tail)
+            else:
+                after += 1
+    finally:
+        conn.close()
+
+    assert len(tails) == 94, f"the pinned run holds {len(tails)} tails, not 94"
+    assert (before, after) == (94, 94), (
+        f"drop counts moved with the morphology fix: before {before} dropped, after {after}; "
+        f"kept tails were {sorted(set(kept_any))!r}")
+    assert not kept_any, f"the fix kept {len(kept_any)} real tails: {sorted(set(kept_any))!r}"
+    assert counts == {"distinct": 90, "unplaced": 1, "gap": 1, "review": 2}, counts
+
+
+@pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
 def test_the_stored_cotw_corpus_keeps_its_verdicts_and_passes_the_lint(tmp_path, monkeypatch):
     """The real 94-claim run: same verdict counts, every page through the same lint."""
     copy = tmp_path / "corpus.db"
