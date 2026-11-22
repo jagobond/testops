@@ -1,0 +1,25 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-9.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t9 (branch `factory/testops-9-vocabulary`). Work only here.
+Ticket: factory/tickets/TESTOPS-9.md
+Build: factory/reports/2026-11-22/TESTOPS-9-build.md
+
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+The ticket claims the verdict vocabulary in schema.sql, the Claim docstring and analysers/base.py now matches what the
+analysers emit, with a test that fails in both directions, and that no data was touched.
+
+HARD RULES
+- Run the suite from this worktree.
+- **Derive the emitted set yourself** from the analyser code (do not read the test and agree with it), then compare
+  against every documented name in the three places. Report any name in either set that the other lacks.
+- **Prove the test bites both ways:** add an invented verdict to a docstring and confirm a test fails; remove a real
+  one from wherever it is documented and confirm a test fails. Revert byte-identically (`git status` clean) and say so.
+- **The dangerous edit:** if the schema CHECK constraint was loosened or dropped rather than corrected, an invalid
+  verdict could now be stored - test it by inserting a bogus verdict into a scratch copy and reporting whether the
+  store refuses. A silently weaker constraint is worse than the stale comment it replaced.
+- **No data touched:** confirm no migration ran and the store schema version is unchanged; run CotW levels and
+  ReqOverflow duplication on scratch copies and report the verdict counts (expect 94/90/1/1/2 and 17/17).
+- Do not edit product code or the ticket. Write exactly one file: factory/reports/2026-11-22/TESTOPS-9-review.md
+  with: ## Verdict; ## Emitted vs documented (both sets); ## Does the test bite; ## The CHECK constraint; ## Counts.
+- Reply with the verdict and a summary under 250 words.
