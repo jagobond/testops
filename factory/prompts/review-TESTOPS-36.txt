@@ -1,0 +1,39 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-36.
+
+Repository: C:/Users/Chester/Projects/testops-t36 (a git worktree), branch `factory/testops-36-cross-reference`.
+Ticket:     factory/tickets/TESTOPS-36.md
+Diff:       git diff origin/feature/f1..HEAD
+
+IMPORTANT: no .venv. `cd C:/Users/Chester/Projects/testops-t36 && env -u PYTHONPATH -u VIRTUAL_ENV
+PYTHONNOUSERSITE=1 PYTHONPATH=. C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q`; confirm
+`testops.__file__` is inside this worktree.
+
+The defect: two analysers report the same step, giving competing instructions with no link between the pages. The
+fix renders "Also reported by <analyser>" plus one sentence stating what it means together, from stored claims.
+
+HARD RULES
+- **Check both links resolve.** The build says "Read that case" links to real case ids. Follow every cross-reference
+  it generates in a fixture store and confirm each target exists and renders 200. A dead cross-reference is worse
+  than none.
+- **Try to make it lie.** Construct a store where the two analysers report the same path+line but at DIFFERENT
+  commits, then the same commit but different lines, then the same coordinates where one claim is decided and the
+  other is open. Report what each page says. The section must not claim a relationship that is not there, and must
+  not go silent when one is.
+- **Check the sentence survives scrutiny.** Quote it and ask whether it is true in the reader's situation: "fixing
+  the level here does not remove the duplication" - is that always true when the duplication's action is "keep one"?
+  Say what you think it should say if not.
+- **Confirm the honest silence.** On the real corpus, level claims at the 17 shared coordinates are all "distinct",
+  so no case exists and the section renders nothing. Verify that is what the code does rather than an accidental
+  no-op, and say whether a reader loses anything by it.
+- Confirm cases with no counterpart are byte-identical, and verdicts unchanged.
+- Do not edit product code, tests or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-36-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## Criteria — AC1..AC6 HOLDS / WEAK / NOT MET.
+  ## Links — each cross-reference followed and what it returned.
+  ## Lies attempted — the three constructions and what rendered.
+  ## Three sharpest concerns.
+
+Then reply with the verdict and a summary under 300 words.

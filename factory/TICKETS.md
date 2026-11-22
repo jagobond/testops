@@ -20,7 +20,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-6 | The case page — an argument a developer can act on | F1 | done | 111 tests; PR #6 merged as fecfb6e after a PASS review |
 | TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | Unblocked by T5/T17; waits on F2 direction. The suite a real team would keep |
 | TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | blocked | Reviewer concern 3 on TESTOPS-2: `test_packaging` imports via sys.path, so a broken `package-data` stays green |
-| TESTOPS-9 | Stale claim vocabulary: `schema.sql`, the `Claim` docstring and `analysers/base.py` describe verdicts (`optimal`/`overbuilt`/`necessary`) the analyser abandoned | F1 | blocked | Found by the TESTOPS-2 builder; schema comments that lie mislead every reader |
+| TESTOPS-9 | Stale claim vocabulary — the schema and the docstrings describe verdicts that were abandoned | F1 | ready | Unblocked by the Product Owner; a schema comment that lies misleads every reader, including the next agent |
 | TESTOPS-10 | Classification coverage — half the real corpus is unclassifiable | F1 | done | 48 → 0 unplaced, gaps unchanged; PR #4 merged after a PASS review |
 | TESTOPS-11 | Restraint — a claim is not checked because one of its words is familiar | F1 | done | 90 distinct / 1 unplaced / 1 gap / 2 review; PR #5 merged as 1c1fca3 after a PASS review |
 | TESTOPS-12 | Labels finish the job, and restraint stops being a be-verb pattern | F1 | done | Accumulated polish: eleven scenarios with mixed labels, be-verb restraint, every statement opening "This test", plus the TESTOPS-16 wording nit |
@@ -47,6 +47,9 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-34 | A run with no findings is listed as an open case awaiting a decision | F1 | done | Rule moved into the list query; closed and quiet provably distinct; PR #29 |
 | TESTOPS-35 | A reviewer's fixture case is sitting in Harry's live store | F1 | done | Scrub ran on the live store: case_ 168->167, 1 fixture removed; PR #27 |
 | TESTOPS-36 | Two analysers, one step, two pages that never mention each other | F1 | done | Cross-reference both ways; four adversarial stores, no lie; PR #30 |
+| TESTOPS-37 | Nothing proves a recorded decision stops the next run reporting the same thing | F2 | ready | **Product Owner** — 'do decisions actually get recorded and prevent future claims?' `pipeline.py` has three suppression gates and no test touches any of them |
+| TESTOPS-38 | A project is a group of services, and a user sets it up without touching code | F2 | ready | **Product Owner** — repos + Jira board + ADO pipelines grouped as the CotW project; configurable, and container-ready for Azure/Foundry |
+| TESTOPS-39 | A second specimen of a different shape, to find out whether the analyses generalise | F2 | ready | JS/Cypress+Cucumber tests against a Java multi-service platform — different ecosystem, different bindings, separate repos |
 
 |----|-------|---------|--------|------|
 
