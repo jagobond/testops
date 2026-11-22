@@ -328,15 +328,17 @@ def test_a_v1_claim_says_provenance_was_not_captured_instead_of_failing(tmp_path
 
 # --------------------------------------------------------------------------- AC10
 
-def test_a_case_with_no_findings_is_a_resolved_case_not_an_error(tmp_path):
+def test_a_case_with_no_findings_is_described_as_a_run_not_a_decision(tmp_path):
+    """TESTOPS-22 AC1: zero findings is a fact about the run, never a person's decision."""
     conn, _ = _seed(tmp_path, findings=0)
     try:
         text = _page_text(conn)
     finally:
         conn.close()
-    assert "This case is resolved" in text
-    assert "interrupted" not in text
-    assert "error" in text and "not an error" in text
+    assert "No findings in this run" in text
+    assert "This case is resolved" not in text
+    assert "Resolved" not in text
+    assert "What this run could not consult" in text
 
 
 def test_the_empty_home_page_reports_freshness_not_all_clear(tmp_path):

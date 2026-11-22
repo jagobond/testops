@@ -11,7 +11,7 @@ import re
 import sqlite3
 
 from . import blobs, cases, sources
-from .extract import stepbindings
+from .extract import csproj, stepbindings
 from .links import GITHUB, blob_permalink, permalink, short_location
 
 
@@ -432,6 +432,131 @@ def finding_rows(conn, case_id: str) -> list[dict]:
                     "fingerprint": f["fingerprint"], "claims": claims,
                     "suppressed": cases.suppressed(conn, f["fingerprint"]) is not None})
     return out
+
+
+# ---------------------------------------------------------------- what happened in this run
+#
+# TESTOPS-22. A run that raised nothing and a case a person resolved are two different facts, and
+# the page used one word - "Resolved" - for both. These read models supply the facts each page
+# needs, and only facts the store can prove: every count is a COUNT over rows this case's own
+# snapshot holds. A count the store cannot support is None, which a page renders as "cannot say" -
+# never as zero, and never re-derived from today's configuration at render time.
+
+def latest_decision(conn, case_id: str) -> dict | None:
+    """The last decision a person recorded for this case, or ``None`` when nobody decided.
+
+    ``None`` is the fact that matters: a run that raised nothing has had no decision taken, and a
+    page that rendered "Resolved" for it was inventing a person's act.
+    """
+    row = conn.execute(
+        "SELECT state, actor, at, note FROM case_state WHERE case_id = ? ORDER BY id DESC LIMIT 1",
+        (case_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def run_analysis(conn, case_id: str) -> dict | None:
+    """What the run behind this case examined, counted from stored rows only.
+
+    ``features`` counts the feature-file artefacts the build keeps - the same test the analyser
+    applies, :func:`csproj.is_active` over :func:`csproj.excluded_patterns` read from the *stored*
+    project file. ``scenarios`` counts the scenario observations recorded against those files, so a
+    dormant file's scenarios cannot inflate it. ``claims`` counts the claim rows this run wrote.
+
+    ``patterns`` is the exclusion list the analyser would have used, or ``None`` when the project
+    file is recorded but its content is not in this store - in which case the feature and scenario
+    counts are ``None`` too, because which files the build keeps is exactly what cannot be known.
+
+    The source facts come from the snapshot's recorded registry, never from
+    :func:`sources.registry`: what today's deployment declares says nothing about what this run
+    could see.
+    """
+    ctx = conn.execute(
+        "SELECT c.run_id, c.analyser, r.snapshot_id, r.finished_at, r.status"
+        " FROM case_ c LEFT JOIN run r ON r.id = c.run_id WHERE c.id = ?", (case_id,)).fetchone()
+    if ctx is None:
+        return None
+    snapshot = ctx["snapshot_id"]
+    findings = conn.execute("SELECT COUNT(*) FROM finding WHERE case_id = ?",
+                            (case_id,)).fetchone()[0]
+    record = {"run_id": ctx["run_id"], "analyser": ctx["analyser"], "snapshot": snapshot,
+              "finished_at": ctx["finished_at"], "findings": int(findings),
+              # None = this store cannot support a count, which is not a count of zero.
+              "claims": None, "features": None, "scenarios": None, "dormant": None,
+              "feature_files": None, "patterns": None, "project_files": [],
+              "registry_recorded": False, "assessment_recorded": False,
+              "blind_spots": [], "assessment": None}
+    if not snapshot:
+        return record
+
+    record["claims"] = int(conn.execute("SELECT COUNT(*) FROM claim WHERE run_id = ?",
+                                       (ctx["run_id"],)).fetchone()[0])
+
+    features: list[tuple[int, str]] = []
+    projects: list[tuple[str, str | None]] = []
+    for art in conn.execute(
+            "SELECT id, uri, kind, blob_sha FROM artefact WHERE snapshot_id = ? ORDER BY id",
+            (snapshot,)):
+        m = GITHUB.match(art["uri"] or "")
+        if m is None:
+            continue                             # jira:/ado: rows carry no file path
+        if art["kind"] == "feature":
+            features.append((art["id"], m["path"]))
+        elif art["kind"] == "build":
+            projects.append((m["path"], art["blob_sha"]))
+    record["project_files"] = [path for path, _sha in projects]
+
+    patterns: list[str] | None = []
+    unreadable = False
+    for _path, sha in projects:
+        try:
+            text = blobs.text(sha) if sha else None
+        except FileNotFoundError:
+            text = None
+        if text is None:
+            unreadable = True
+            break
+        patterns.extend(csproj.excluded_patterns(text))
+    if unreadable:
+        patterns = None
+    record["patterns"] = patterns
+
+    if patterns is not None:
+        active = [artefact_id for artefact_id, path in features
+                  if csproj.is_active(path, patterns)]
+        record["feature_files"] = len(features)
+        record["features"] = len(active)
+        record["dormant"] = len(features) - len(active)
+        record["scenarios"] = int(sum(
+            conn.execute("SELECT COUNT(*) FROM observation"
+                         " WHERE artefact_id = ? AND key LIKE 'scenario:%'",
+                         (artefact_id,)).fetchone()[0] for artefact_id in active))
+
+    meta = _snapshot_meta(conn, ctx["run_id"])
+    stored = meta.get("sources") if isinstance(meta, dict) else None
+    record["registry_recorded"] = isinstance(stored, dict)
+    if record["registry_recorded"]:
+        assessment = sources.assessment_for(meta, ctx["analyser"])
+        consulted = sources.consulted_for(meta, ctx["analyser"])
+        record["assessment_recorded"] = assessment is not None or consulted is not None
+        if assessment is not None:
+            view = assessment.record()
+            view["sentence"] = assessment.sentence()
+            record["assessment"] = view
+        spots: list[dict] = []
+        named: set[tuple[str, str]] = set()
+        for found in (assessment, consulted):
+            if found is None:
+                continue
+            for spot in found.blind_spots:
+                key = (spot.source, spot.title)
+                if key in named:
+                    continue
+                named.add(key)
+                spots.append({"source": spot.source, "title": spot.title, "state": spot.state,
+                              "reason": spot.reason, "blocked_by": spot.blocked_by,
+                              "recorded": True})
+        record["blind_spots"] = spots
+    return record
 
 
 def evidence_for_claim(conn, claim: dict) -> list[dict] | None:

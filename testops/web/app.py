@@ -43,6 +43,9 @@ LABEL = {
 }
 STATE_LABEL = {"open": "Open", "needs_fix": "Needs a fix", "resolved": "Resolved",
                "false_positive": "Not a real finding"}
+# A run that raised nothing is a fact about the code, not a decision about it. It gets its own
+# label so no screen can borrow the word a person's decision owns (TESTOPS-22).
+NO_FINDINGS_LABEL = "No findings"
 
 # What each instrument does, as a verb phrase. ``ui`` and ``api`` are the ticket's own words.
 INSTRUMENT_WORD = {
@@ -155,10 +158,22 @@ def versions_text(versions: dict | None) -> str:
 
 
 def display_state(state: str, findings: int) -> str:
-    """The state a reader is shown. An empty case has nothing open, whatever the stored row says."""
-    if findings == 0 and state == "open":
-        return "Resolved"
+    """The state a reader is shown. An empty case has no decision on it, whatever the row says.
+
+    A finding count of zero is not a decision and must not wear one's word: this used to return
+    "Resolved" here, which told every reader that a person had closed a claim nobody had ever made
+    (TESTOPS-22). A recorded terminal state still wins, because that *is* a person's decision.
+    """
+    if findings == 0 and state not in cases.TERMINAL:
+        return NO_FINDINGS_LABEL
     return STATE_LABEL.get(state, state)
+
+
+def case_badge(decision: dict | None, findings: int) -> str:
+    """The badge for a case page: the recorded decision if there is one, else what the run found."""
+    if decision is not None:
+        return STATE_LABEL.get(decision["state"], decision["state"])
+    return NO_FINDINGS_LABEL if findings == 0 else STATE_LABEL["open"]
 
 
 def freshness_line(fr: dict) -> str:
@@ -323,7 +338,7 @@ def index(conn) -> bytes:
             hot = ' class="hot"' if shown in ("Open", "Needs a fix") else ""
             # The claim's own words, never finding.title: a title cut to 160 characters ends
             # mid-sentence and leaves the reader to guess what is alleged.
-            statement = r.get("statement") or "No claim: this case raised nothing to act on."
+            statement = r.get("statement") or "No claim: this run raised no finding."
             body.append(
                 f'<li><a href="/case/{esc(r["id"])}">'
                 f'<div><span class="badge{hot}">{esc(shown)}</span> '
@@ -533,6 +548,122 @@ def _blind_spot_sentence(note: dict) -> str:
     return f"{title} \u2014 {state}: {reason}." if state and reason else f"{title}."
 
 
+# ---------------------------------------------------------------- a run, or a decision
+
+def _count(n: int, singular: str, plural: str | None = None) -> str:
+    return f"{n} {singular if n == 1 else (plural or singular + 's')}"
+
+
+def analysed_sentence(run: dict) -> str:
+    """One sentence saying what this run examined, from counts the store can prove.
+
+    Every number is a count over the case's own snapshot: feature files recorded as artefacts, the
+    exclusions read from the stored project file by the same reader the analyser used, the scenario
+    observations recorded against the files the build keeps, and the claims the run wrote. A count
+    the snapshot cannot support is said to be unrecorded, not shown as zero.
+    """
+    name = ANALYSER_LABEL.get(run.get("analyser") or "",
+                              (run.get("analyser") or "").replace("_", " ")).lower()
+    if run.get("features") is None:
+        return ("This run cannot be counted from the store: it records no snapshot, or a project "
+                "file whose content is not in this store, so what it analysed cannot be stated "
+                "here.")
+    features = _count(run["features"], "feature file")
+    scenarios = _count(run["scenarios"], "scenario")
+    files = _count(run["feature_files"], "stored feature file")
+    if not run.get("project_files"):
+        exclusions = (f"no project file is stored for this snapshot, so no exclusion patterns "
+                      f"were read and all {files} were in the build")
+    else:
+        project = ", ".join(run["project_files"])
+        exclusions = (f"{_count(len(run['patterns']), 'exclusion pattern')} read from {project} "
+                      f"left {run['dormant']} of {files} outside the build")
+    return (f"This run analysed {features} and {scenarios}: {exclusions}, and the {name} analyser "
+            f"{_coverage(run['claims'])}.")
+
+
+def _coverage(claims: int) -> str:
+    """The analyser's own coverage, as the count the store holds - never a percentage."""
+    if claims == 0:
+        return "recorded no claim about any of them"
+    return f"recorded {_count(claims, 'claim')} in this run"
+
+
+def quiet_run_block(run: dict | None) -> list[str]:
+    """A run that raised nothing, described as a run - never as a decision somebody took.
+
+    The heading is about the run; the sentence is what it examined; the last section is what it
+    could not consult, read from the snapshot's recorded registry. No source is named from today's
+    configuration: a snapshot that recorded no registry says exactly that.
+    """
+    out = ['<h2>No findings in this run</h2>']
+    if run is None:
+        out.append('<p class="quiet">This case records no run, so there is nothing to describe.</p>')
+        return out
+    out.append(f'<p>{esc(analysed_sentence(run))}</p>')
+    if run.get("assessment") and run["assessment"].get("sentence"):
+        out.append(f'<p class="meta">{esc(run["assessment"]["sentence"])}</p>')
+    out.append('<h2 class="section">What this run could not consult</h2>')
+    out.extend(_blind_spot_lines(run))
+    return out
+
+
+def _blind_spot_lines(run: dict) -> list[str]:
+    if not run.get("registry_recorded"):
+        # Not "every source was available": this snapshot predates the registry, so nobody recorded
+        # what the run could see, and today's declarations are not evidence about that run.
+        return ['<p class="quiet">This run recorded no source registry, so it cannot say which '
+                'sources it could not consult. Nothing here says the sources it did not have were '
+                'clean.</p>']
+    if not run.get("assessment_recorded"):
+        return ['<p class="quiet">This run recorded its sources but not what this analysis needed, '
+                'so it cannot say which of them it could not consult.</p>']
+    spots = run.get("blind_spots") or []
+    if not spots:
+        return ['<p>Its recorded source registry names no source it could not consult.</p>']
+    lines = ['<p>Not connected when this run looked:</p>']
+    lines.extend(f'<p>{esc(_blind_spot_sentence(spot))}</p>' for spot in spots)
+    lines.append('<p>They were never consulted, so nothing here says they held nothing \u2014 only '
+                 'that this run was never checked against them.</p>')
+    return lines
+
+
+def decision_block(decision: dict | None) -> list[str]:
+    """The decision a person recorded, with who made it, when, and their note.
+
+    "Resolved" is reachable only from here, and only from a stored ``case_state`` row whose state
+    is ``resolved``. The sentence says what the decision was about, so a reader cannot take it for
+    a statement about the run (TESTOPS-22, AC2).
+    """
+    if decision is None:
+        return []
+    state = decision["state"]
+    label = STATE_LABEL.get(state, state)
+    actor = decision["actor"]
+    when = age(decision["at"])
+    note = (decision["note"] or "").strip()
+    if state == "resolved":
+        sentence = f"Resolved by {actor} {when}."
+    elif state == "false_positive":
+        sentence = f"Judged not a real finding by {actor} {when}."
+    elif state == "needs_fix":
+        sentence = f"Marked as needing a fix by {actor} {when}."
+    elif state == "open":
+        sentence = f"Reopened by {actor} {when}."
+    else:
+        sentence = f"Set to {label.lower()} by {actor} {when}."
+    # Built outside the f-string expression: 3.11 serves this UI and rejects a backslash inside one.
+    quote = "\u201c" + note + "\u201d."
+    if note:
+        sentence += f" The note recorded with that decision: {quote}"
+    else:
+        sentence += " No note was recorded with that decision."
+    if state in cases.TERMINAL:
+        sentence += (" This is a decision about the findings in this case; it did not change what "
+                     "the run analysed.")
+    return [f'<h2>{esc(label)}</h2>', f'<p>{esc(sentence)}</p>']
+
+
 def section_action(c: dict) -> list[str]:
     """6. The action, in one sentence naming the step to change."""
     if c["proposed_action"]:
@@ -644,7 +775,9 @@ def case_page(conn, case_id: str) -> bytes | None:
     findings = queries.finding_rows(conn, case_id)
     claims = [c for f in findings for c in f["claims"]]
     versions = versions_text(row["versions"])
-    state_label = display_state(row["state"], len(findings))
+    decision = queries.latest_decision(conn, case_id)
+    run = queries.run_analysis(conn, case_id)
+    state_label = case_badge(decision, len(findings))
 
     body = [f'<p class="meta"><a href="/">\u2190 all cases</a></p>',
             f'<h1>{esc(row["project"])} \u00b7 {esc(analyser_text(row["analyser"]))}</h1>']
@@ -654,30 +787,20 @@ def case_page(conn, case_id: str) -> bytes | None:
     # own summary at the head of their own argument.
     if claims:
         body.extend(summary_block(claims[0]))
-    body.append(f'<p class="meta"><span class="badge'
-                f'{" hot" if STATE_LABEL.get(row["state"]) in ("Open", "Needs a fix") else ""}">'
+    hot = ' class="hot"' if state_label in ("Open", "Needs a fix") else ""
+    body.append(f'<p class="meta"><span class="badge{hot}">'
                 f'{esc(state_label)}</span>'
                 f' \u00b7 Analysed {esc(age(row["created_at"]))}'
                 f'{" at " + esc(versions) if versions else ""}</p>')
 
     if not findings:
-        superseded = conn.execute(
-            """SELECT s.state, s.actor, s.at, s.note FROM suppression s
-               JOIN finding f ON f.fingerprint = s.fingerprint WHERE f.case_id = ?
-               ORDER BY s.at DESC LIMIT 1""", (case_id,)).fetchone()
-        if superseded:
-            # Outside the f-string: backslash in an f-string expression is a SyntaxError before
-            # 3.12 and 3.11 serves this UI (TESTOPS-13).
-            note_suffix = esc(" \u2014 " + superseded["note"]) if superseded["note"] else ""
-            body.append(f'<p>Every finding in this case has been suppressed. '
-                        f'Last decision: <strong>{esc(STATE_LABEL.get(superseded["state"], superseded["state"]))}</strong> '
-                        f'by {esc(superseded["actor"])} {esc(age(superseded["at"]))}'
-                        f'{note_suffix}.</p>')
-        else:
-            body.append('<p>This case is resolved: the analysis raised nothing to act on. That is a '
-                        'result, not an error \u2014 and not a claim that the code is clean, only '
-                        'that nothing in this run fell short.</p>')
-    else:
+        # A run that raised nothing is described as a run: what it examined, and what it could not
+        # consult. It is never called resolved - that word belongs to a person's recorded decision,
+        # which is rendered beside it when one exists (TESTOPS-22).
+        body.extend(quiet_run_block(run))
+    if decision is not None:
+        body.extend(decision_block(decision))
+    if findings:
         first = True
         for i, f in enumerate(findings, start=1):
             if len(findings) > 1:
