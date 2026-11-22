@@ -1,0 +1,37 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-44.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-44-secret-guard`, tree clean, 459 tests.
+Ticket:   factory/tickets/TESTOPS-44.md
+Build:    factory/reports/2026-11-22/TESTOPS-44-build.md
+
+The prior review found the secret guard exempted any value containing `/`, so a base64 AWS key was stored, while a
+plausible 32-char project key was refused. The build claims base64 is now detected before the exemption.
+
+HARD RULES - the guard must be right in BOTH directions or it is worse than nothing:
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Secrets that must be refused** (post each through /config/services on a scratch store; quote the response): the
+  AWS key from the last review; a 40-byte random base64 with `+`; base64 with no padding; a JWT
+  (`eyJ...eyJ...sig`, three dot-separated base64 segments); 64-char hex; `ghp_` 40-char; `AKIA` + 16; a line from an
+  SSH private key; `Bearer `; `password=`; a 32-char random alphanumeric.
+- **Real configuration that must be ACCEPTED** (a false positive here is the worse failure): `owner/repo`,
+  `https://jira.example.com`, `https://dev.azure.com/org/project/_build?definitionId=2`, a Windows path
+  `C:/work/repos/cotw`, `PROJ`, `COTW-PROJ-KEY-0123456789-ABCDEFG`, a UUID, `main`, `refs/heads/feature/x`,
+  `pipeline #2`, a 12-char word, and a 21-char base64-looking word that is actually a name (e.g. `Q29udGludWl0eUdhbWU=`).
+  Report every false positive and say what rule caused it.
+- **No echo:** grep the response bodies AND the server log for each refused value; report any occurrence.
+- **Migration message:** open a v3 copy (the backup) and confirm one line naming v3 -> v4; then hand it a v99 store and
+  confirm the refusal names both versions.
+- **Check AC6 landed:** does the builder prompt now require a build report, and did this ticket's builder actually write
+  one? Quote the prompt line.
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-44-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## Refused — each secret probe and the quoted reason.
+  ## Accepted — each real-configuration probe; any false positive named with the rule that caused it.
+  ## Echo check.
+  ## Migration message.
+  ## Where it still errs, and why that is acceptable or not.
+
+Then reply with the verdict and a summary under 300 words.

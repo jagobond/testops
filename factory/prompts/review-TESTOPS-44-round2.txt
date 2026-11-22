@@ -1,0 +1,18 @@
+You are the reviewer on the TestOps factory. Round 2 on TESTOPS-44 (round 1 was NEEDS-FIX for one hole).
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-44-secret-guard`.
+Round 1: factory/reports/2026-11-22/TESTOPS-44-review.md - your own finding was the 20-char `AKIA` key ID passing.
+Fix: commit 9af99c2 adds a credential-PREFIX rule at any length, in front of the entropy floors.
+
+Judgement rules:
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Confirm the hole is closed:** `AKIA`+16, `ASIA`+16, `ghp_`+36, `github_pat_`+22, `xoxb-`+12, `glpat-`+20, `sk-`+32,
+  `eyJ`+20, `-----BEGIN RSA PRIVATE KEY-----` - each through /config/services on a scratch store, quoted verdict.
+- **Attack the prefix rule for false positives**, which is the risk it introduces: `skipton-branch`, `task-akia-review`,
+  `masking/x`, `SK-1234` (an ADO project key), a repo named `sk-utils/tools`, `eyJ` inside a longer word,
+  `github_pat_docs` (documentation URL slug), `xoxb-not-a-token`. Report every refusal that would block a real setting.
+- **Re-run your round-1 eleven accepted values** - all must still be accepted.
+- **Confirm round 1's "still errs" items are unchanged or improved** - the low-entropy `ghp_` probe should now be refused.
+- Do not edit product code or the ticket. Append a `## Round 2` section to factory/reports/2026-11-22/TESTOPS-44-review.md
+  with: Verdict (PASS/NEEDS-FIX), the prefix probes, the false-positive probes, and whether the floors are untouched.
+- Reply with the verdict and a summary under 250 words.
