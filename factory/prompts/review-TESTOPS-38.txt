@@ -1,0 +1,43 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-38 - the largest change so far and the one that
+touches the live store.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-38-projects-services`, tree clean, 439 tests.
+Ticket:     factory/tickets/TESTOPS-38.md
+Decision:   docs/ADR-1-projects-and-services.md
+Build report: factory/reports/2026-11-22/TESTOPS-38-build.md (read it, then distrust it)
+
+The wire ran an in-place schema migration (v3 -> v4) on data/testops.db with a backup beside it, added `project` and
+`service` tables, seeded 12 service rows, and added a /config page that can add/edit/remove services and projects.
+
+HARD RULES - this is a live-data review, so damage first:
+- **Copy the store before you touch anything.** Work on copies under a scratch dir; the live `data/testops.db` must be
+  byte-identical when you finish (compare a hash before and after and report both).
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Migration safety:** re-run the migration on an already-migrated copy (must be a no-op); run it on a copy with an
+  interrupted transaction; run it on a copy of the pre-change backup. Report what happens in each case, and whether a
+  failure leaves the store usable.
+- **AC2 by your own hand:** render at least 12 case pages, the index and /runs from a copy of the migrated store and
+  compare with HTML captured from the pre-change code (use `git stash`/a worktree of main). Say exactly how you
+  compared and quote any difference.
+- **AC5 secrets:** try to store each of these in a service setting and report the response - a 40-char GitHub token,
+  a base64 AWS key, a value containing `Bearer `, a password-shaped word, a jira host (must be ACCEPTED), a 32-char
+  project key (must be ACCEPTED). False positives are as bad as false negatives here; say which side it errs on.
+  Confirm no rejected value is echoed back into any log file or the page.
+- **AC3 config page:** inject a project name containing `<script>alert(1)</script>`, a quote, an em-dash and a
+  200-char name; check the page and every listing that shows it. Removing a service that a run used must not delete
+  the run or its claims - test it.
+- **AC6/AC7:** start the app with TESTOPS_DATA pointing outside the checkout; render a case page. Then a project with
+  a test repo and no product repo - quote the sentence the run page gives.
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-38-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## The live store — hash before and after, what you did to copies.
+  ## Migration safety — re-run, interrupted, from backup.
+  ## AC2 — pages compared, method, differences.
+  ## Secrets — each probe and the verdict, and which way it errs.
+  ## Config page — injection results, and removing a service a run used.
+  ## Three sharpest concerns.
+
+Then reply with the verdict and a summary under 350 words.
