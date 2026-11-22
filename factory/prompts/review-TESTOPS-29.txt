@@ -1,0 +1,30 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-29.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-29-action-prose`, tree clean.
+Ticket:     factory/tickets/TESTOPS-29.md
+Diff:       git diff feature/f1..HEAD
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Measure the repetition yourself** over all 94 actions in run cotw-levels-20261122T011316: for each claim,
+  take the action and the statement, and report how many actions share a content word with their own block.
+  The build claims zero. Verify or refute with your own code.
+- **Check nothing was deleted to win.** The reason must still be on the page (AC2). For the two review-verdict
+  claims, confirm the reason's content words appear in section 1. Then spot-check five other claims whose action
+  changed in this diff and confirm their information moved rather than vanished.
+- **Confirm the lint was not weakened.** The T26 no-repeat lint must still bite: seed a repeated 6-word clause and
+  confirm a test fails.
+- **Judge whether the new actions are still instructions.** An action that states the change is good; an action
+  that became a restatement of the claim is useless. Quote three actions before and after.
+- Confirm verdicts 94/90/1/1/2.
+- Do not edit product code, tests or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-29-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## Criteria — AC1..AC5 HOLDS / WEAK / NOT MET.
+  ## Repetition — the number you measured, and how.
+  ## Before and after — three actions, and whether the instruction survived the rewrite.
+  ## Three sharpest concerns.
+
+Then reply with the verdict and a summary under 300 words.
