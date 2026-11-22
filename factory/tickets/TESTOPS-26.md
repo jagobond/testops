@@ -2,7 +2,7 @@
 id: TESTOPS-26
 title: The summary is there, but the reader has to dig it out of a paragraph
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-23
 ---
