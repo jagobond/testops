@@ -2,7 +2,7 @@
 id: TESTOPS-46
 title: A store can no longer be restored from its own history
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-45
 ---

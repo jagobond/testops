@@ -56,7 +56,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-43 | A sentence that hides its own partial reads | F1 | ready | From the TESTOPS-41 review: aggregate totals hide a per-capability zero, a harmless skip renders nowhere, partial reads say "consulted" |
 | TESTOPS-44 | The secret guard errs in both directions, and the store upgrades without saying so | F2 | ready | From the TESTOPS-38 review: base64 key accepted because the guard exempts `/`, a real 32-char key refused, migration silent on open |
 | TESTOPS-45 | The store will accept any verdict string, and 128 rows still carry retired names | F2 | done | Schema v5 vocabulary + triggers, `check-store`; 534 tests; PR #38 |
-| TESTOPS-46 | A store can no longer be restored from its own history | F2 | ready | From the TESTOPS-45 review: row-level copy of retired names is refused, so restore breaks. Database guard = ever emitted, code guard = current |
+| TESTOPS-46 | A store can no longer be restored from its own history | F2 | done | Insert allows ever-emitted, update stays current-only; `add_claim` guard now actually called; 548 tests; PR #40 |
 | TESTOPS-47 | Each analyser states the cover of its own decision, and states identity rather than promising an event | F2 | ready | From the TESTOPS-40 review: one global sentence is wrong for duplication and over-promises on net-zero twin edits |
 
 |----|-------|---------|--------|------|
