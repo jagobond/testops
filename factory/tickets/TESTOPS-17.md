@@ -2,7 +2,7 @@
 id: TESTOPS-17
 title: A clean bill requires having looked
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-5
 ---
