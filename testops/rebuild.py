@@ -173,9 +173,9 @@ def rebuild(conn, snapshot_id: str) -> tuple[list, dict, Snapshot]:
         elif kinds[path] == "stepdef":
             bindings.extend(stepbindings.parse_file(path, text, driver_map))
 
-    surfaces = surface_discovery.discover(snap.product_texts)
+    discovery = surface_discovery.discover(snap.product_texts)
     claims = level_fitness.analyse(
-        features, bindings, surfaces,
+        features, bindings, list(discovery.surfaces),
         lambda path: f"github:{snap.test_slug}@{snap.test_commit}:{path}",
         {"calls": 0, "tokens_in": 0, "tokens_out": 0},
         sources_missing=snap.sources_missing, assessment=snap.assessment,
@@ -183,5 +183,5 @@ def rebuild(conn, snapshot_id: str) -> tuple[list, dict, Snapshot]:
     )
     stats = {"features": len(features), "bindings": len(bindings),
              "scenarios": sum(len(f.scenarios) for f in features),
-             "surfaces": len(surfaces)}
+             "surfaces": len(discovery.surfaces), "surfaces_state": discovery.state}
     return claims, stats, snap

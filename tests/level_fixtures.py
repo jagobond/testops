@@ -156,6 +156,7 @@ def stub_pipeline(monkeypatch, pipeline, tmp_path, feature: str = PIPELINE_FEATU
     monkeypatch.setattr(pipeline.blobs, "text", lambda sha: texts[sha])
     monkeypatch.setattr(pipeline.github, "collect",
                         lambda repo, token, role="product": Collected(commit=COMMIT, files=files))
-    monkeypatch.setattr(pipeline.surface_discovery, "discover", lambda product_texts: [])
+    monkeypatch.setattr(pipeline.surface_discovery, "discover",
+                        lambda product_texts: pipeline.surface_discovery.Discovery((), "zero"))
     return path, real_connect
 

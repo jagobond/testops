@@ -74,7 +74,11 @@ The suite is deliberately small. It pins the invariants later tickets depend on:
   removes only with `--yes`: the case, its findings, its decisions and its orphaned suppressions
   go; the run, snapshot, artefacts, observations and claims stay (`test_scrub_fixtures.py`);
 - a case naming an unregistered analyser answers 404 with the "no longer in the store" page, is
-  not listed on the dashboard, and a registered case still renders (`test_unregistered_case_page.py`).
+  not listed on the dashboard, and a registered case still renders (`test_unregistered_case_page.py`);
+- every file the collector refused is recorded with its reason and kind, a capability is read /
+  returned-nothing / could-not-be-read with a different sentence for each, a Java product's run
+  names the `.java` files it skipped and says no product code file was fetched, and the kind list is
+  configuration (`test_skipped_is_not_consulted.py`).
 
 Every test that needs a database creates it under pytest's `tmp_path`. No test reads the network,
 credentials, Jira, or an external repository - and no test may write to the live store.

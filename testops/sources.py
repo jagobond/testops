@@ -31,7 +31,7 @@ the registry can be written into a snapshot and read by anyone. A test asserts t
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Iterable
 
 # ---------------------------------------------------------------- capabilities
@@ -70,6 +70,59 @@ ZERO = "zero"
 # We looked, and there is something.
 FOUND = "found"
 
+# TESTOPS-41. A capability whose reader could not read this repository: the source was available,
+# the run consulted it, and nothing it reads as this capability was fetched. It is not ``absent``
+# (the source is configured), it is not ``zero`` (a zero means a reader looked and found nothing),
+# and it is not ``found``. A file nothing read is never counted as consulted.
+NOT_READABLE = "not_readable"
+
+
+@dataclass(frozen=True)
+class Reading:
+    """What one capability got from one source in one run - one of three states, never shared.
+
+      * ``observed`` is a count and ``unreadable`` is empty: the reader read this kind of file and
+        returned that many. ``0`` is a real zero.
+      * one or more files were fetched but the capability could not be read as this capability:
+        ``observed`` is ``None``, ``unreadable`` says why, and ``skipped`` records what fell
+        outside the reader's reach.
+
+    ``arms`` is the count per repository, so a record can say which of two repositories supplied
+    the items without anyone guessing. Nothing here is a percentage: counts, or an absence.
+    """
+    capability: str
+    observed: int | None = None
+    unreadable: str = ""
+    arms: dict[str, int] = field(default_factory=dict)
+    skipped: tuple[dict, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.capability not in CAPABILITIES:
+            raise ValueError(f"unknown capability {self.capability!r}; expected one of {CAPABILITIES}")
+        if self.observed is not None and (not isinstance(self.observed, int) or self.observed < 0):
+            raise ValueError(f"{self.capability}: observed must be a count or None, "
+                             f"found {self.observed!r}")
+        if self.unreadable.strip():
+            if self.observed not in (None, 0):
+                raise ValueError(f"{self.capability}: a capability that could not be read cannot "
+                                 f"report {self.observed} items read")
+        elif self.observed is None:
+            # The other direction of the same mistake: "read, and I will not say what it returned"
+            # is not a state this record has. It is either a count or a reason.
+            raise ValueError(f"{self.capability}: a readable capability must record what it "
+                             "returned, even when that is 0")
+
+    @property
+    def readable(self) -> bool:
+        return not self.unreadable.strip()
+
+    def record(self, *, include_skipped: bool = False) -> dict:
+        out = {"capability": self.capability, "observed": self.observed,
+               "unreadable": self.unreadable, "arms": dict(self.arms)}
+        if include_skipped:
+            out["skipped"] = [dict(entry) for entry in self.skipped]
+        return out
+
 # ---------------------------------------------------------------- the Quilter deployment
 
 GITHUB = "github"
@@ -106,11 +159,16 @@ class SourceState:
 
     ``observed`` is how many items the run actually took from the source, when it was consulted.
     ``None`` means "not recorded" - it is never spelled ``0``, because zero is a real result.
+
+    ``readings`` is the per-capability answer (TESTOPS-41): what this source returned for each
+    capability it was asked for. A record written before that field existed has none, and is read
+    through ``observed`` exactly as it always was - an old snapshot must render as it rendered.
     """
     state: str
     reason: str = ""
     blocked_by: str = ""
     observed: int | None = None
+    readings: tuple[Reading, ...] = ()
 
     def __post_init__(self) -> None:
         if self.state not in STATES:
@@ -126,14 +184,27 @@ class SourceState:
             # "We counted zero" and "nobody could look" are the two facts this module keeps apart.
             # A source nobody could consult has no count at all, not a count of zero.
             raise ValueError(f"a source declared {self.state!r} cannot have an observed count")
+        if self.readings and self.state != AVAILABLE:
+            raise ValueError(f"a source declared {self.state!r} cannot have readings")
+        if self.readings and self.observed is None:
+            # The aggregate and the readings cannot disagree: when a run records the split, the
+            # whole is the sum of the capabilities it could read, and nothing else.
+            countable = [reading.observed for reading in self.readings if reading.readable]
+            if countable:
+                object.__setattr__(self, "observed", sum(countable or ()))
 
     @property
     def available(self) -> bool:
         return self.state == AVAILABLE
 
     def record(self) -> dict:
-        return {"state": self.state, "reason": self.reason, "blocked_by": self.blocked_by,
-                "observed": self.observed}
+        out = {"state": self.state, "reason": self.reason, "blocked_by": self.blocked_by,
+               "observed": self.observed}
+        if self.readings:
+            # Only when the run recorded them. A snapshot taken before this field existed must
+            # read back as it was written, not as if it had said something it never said.
+            out["readings"] = [reading.record(include_skipped=True) for reading in self.readings]
+        return out
 
 
 @dataclass(frozen=True)
@@ -158,6 +229,10 @@ class SourceKind:
         if unknown:
             raise ValueError(f"source {self.id!r} claims unknown capabilities: {sorted(unknown)}")
         object.__setattr__(self, "capabilities", capabilities)
+        for reading in self.state.readings:
+            if reading.capability not in capabilities:
+                raise ValueError(f"source {self.id!r} recorded a reading for {reading.capability!r}, "
+                                 f"which it does not declare")
 
     @classmethod
     def available(cls, source_id: str, title: str, capabilities: Iterable[str], *,
@@ -222,11 +297,18 @@ class Assessment:
     ``state`` is one of :data:`NOT_ASSESSABLE`, :data:`NOT_RECORDED`, :data:`ZERO`, :data:`FOUND`.
     The two the product turns on are ``not_assessable`` ("nobody could look") and ``zero`` ("we
     looked, there is nothing"); they are different verdicts with different sentences.
+
+    ``readings`` is the per-capability detail when the run recorded it (TESTOPS-41). With it, a
+    claim that needed two capabilities and got only one says so: the capability that was read is
+    reported with its count, the one that could not be read is reported with the reason, and the
+    two never share a sentence. Without it - a snapshot written before the field existed - the
+    sentence is exactly the one that snapshot's readers saw.
     """
     capabilities: tuple[str, ...]
     state: str
     observed: int | None = None
     blind_spots: tuple[BlindSpot, ...] = ()
+    readings: tuple[Reading, ...] = ()
 
     @property
     def assessable(self) -> bool:
@@ -234,16 +316,28 @@ class Assessment:
 
     def record(self) -> dict:
         """The assessment without its sentence: wording is derived, the facts are stored."""
-        return {"state": self.state, "capabilities": list(self.capabilities),
-                "observed": self.observed,
-                "blind_spots": [spot.record() for spot in self.blind_spots]}
+        out = {"state": self.state, "capabilities": list(self.capabilities),
+               "observed": self.observed,
+               "blind_spots": [spot.record() for spot in self.blind_spots]}
+        if self.readings:
+            # Per capability, without the skipped file lists: a claim row is not a place to copy a
+            # repository's tree. The full record lives once, in the snapshot's registry.
+            out["readings"] = [reading.record() for reading in self.readings]
+        return out
 
     def sentence(self) -> str:
         """What a reader is told. Different states never share wording."""
         titles = _titles(self.capabilities)
         plural = len(self.capabilities) > 1
         if self.state == NOT_ASSESSABLE:
-            parts = " ".join(_blind_sentence(spot) for spot in self.blind_spots)
+            # The source-level blind spots (blocked, absent) are stated by _blind_sentence. A
+            # capability that was consulted and could not be read is stated per capability, so it
+            # is not repeated here.
+            parts = " ".join(_blind_sentence(spot) for spot in self.blind_spots
+                             if spot.state != NOT_READABLE)
+            if self.readings:
+                clauses = "; ".join(_reading_clause(reading) for reading in self.readings)
+                return f"Cannot assess this claim: {clauses}. {parts}".strip()
             return f"Cannot assess this claim: nobody could look at {titles}. {parts}".strip()
         if self.state == ZERO:
             verb = "were" if plural else "was"
@@ -273,7 +367,20 @@ def _blind_sentence(spot: BlindSpot) -> str:
         return f"{spot.title} is blocked{by}: {reason}." if reason else f"{spot.title} is blocked{by}."
     if spot.state == ABSENT:
         return f"{spot.title} is absent: {reason}." if reason else f"{spot.title} is absent."
+    if spot.state == NOT_READABLE:
+        return (f"{spot.title} could not be read: {reason}." if reason
+                else f"{spot.title} could not be read.")
     return f"{spot.title} is {spot.state}: {reason}." if reason else f"{spot.title} is {spot.state}."
+
+
+def _reading_clause(reading: Reading) -> str:
+    """One capability, in the reader's words: what it returned, or why it could not be read."""
+    title = CAPABILITY_TITLE.get(reading.capability, reading.capability)
+    if reading.readable:
+        count = reading.observed or 0
+        item = "item" if count == 1 else "items"
+        return f"{title} was consulted and returned {count} {item}"
+    return f"{title} was not read: {reading.unreadable.strip().rstrip('.')}"
 
 
 # ---------------------------------------------------------------- the registry
@@ -337,8 +444,10 @@ class Registry:
             raise ValueError("an assessment must ask about at least one capability")
 
         blind: list[BlindSpot] = []
+        readings: list[Reading] = []
         # Counted per source, not per capability: one repository serving both code and test code is
         # one repository, and adding its count once per capability would report double what it saw.
+        # That is the legacy reading, used only for a record written before per-capability counts.
         observed: dict[str, int] = {}
         for capability in requested:
             candidates = self.for_capability(capability)
@@ -353,10 +462,33 @@ class Registry:
                                        kind.state.reason, kind.state.blocked_by)
                              for kind in candidates)
                 continue
-            for kind in usable:
-                if kind.state.observed is not None:
-                    observed[kind.id] = kind.state.observed
+            served = [(kind, reading) for kind in usable
+                      for reading in kind.state.readings if reading.capability == capability]
+            if not served:
+                for kind in usable:
+                    if kind.state.observed is not None:
+                        observed[kind.id] = kind.state.observed
+                continue
+            readable = [(kind, reading) for kind, reading in served if reading.readable]
+            if readable:
+                readings.append(Reading(
+                    capability,
+                    observed=sum(reading.observed or 0 for _kind, reading in readable),
+                    arms=_merge_arms(reading for _kind, reading in readable),
+                    skipped=tuple(entry for _kind, reading in readable
+                                  for entry in reading.skipped)))
+                continue
+            # Every source that could serve this capability was consulted and none could read it.
+            for kind, reading in served:
+                blind.append(BlindSpot(kind.id, CAPABILITY_TITLE[capability], NOT_READABLE,
+                                       reading.unreadable))
+                readings.append(reading)
 
+        if readings:
+            if blind:
+                return Assessment(requested, NOT_ASSESSABLE, None, tuple(blind), tuple(readings))
+            total = sum(reading.observed or 0 for reading in readings)
+            return Assessment(requested, ZERO if total == 0 else FOUND, total, (), tuple(readings))
         if blind:
             return Assessment(requested, NOT_ASSESSABLE, None, tuple(blind))
         if not observed:
@@ -364,14 +496,25 @@ class Registry:
         total = sum(observed.values())
         return Assessment(requested, ZERO if total == 0 else FOUND, total)
 
-    def with_observed(self, counts: dict[str, int]) -> "Registry":
-        """A copy of the registry recording what this run actually took from each source."""
+    def with_readings(self, readings: dict[str, Iterable[Reading]]) -> "Registry":
+        """A copy of the registry recording, per source and capability, what this run took.
+
+        TESTOPS-41. This is the record that stops one count standing for two capabilities: the
+        source's aggregate ``observed`` is the sum of the capabilities it could read, and a
+        capability it could not read carries no count at all - it carries a reason.
+        """
         kinds = []
         for kind in self._kinds:
-            if kind.id in counts:
-                kinds.append(replace(kind, state=replace(kind.state, observed=int(counts[kind.id]))))
-            else:
+            given = list(readings.get(kind.id) or ())
+            if not given:
                 kinds.append(kind)
+                continue
+            ordered = tuple(reading for capability in CAPABILITIES
+                            for reading in given if reading.capability == capability)
+            countable = [reading.observed for reading in ordered if reading.readable]
+            total = sum(value or 0 for value in countable) if countable else None
+            kinds.append(replace(kind, state=replace(kind.state, readings=ordered,
+                                                      observed=total)))
         return Registry(kinds)
 
     def use(self, source_id: str, call: Callable[[], Any], *, role: str = "") -> Any:
@@ -431,11 +574,40 @@ class Registry:
                     reason=entry.get("reason") or "",
                     blocked_by=entry.get("blocked_by") or "",
                     observed=entry.get("observed"),
+                    readings=_readings_from(entry.get("readings")),
                 ),
                 route=entry.get("route") or "",
                 note=entry.get("note") or "",
             ))
         return cls(kinds)
+
+
+def _readings_from(stored) -> tuple[Reading, ...]:
+    """The per-capability readings a stored source record holds, or none when it predates them.
+
+    A malformed reading is refused rather than dropped: a record that says something unreadable
+    about what a run could see must not read back as a record that says nothing.
+    """
+    if not stored:
+        return ()
+    if not isinstance(stored, list):
+        raise ValueError(f"a source record's readings must be a list, found {type(stored).__name__}")
+    out: list[Reading] = []
+    for entry in stored:
+        if not isinstance(entry, dict):
+            raise ValueError(f"a reading must be a mapping, found {entry!r}")
+        arms = entry.get("arms") or {}
+        if not isinstance(arms, dict):
+            raise ValueError(f"a reading's arms must be a mapping, found {arms!r}")
+        skipped = entry.get("skipped") or ()
+        out.append(Reading(
+            capability=entry.get("capability") or "",
+            observed=entry.get("observed"),
+            unreadable=entry.get("unreadable") or "",
+            arms={str(arm): int(count) for arm, count in arms.items()},
+            skipped=tuple(entry for entry in skipped if isinstance(entry, dict)),
+        ))
+    return tuple(out)
 
 
 def _check_capabilities(capabilities: Iterable[str]) -> set[str]:
@@ -444,6 +616,15 @@ def _check_capabilities(capabilities: Iterable[str]) -> set[str]:
     if unknown:
         raise ValueError(f"unknown capabilities {sorted(unknown)}; expected a subset of {CAPABILITIES}")
     return wanted
+
+
+def _merge_arms(readings: Iterable[Reading]) -> dict[str, int]:
+    """The per-repository counts behind one capability, summed across the sources that served it."""
+    arms: dict[str, int] = {}
+    for reading in readings:
+        for arm, count in reading.arms.items():
+            arms[arm] = arms.get(arm, 0) + int(count)
+    return arms
 
 
 # ---------------------------------------------------------------- the deployment's declarations

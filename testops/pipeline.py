@@ -11,7 +11,7 @@ from .surfaces import discover as surface_discovery
 from .collectors import github, jira
 from .config import Project, load_env
 from .extract import csproj, gherkin, stepbindings
-from . import cases, sources
+from . import cases, config, sources
 from .store import db
 
 
@@ -68,6 +68,86 @@ def _analyser_record(analyser) -> dict:
                             "consults": sorted(analyser.CONSULTS)}}
 
 
+def _skip_reason(capability: str, arms: list[tuple[str, github.Collected]]) -> str:
+    """Why a capability could not be read, in the words a page will print (TESTOPS-41).
+
+    The count and the kind come from the collector's own record; the repository is named because
+    "the product code was not read" is only checkable if a reader can tell which repository held it.
+    """
+    title = sources.CAPABILITY_TITLE[capability]
+    skipped = [entry for _role, collected in arms for entry in collected.skipped
+               if entry.reason != github.IGNORE]
+    if not skipped:
+        return (f"no file the collector reads as {title} was fetched, and the tree recorded nothing "
+                f"that fell outside its kinds")
+    biggest = sorted(skipped, key=lambda entry: (-entry.count, entry.kind))[0]
+    kind = biggest.kind
+    if biggest.reason == github.UNSUPPORTED:
+        why = f"{kind} is not a kind this collector reads ({biggest.reason})"
+    elif biggest.reason == github.SIZE_CAP:
+        why = (f"they are over the {config.MAX_FILE_BYTES // 1024} KB size cap ({biggest.reason})")
+    else:
+        why = f"readers ignored them by pattern ({biggest.reason})"
+    noun = "file" if biggest.count == 1 else "files"
+    where = ", ".join(sorted({f"the {role} repository" for role, _c in arms}))
+    others = len(skipped) - 1
+    also = (f", along with {sum(entry.count for entry in skipped if entry is not biggest)} more "
+            f"in {others} other kind{'s' if others != 1 else ''}") if others else ""
+    lead = "no product code file was fetched" if capability == sources.CODE else \
+        "no test code file was fetched"
+    return (f"{biggest.count} {kind} {noun} in {where} were skipped because {why}{also}, so {lead}")
+
+
+def _readings(arms: list[tuple[str, github.Collected]]) -> dict[str, list[sources.Reading]]:
+    """What one source (GitHub) read and could not read, per capability, for this run.
+
+    TESTOPS-41. The counts come from the collector's own kind table, so a file fetched as one kind
+    can never be counted for another. An arm with no fetched file for a capability, in a run that
+    read that arm, is not a zero: it is a capability this reader could not read, and it carries the
+    reason and the skipped kinds that explain it.
+    """
+    readings: list[sources.Reading] = []
+    for capability in (sources.CODE, sources.TEST_CODE):
+        serving = [(role, collected) for role, collected in arms
+                   if config.arm_capability(role) == capability]
+        # A file counts toward the capability its *kind* serves, whichever arm fetched it: the
+        # product repository's `.js` assets are step definitions to this collector, so they are
+        # counted as test code and appear in that count rather than vanishing between the two.
+        per_arm = {role: collected.counts.get(capability, 0) for role, collected in arms}
+        observed = sum(per_arm.values())
+        if not serving and not observed:
+            continue                       # this run had no arm for it; not a result about it
+        skipped = tuple(entry.record() for role, collected in serving
+                        for entry in collected.skipped)
+        # A capability with nothing fetched is only *unreadable* when the tree held files that fell
+        # outside the kinds. An arm that fetched nothing and skipped nothing is a real zero: the
+        # reader looked and the repository had nothing for it.
+        unread = [entry for _role, collected in serving for entry in collected.unread]
+        readings.append(sources.Reading(
+            capability,
+            observed=observed,
+            unreadable="" if observed or not unread else _skip_reason(capability, serving),
+            arms={role: count for role, count in per_arm.items() if count},
+            skipped=skipped,
+        ))
+    return {sources.GITHUB: readings}
+
+
+def _counts(arms: list[tuple[str, github.Collected]]) -> dict[str, int]:
+    """Files fetched per capability, summed over the arms - the run's own reading of the tree."""
+    out: dict[str, int] = {}
+    for _role, collected in arms:
+        for capability, count in collected.counts.items():
+            out[capability] = out.get(capability, 0) + count
+    return dict(sorted(out.items()))
+
+
+def _skips(arms: list[tuple[str, github.Collected]]) -> list[dict]:
+    """Per kind, how many files this run refused and why - counts and reasons, not paths."""
+    return [{"reason": entry.reason, "kind": entry.kind, "count": entry.count}
+            for _role, collected in arms for entry in collected.skipped]
+
+
 def _new_snapshot_id(conn, base: str) -> str:
     """A snapshot id no stored snapshot already holds.
 
@@ -122,8 +202,8 @@ def run_duplication(project: Project, token: str,
         product = declared.use(sources.GITHUB,
                                lambda: github.collect(project.product, token, role="product"),
                                role="product")
-    declared = declared.with_observed({sources.GITHUB: len(test_repo.files)
-                                       + (len(product.files) if product else 0)})
+    arms = [("test", test_repo)] + ([("product", product)] if product else [])
+    declared = declared.with_readings(_readings(arms))
     missing_sources = declared.missing(duplication.NEEDS | duplication.CONSULTS)
     assessment = declared.assess(duplication.NEEDS)
 
@@ -138,6 +218,7 @@ def run_duplication(project: Project, token: str,
                        schema_version=2,
                        meta={"sources_missing": missing_sources,
                              "sources": declared.record(),
+                             "reads": {role: collected.record() for role, collected in arms},
                              "analysers": _analyser_record(duplication)})
 
     # 2. artefacts + observations
@@ -271,7 +352,8 @@ def run_duplication(project: Project, token: str,
                             "scenarios": sum(len(f.scenarios) for f in features),
                             "dormant_features": len(dormant), "jira_issues": jira_count,
                             "excludes": excludes, "claims": len(claims),
-                            "cases": len(case_ids)})
+                            "cases": len(case_ids),
+                            "read": _counts(arms), "skipped": _skips(arms)})
 
 
 def run_level_fitness(project: Project, token: str,
@@ -295,12 +377,22 @@ def run_level_fitness(project: Project, token: str,
     product = declared.use(sources.GITHUB,
                            lambda: github.collect(project.product, token, role="product"),
                            role="product")
-    declared = declared.with_observed({sources.GITHUB: len(test_repo.files) + len(product.files)})
+    arms = [("test", test_repo), ("product", product)]
+    declared = declared.with_readings(_readings(arms))
     missing_sources = declared.missing(level_fitness.NEEDS | level_fitness.CONSULTS)
     assessment = declared.assess(level_fitness.NEEDS)
 
     snapshot_id = _new_snapshot_id(
         conn, f"{project.key}-levels-{dt.date.today():%Y%m%d}-{test_repo.commit[:8]}")
+
+    # The product's text is read here, before the snapshot is written, because what the surface
+    # reader could make of it is part of the snapshot's record (TESTOPS-41): a run that found no
+    # surface because it cannot read the language must say that, and a run page read months later
+    # has no blob of its own to ask.
+    product_texts = {path: blobs.text(sha) for path, (sha, _kind) in sorted(product.files.items())}
+    discovery = surface_discovery.discover(product_texts)
+    surfaces = list(discovery.surfaces)
+
     db.upsert_snapshot(conn, snapshot_id, project.key, _now(),
                        {project.test.slug: test_repo.commit, project.product.slug: product.commit},
                        schema_version=2,
@@ -310,9 +402,11 @@ def run_level_fitness(project: Project, token: str,
                        meta={"sources_missing": missing_sources,
                              "arms": {"test": project.test.slug, "product": project.product.slug},
                              "sources": declared.record(),
+                             "reads": {role: collected.record() for role, collected in arms},
+                             "surfaces": discovery.record(),
                              "analysers": _analyser_record(level_fitness)})
 
-    texts, product_texts = {}, {}
+    texts = {}
     artefact_ids: dict[str, int] = {}
     for path, (sha, kind) in sorted(test_repo.files.items()):
         texts[path] = blobs.text(sha)
@@ -320,7 +414,6 @@ def run_level_fitness(project: Project, token: str,
             conn, snapshot_id, f"github:{project.test.slug}@{test_repo.commit}:{path}",
             kind, sha, {"role": "test"})
     for path, (sha, kind) in sorted(product.files.items()):
-        product_texts[path] = blobs.text(sha)
         db.add_artefact(conn, snapshot_id,
                         f"github:{project.product.slug}@{product.commit}:{path}",
                         kind, sha, {"role": "product"})
@@ -357,8 +450,6 @@ def run_level_fitness(project: Project, token: str,
                      "layer": binding.layer, "suite": binding.suite, "line": binding.line})
                 support_index.setdefault((binding.path, binding.verb, binding.pattern),
                                          observation)
-
-    surfaces = surface_discovery.discover(product_texts)
 
     def uri_for_path(path: str) -> str:
         return f"github:{project.test.slug}@{test_repo.commit}:{path}"
@@ -426,5 +517,11 @@ def run_level_fitness(project: Project, token: str,
                      claims=claims, case_ids=case_ids,
                      stats={"features": len(features), "scenarios": sum(len(f.scenarios) for f in features),
                             "claims": len(claims), "actionable": len(actionable),
-                            "cases": len(case_ids), "surfaces": len(surfaces), "budget": budget})
+                            "cases": len(case_ids), "surfaces": len(surfaces),
+                            # A count of 0 is not the answer on its own: "found none" and "could
+                            # not look" are different runs (AC3), so the state and the reason travel
+                            # beside the count.
+                            "surfaces_state": discovery.state,
+                            "surfaces_reason": discovery.reason,
+                            "read": _counts(arms), "skipped": _skips(arms), "budget": budget})
 

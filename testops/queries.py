@@ -581,7 +581,12 @@ def _source_facts(conn, run_id: str, analyser: str | None) -> dict:
     meta = _snapshot_meta(conn, run_id)
     stored = meta.get("sources") if isinstance(meta, dict) else None
     facts = {"registry_recorded": isinstance(stored, dict), "assessment_recorded": False,
-             "blind_spots": [], "assessment": None}
+             "blind_spots": [], "assessment": None,
+             # TESTOPS-41: what the readers could not read, and what the surface reader made of the
+             # product repository. ``None`` means the snapshot predates the record - not "nothing
+             # was skipped", which is the same mistake in a different place.
+             "reads": meta.get("reads") if isinstance(meta, dict) else None,
+             "surfaces": meta.get("surfaces") if isinstance(meta, dict) else None}
     if not facts["registry_recorded"]:
         return facts
     assessment = sources.assessment_for(meta, analyser or "")

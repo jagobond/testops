@@ -82,7 +82,8 @@ def _reqoverflow_store(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "load_env", lambda: {})
     monkeypatch.setattr(pipeline.db, "connect", lambda: real_connect(path))
     monkeypatch.setattr(pipeline.github, "collect", collect)
-    monkeypatch.setattr(pipeline.surface_discovery, "discover", lambda product_texts: [])
+    monkeypatch.setattr(pipeline.surface_discovery, "discover",
+                        lambda product_texts: pipeline.surface_discovery.Discovery((), "zero"))
     return path, real_connect, blob_dir
 
 
@@ -107,7 +108,8 @@ def _levels_store(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "load_env", lambda: {})
     monkeypatch.setattr(pipeline.db, "connect", lambda: real_connect(path))
     monkeypatch.setattr(pipeline.github, "collect", collect)
-    monkeypatch.setattr(pipeline.surface_discovery, "discover", lambda product_texts: [])
+    monkeypatch.setattr(pipeline.surface_discovery, "discover",
+                        lambda product_texts: pipeline.surface_discovery.Discovery((), "zero"))
     return path, real_connect, blob_dir
 
 

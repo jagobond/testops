@@ -5,14 +5,31 @@ real, and would let the analyser "find" surfaces it never had to look for.
 
 v0.2 adds the thing v0.1 lacked: **claims**. Without them, "a cheaper surface exists" is true for almost
 every scenario in any product, which is how a precision of 0.118 happened.
+
+TESTOPS-41. The reader parses Python. Against a Java product it used to return ``[]``, and the run
+printed ``"surfaces": 0`` - a zero produced by a reader that could not read, reported like a zero
+produced by one that read and found nothing. The two are now different values, and the reason travels
+with the second of them: which languages the repository holds, and how many files of each.
+
+The languages this reader can parse are :data:`LANGUAGES`, which is data. Adding one widens the
+reader; it does not make a repository it cannot parse look empty.
 """
 from __future__ import annotations
 
 import ast
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 
 ROUTE = re.compile(r"""["'](/[a-zA-Z0-9_\-/]*)["']""")
+
+# suffix -> language, for the reader below. Only Python has a parser here.
+LANGUAGES = {".py": "Python"}
+
+# What the discovery can say about a product repository. These three never share wording.
+FOUND = "found"
+ZERO = "zero"
+NOT_ASSESSABLE = "not_assessable"
 
 
 @dataclass
@@ -22,6 +39,27 @@ class Surface:
     target: str
     claims: list[str] = field(default_factory=list)
     source: str = ""
+
+
+@dataclass(frozen=True)
+class Discovery:
+    """The surfaces found, and - just as important - what the reader could not look at.
+
+    ``state`` is ``found`` (there are surfaces), ``zero`` (this reader read the files and found
+    none) or ``not_assessable`` (there was nothing here it could read, with the language and the
+    file count in ``reason``). A caller must not print the second and the third the same way.
+    """
+    surfaces: tuple[Surface, ...]
+    state: str
+    reason: str = ""
+    languages: tuple[tuple[str, int], ...] = ()
+    parsed: int = 0        # files this reader could parse
+
+    def record(self) -> dict:
+        return {"state": self.state, "surfaces": len(self.surfaces), "parsed": self.parsed,
+                "reason": self.reason,
+                "languages": [{"suffix": suffix, "count": count}
+                              for suffix, count in self.languages]}
 
 
 def _first_sentence(text: str) -> str:
@@ -36,14 +74,26 @@ def _humanise(name: str) -> str:
     return name.replace("_", " ").strip()
 
 
-def discover(files: dict[str, str]) -> list[Surface]:
-    """files: path -> text for the product repo. Returns deduplicated surfaces with claims."""
+def _suffix(path: str) -> str:
+    name = path.rsplit("/", 1)[-1]
+    if "." not in name.lstrip("."):
+        return "(no suffix)"
+    return "." + name.rsplit(".", 1)[1]
+
+
+def _languages(files: dict[str, str]) -> tuple[tuple[str, int], ...]:
+    counts = Counter(_suffix(path) for path in files)
+    return tuple(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+
+
+def discover(files: dict[str, str]) -> Discovery:
+    """files: path -> text for the product repo. Returns the surfaces, and what it could read."""
     routes: dict[str, Surface] = {}
     modules: list[Surface] = []
+    parsed = [path for path in files if path.endswith(".py")]
 
-    for path, text in files.items():
-        if not path.endswith(".py"):
-            continue
+    for path in parsed:
+        text = files[path]
         try:
             tree = ast.parse(text)
         except SyntaxError:
@@ -80,4 +130,20 @@ def discover(files: dict[str, str]) -> list[Surface]:
                 modules.append(Surface(id=f"engine:{path}", layer="engine", target=path,
                                        claims=claims[:8], source=path))
 
-    return sorted(routes.values(), key=lambda s: s.id) + modules
+    surfaces = tuple(sorted(routes.values(), key=lambda s: s.id) + modules)
+    languages = _languages(files)
+    reader = ", ".join(f"{name} ({suffix})" for suffix, name in LANGUAGES.items())
+    if not parsed:
+        # Nothing here this reader could parse. Say what was there, not "0 surfaces".
+        if not files:
+            reason = ("this run fetched no product file at all, so there was nothing for the surface "
+                      "reader to look at")
+        else:
+            held = ", ".join(f"{count} {suffix}" for suffix, count in languages[:4])
+            reason = (f"the surface reader parses {reader} only, and the product repository holds no "
+                      f"file it can read: {held}" + (", ..." if len(languages) > 4 else ""))
+        return Discovery((), NOT_ASSESSABLE, reason, languages, 0)
+    if not surfaces:
+        return Discovery((), ZERO, "", languages, len(parsed))
+    return Discovery(surfaces, FOUND, "", languages, len(parsed))
+

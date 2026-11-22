@@ -1243,11 +1243,20 @@ def section_unchecked(c: dict) -> list[str]:
         return ['<p>Every source needed for this claim was available.</p>']
 
     if recorded:
-        out = ['<p>Not connected when this claim was checked:</p>']
-        for note in notes:
-            out.append(f'<p>{esc(_blind_spot_sentence(note))}</p>')
-        out.append('<p>They were never consulted, so nothing here says they were clean '
-                   '\u2014 only that this claim was never checked against them.</p>')
+        # A capability the run consulted and could not read is not a source that was never
+        # connected: saying "never consulted" about it would be the TESTOPS-41 fault in a new
+        # place. The two get their own lead-in and their own sentence.
+        absent = [note for note in notes if note.get("state") != sources.NOT_READABLE]
+        unread = [note for note in notes if note.get("state") == sources.NOT_READABLE]
+        out = []
+        if absent:
+            out.append('<p>Not connected when this claim was checked:</p>')
+            out.extend(f'<p>{esc(_blind_spot_sentence(note))}</p>' for note in absent)
+            out.append('<p>They were never consulted, so nothing here says they were clean '
+                       '\u2014 only that this claim was never checked against them.</p>')
+        if unread:
+            out.append('<p>Could not be read when this claim was checked:</p>')
+            out.extend(f'<p>{esc(_blind_spot_sentence(note))}</p>' for note in unread)
         return out
 
     names = [SOURCE_NAME.get(m, m) for m in missing]
@@ -1264,6 +1273,9 @@ def _blind_spot_sentence(note: dict) -> str:
         return f"{title} \u2014 this run did not record why it was not connected."
     state = note.get("state")
     reason = (note.get("reason") or "").strip().rstrip(".")
+    if state == sources.NOT_READABLE:
+        return (f"{title} \u2014 could not be read: {reason}." if reason
+                else f"{title} \u2014 could not be read.")
     if state == sources.BLOCKED:
         by = f" by {note['blocked_by']}" if note.get("blocked_by") else ""
         return f"{title} \u2014 blocked{by}: {reason}." if reason else f"{title} \u2014 blocked{by}."
@@ -1371,6 +1383,7 @@ def quiet_run_block(run: dict | None) -> list[str]:
         out.append(f'<p class="meta">{esc(run["assessment"]["sentence"])}</p>')
     out.append('<h2 class="section">What this run could not consult</h2>')
     out.extend(_blind_spot_lines(run))
+    out.extend(could_not_read_lines(run))
     return out
 
 
@@ -1387,11 +1400,67 @@ def _blind_spot_lines(run: dict) -> list[str]:
     spots = run.get("blind_spots") or []
     if not spots:
         return ['<p>Its recorded source registry names no source it could not consult.</p>']
-    lines = ['<p>Not connected when this run looked:</p>']
-    lines.extend(f'<p>{esc(_blind_spot_sentence(spot))}</p>' for spot in spots)
-    lines.append('<p>They were never consulted, so nothing here says they held nothing \u2014 only '
-                 'that this run was never checked against them.</p>')
+    absent = [spot for spot in spots if spot.get("state") != sources.NOT_READABLE]
+    unread = [spot for spot in spots if spot.get("state") == sources.NOT_READABLE]
+    lines: list[str] = []
+    if absent:
+        lines.append('<p>Not connected when this run looked:</p>')
+        lines.extend(f'<p>{esc(_blind_spot_sentence(spot))}</p>' for spot in absent)
+        lines.append('<p>They were never consulted, so nothing here says they held nothing \u2014 only '
+                     'that this run was never checked against them.</p>')
+    if unread:
+        # A capability the run consulted and could not read. Not "never consulted", and not a zero.
+        lines.append('<p>Could not be read when this run looked:</p>')
+        lines.extend(f'<p>{esc(_blind_spot_sentence(spot))}</p>' for spot in unread)
     return lines
+
+
+def could_not_read_lines(run: dict | None) -> list[str]:
+    """What the readers could not read: the surface reader, then every skipped file by kind.
+
+    TESTOPS-41. Two facts a run page has to be able to state, and could not before: that a reader
+    could not look at the product's language at all, and which files fell outside the collector's
+    kinds. A snapshot that predates the record renders nothing here - inventing "nothing was
+    skipped" for it would be the same fault as inventing a zero.
+    """
+    if not run:
+        return []
+    out: list[str] = []
+    surfaces = run.get("surfaces")
+    if isinstance(surfaces, dict) and surfaces.get("state") == "not_assessable":
+        reason = surfaces.get("reason") or "the surface reader could not look at this product"
+        out.append('<h2 class="section">What the surface reader could not read</h2>')
+        out.append(f'<p>{esc(reason)}. No surface was found and none was ruled out.</p>')
+
+    reads = run.get("reads")
+    if not isinstance(reads, dict) or not reads:
+        return out
+    # The list is shown when it explains something: a capability this run could not read. A run
+    # that read every capability it needed is not made more truthful by a list of its README files,
+    # and the record - not the page - is where the full skip list lives (AC1).
+    unread = [spot for spot in (run.get("blind_spots") or [])
+              if spot.get("state") == sources.NOT_READABLE]
+    if not unread:
+        return out
+    skipped = [(role, entry) for role in sorted(reads)
+               for entry in ((reads.get(role) or {}).get("skipped") or [])
+               if entry.get("reason") != "ignore pattern"]
+    if not skipped:
+        return out
+    skipped.sort(key=lambda item: (-int(item[1].get("count") or 0), item[1].get("kind") or ""))
+    total = sum(int(entry.get("count") or 0) for _role, entry in skipped)
+    out.append('<h2 class="section">Files this run could not read</h2>')
+    out.append(f'<p>{_count(total, "file")} in the repositories were not fetched. Nothing in this '
+               f'run says what they contain, so nothing here counts them as consulted.</p>')
+    for role, entry in skipped:
+        files = entry.get("files") or []
+        out.append(f'<p><strong>{entry.get("count")} {esc(entry.get("kind") or "")}</strong> in the '
+                   f'{esc(role)} repository \u2014 {esc(entry.get("reason") or "")}.</p>')
+        if files:
+            out.append('<details><summary>Name them</summary><ul>')
+            out.extend(f'<li><span class="code">{esc(path)}</span></li>' for path in files)
+            out.append('</ul></details>')
+    return out
 
 
 # ---------------------------------------------------------------- the runs view
@@ -1542,6 +1611,7 @@ def run_response(conn, run_id: str) -> tuple[bytes, int]:
                             'not a clean bill.</p>')
         body.append('<h2 class="section">What this run could not consult</h2>')
         body.extend(_blind_spot_lines(run))
+        body.extend(could_not_read_lines(run))
     return page(f"TestOps · {run_id}", "".join(body)), 200
 
 
