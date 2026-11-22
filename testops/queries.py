@@ -1107,6 +1107,11 @@ def latest_per_analyser(conn, project: str | None = None) -> tuple[list[dict], i
     Each row carries ``statement``: the claim's own words, so the list says what is alleged. The
     stored ``finding.title`` is a truncated copy of that statement (160 characters, cut mid-sentence)
     and never belongs on a screen.
+
+    Each row also carries ``verdict`` and ``scenario``, read from the same claim as ``assertion``.
+    The list headline is a judgement plus the scenario title (TESTOPS-33), so the three facts a row
+    needs have to come from one claim - a verdict from one claim beside a subject from another
+    would describe a case nobody raised.
     """
     rows = cases.list_cases(conn, project, 200)
     seen: set[tuple[str, str]] = set()
@@ -1127,8 +1132,29 @@ def latest_per_analyser(conn, project: str | None = None) -> tuple[list[dict], i
         # the analyser's essay about it. A v1 claim has no recorded assertion, so its statement is
         # all there is.
         r["assertion"] = case_assertion(conn, r["id"])
+        lead = case_lead(conn, r["id"])
+        r["verdict"] = lead["verdict"]
+        r["scenario"] = lead["scenario"]
         latest.append(r)
     return latest, older
+
+
+def case_lead(conn, case_id: str) -> dict:
+    """The first claim's verdict and scenario title, or ``None`` for each when it holds no claim.
+
+    The case list's headline names a judgement and a subject, and both must be facts about the same
+    claim: the one whose assertion the row already shows. A case with no finding has no verdict,
+    and that absence is returned as ``None`` rather than as the words "open" or "resolved".
+    """
+    row = conn.execute("SELECT claim_ids FROM finding WHERE case_id = ? ORDER BY id LIMIT 1",
+                       (case_id,)).fetchone()
+    for cid in (_json(row["claim_ids"], []) if row else []):
+        claim = conn.execute("SELECT verdict, subject_ref FROM claim WHERE id = ?",
+                             (cid,)).fetchone()
+        if claim:
+            _, _, scenario = claim["subject_ref"].partition("#")
+            return {"verdict": claim["verdict"], "scenario": scenario or None}
+    return {"verdict": None, "scenario": None}
 
 
 def case_assertion(conn, case_id: str) -> str | None:
