@@ -946,8 +946,8 @@ def decision_form(conn, row: dict, case_id: str, findings: list[dict]) -> list[s
                    f'applies to this case only.</p>')
         out.append('<p><input type="text" name="note" placeholder="Why? (optional, shown next time)"></p>')
         out.append('<p>'
-                   '<button name="state" value="needs_fix">Needs a fix</button>'
-                   '<button class="term" name="state" value="resolved">Resolved \u2014 stop reporting</button>'
+                   '<button name="state" value="needs_fix">Needs a fix</button> '
+                   '<button class="term" name="state" value="resolved">Resolved \u2014 stop reporting</button> '
                    '<button class="term" name="state" value="false_positive">Not a real finding \u2014 stop reporting</button>'
                    '</p>')
         out.append('<p class="warn">Resolved and \u201cnot a real finding\u201d hide this evidence '
