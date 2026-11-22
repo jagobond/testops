@@ -42,6 +42,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-33 | The case list says "the suggestions list should be", which is not a case | F1 | ready | **Product Owner** — the list renders a raw assertion fragment as a link title |
 | TESTOPS-34 | A run with no findings is listed as an open case awaiting a decision | F1 | ready | **Product Owner** — 'an open case to tell me there are no findings? This seems like a defect' |
 | TESTOPS-35 | A reviewer's fixture case is sitting in Harry's live store | F1 | ready | `/case/rev-duplicate`: analyser "x", written by a review session, visible on the dashboard |
+| TESTOPS-36 | Two analysers, one step, two pages that never mention each other | F1 | ready | **Product Owner** — 'are these duplicate claims of each other?' Competing instructions with no link |
 
 Feature F1 = "a claim a developer can act on". F0 is scaffolding and carries no product outcome.
 

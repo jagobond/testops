@@ -1,0 +1,37 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-31.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-31-tables`, tree clean.
+Ticket:     factory/tickets/TESTOPS-31.md
+Diff:       git diff feature/f1..HEAD
+
+Context: the Product Owner read a duplication case, found no evidence of the alleged duplicate, and was right about
+more than he knew - QuestionSuggestions.feature:17 and :39 assert DIFFERENT lists, but data tables were excluded
+from the signature so they were called the same test. The build now includes tables, doc strings and Examples rows
+in the signature and in assertion_text, and reports exactly one pair resolved.
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Hunt for FALSE NEGATIVES now.** The build reports one pair resolved and no new duplicates. Take three
+  scenarios that are genuinely identical incl. tables and confirm still reported; then take two scenarios whose
+  tables differ by ONE row and confirm NOT reported. Then two whose tables differ only in row ORDER - report what
+  the analyser decides, and whether that is defensible either way.
+- **Check the assertion text is now checkable.** Render the resolved claim and quote it. A reader must be able to
+  see the rows. Reject any wording that still ends in "should be" or hides the table behind a count.
+- **Try to break the normalisation change.** Examples were included as a judgement call. Construct an outline pair
+  where Examples rows differ but the step tables do not - confirm the analyser distinguishes them - and one where
+  Examples differ only in a digit - confirm what happens now that digits are no longer parameterised.
+- Confirm the guarantee that motivated the change cannot be met by silence: a truly identical pair still yields a
+  duplicate claim (AC4).
+- Confirm existing runs keep their stored text (AC5) and level fitness is 94/90/1/1/2 (AC6).
+- Do not edit product code, tests or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-31-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## Criteria — AC1..AC6 HOLDS / WEAK / NOT MET.
+  ## Table probes — each pair you built, its tables, what the analyser said.
+  ## The resolved claim — quoted text as rendered.
+  ## False negatives — did the fix go too far? What does it now miss?
+  ## Three sharpest concerns.
+
+Then reply with the verdict and a summary under 300 words.

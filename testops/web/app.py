@@ -13,9 +13,14 @@ What the page says now:
   1. a scan block - the judgement as a headline, one sentence saying what is wrong, and one line
      saying what to do, on its own row so the eye lands on it; then the quote's provenance
   2. the step that is asserted - the feature file around it and the definition that runs it
-  3. the other steps in this scenario, for context - never presented as evidence
-  4. what could not be checked - the sources that were never connected
-  5. the decision
+  3. for a duplicate, the copy the claim names - its file:line, scenario, steps with their data,
+     and the definition that runs the asserted step there (TESTOPS-32)
+  4. the other steps in this scenario, for context - never presented as evidence
+  5. what could not be checked - the sources that were never connected
+  6. the decision
+
+The copy a duplicate claim names is evidence, so it is shown before the context list and never in
+its place: a page that withholds the copy has no way for a reader to check the claim.
 
 Every sentence above is built from the stored row by a rule (``wrong_sentence``, ``action_line``
 and the label functions below), not written for one claim, so any claim gets the same shape. The
@@ -303,11 +308,13 @@ def quoted_assertion(claim: dict) -> str | None:
         return None
     line = _asserted_line(claim)
     match = GHERKIN.match(line or "")
-    if match and match.group(2).strip() == text.strip():
+    # The stored assertion may carry its step's table or doc string after the step's words
+    # (TESTOPS-31); the file line stops at the words, so the line is a prefix of what was stored.
+    if match and text.strip().startswith(match.group(2).strip()):
         keyword = match.group(1)
         if keyword in ("And", "But"):
             keyword = "Then"
-        return f"{keyword} {match.group(2).strip()}"
+        return f"{keyword} {text.strip()}"
     return "Then " + text.strip()
 
 
@@ -817,6 +824,43 @@ def context_block(claim: dict) -> list[str]:
     return out
 
 
+def counterpart_block(claim: dict) -> list[str]:
+    """The copy a duplicate claim names, shown as the evidence it is - never as context.
+
+    The claim's ``established_by`` records the copy's ``file:line``; this block renders the copy
+    from the snapshot's own artefact and blob. Its scenario is shown verbatim - the steps with the
+    tables and doc strings that make the assertions what they are - so a reader can see whether the
+    two really are the same claim. When the store cannot produce it, the block says which absence
+    it is instead of leaving a blank where the evidence should be.
+    """
+    copy = claim.get("counterpart")
+    if not copy:
+        return []
+    where = f'{copy["path"]}:{copy["line"]}'
+    out = [f'<p>The claim names <span class="code">{esc(where)}</span> as the scenario that '
+           f'already asserts the same thing. That copy is evidence for the claim, not context '
+           f'around it.</p>']
+    if copy.get("state") == queries.SNIPPET_OK:
+        out.append(f'<p>The copy is the scenario \u201c{rich_prose(copy["scenario"])}\u201d, the '
+                   f'test author\u2019s own name for it. Its steps follow, with the data they '
+                   f'carry, and the line the claim names is marked.</p>')
+        out.extend(snippet_block(copy.get("snippet"),
+                                 "The copy\u2019s own scenario, as the store recorded it:"))
+    elif copy.get("state") == queries.COUNTERPART_NO_SCENARIO:
+        out.append(f'<p class="quiet">The stored file holds no scenario at <span class="code">'
+                   f'{esc(where)}</span>, so this page cannot show the copy the claim '
+                   f'meant.</p>')
+    else:
+        out.extend(snippet_block({"state": copy.get("state"), "path": copy["path"],
+                                  "line": copy["line"], "total": copy.get("total"),
+                                  "link": copy.get("link")}, ""))
+    definition = copy.get("definition")
+    if definition is not None:
+        out.extend(snippet_block(definition,
+                                 "The step definition that runs the copy\u2019s step there:"))
+    return out
+
+
 def section_unchecked(c: dict) -> list[str]:
     """4. What could not be checked. Absence is a state, never a blank and never a zero.
 
@@ -876,28 +920,43 @@ def _blind_spot_sentence(note: dict) -> str:
     return f"{title} \u2014 {state}: {reason}." if state and reason else f"{title}."
 
 
-def claim_sections(c: dict) -> list[str]:
-    """One claim, one argument: five sections, and the claim stated once (TESTOPS-23, AC3).
+def claim_sections(c: dict) -> tuple[list[str], int]:
+    """One claim, one argument: the sections a reader needs, in the order they decide with.
 
     1. a scan block - the judgement, the one wrong thing, and the action on its own line; the
        provenance footnote sits under it, never as a section of its own
     2. the step that is asserted - the file around it and the definition that runs it
-    3. the other steps in this scenario, for context - separated from evidence, introduced together
-    4. what could not be checked
-    5. the decision (rendered once per case, by ``case_page``)
+    3. for a duplicate, the copy the claim names - its coordinates, scenario and definition, before
+       any context (TESTOPS-32); the context list is about the claim's *own* scenario and can never
+       stand in for the evidence
+    4. the other steps in this scenario, for context - separated from evidence, introduced together
+    5. what could not be checked
+
+    Returns the sections and the number the decision section takes, so the numbering stays one
+    sequence whether or not the copy is shown.
     """
-    out = ['<h2 class="section">1. What is asserted, and what settles it</h2>']
+    number = 1
+    out = [f'<h2 class="section">{number}. What is asserted, and what settles it</h2>']
+    number += 1
     out.extend(argument_block(c))
     out.extend(provenance_line(c))
     out.extend(assessment_note(c))
     out.extend(pass_aside(c))
-    out.extend(['<h2 class="section">2. The step that is asserted</h2>'])
+    out.extend([f'<h2 class="section">{number}. The step that is asserted</h2>'])
+    number += 1
     out.extend(evidence_block(c))
-    out.extend(['<h2 class="section">3. The other steps in this scenario, for context</h2>'])
+    if c.get("counterpart"):
+        out.extend([f'<h2 class="section">{number}. The copy this claim names</h2>'])
+        number += 1
+        out.extend(counterpart_block(c))
+    out.extend([f'<h2 class="section">{number}. The other steps in this scenario, '
+                f'for context</h2>'])
+    number += 1
     out.extend(context_block(c))
-    out.extend(['<h2 class="section">4. What could not be checked</h2>'])
+    out.extend([f'<h2 class="section">{number}. What could not be checked</h2>'])
+    number += 1
     out.extend(section_unchecked(c))
-    return out
+    return out, number
 
 
 # ---------------------------------------------------------------- a run, or a decision
@@ -1153,6 +1212,7 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
         body.extend(quiet_run_block(run))
     if decision is not None:
         body.extend(decision_block(decision))
+    next_section = 1
     if findings:
         # Each claim opens with a scan block: the judgement as a headline, one sentence saying
         # what is wrong, and the action on its own line (TESTOPS-26). The evidence follows below,
@@ -1163,11 +1223,13 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
             for j, c in enumerate(f["claims"], start=1):
                 if len(f["claims"]) > 1:
                     body.append(f'<h3>Claim {j} of {len(f["claims"])}</h3>')
-                body.extend(claim_sections(c))
+                sections, next_section = claim_sections(c)
+                body.extend(sections)
 
     form = decision_form(conn, row, case_id, findings)
     if form:
-        body.append('<h2 class="section">5. Decision</h2>' if findings else "<h2>Decision</h2>")
+        body.append(f'<h2 class="section">{next_section}. Decision</h2>' if findings
+                    else "<h2>Decision</h2>")
         body.extend(form)
     body.extend(footnote(claims))
     return page(f"TestOps \u00b7 {case_id}", "".join(body)), 200

@@ -12,7 +12,7 @@ import sqlite3
 
 from . import blobs, cases, sources
 from .analysers import is_registered
-from .extract import csproj, stepbindings
+from .extract import csproj, gherkin, stepbindings
 from .links import GITHUB, blob_permalink, permalink, short_location
 
 
@@ -708,7 +708,19 @@ def _asserting_binding(conn, claim: dict, snapshot: str) -> dict | None:
     text = prov["assertion_text"]
     if not text:
         return None
-    suite = stepbindings.suite_of(prov["assertion_path"])
+    return _binding_for(conn, snapshot, text, prov["assertion_path"])
+
+
+def _binding_for(conn, snapshot: str, text: str, path: str | None) -> dict | None:
+    """The binding that runs ``text`` in ``path``'s suite, resolved from the snapshot's own rows.
+
+    The same resolution the claim's own evidence uses, offered as a function so the copy a duplicate
+    claim names can be bound by the text the store recorded for it - never by re-reading today's
+    corpus. The suite the file belongs to wins on a tie, then the earliest line.
+    """
+    if not text:
+        return None
+    suite = stepbindings.suite_of(path or "")
     candidates: list[tuple[bool, int, int, dict]] = []
     for row in conn.execute(
             """SELECT o.id, o.key, o.value, a.uri, a.kind
@@ -898,13 +910,21 @@ def _step_definition_snippet(conn, claim: dict) -> dict:
     binding = _asserted_binding(claim)
     if binding is None:
         return {"state": SNIPPET_NO_BINDING}
+    return _binding_snippet(conn, _claim_snapshot(conn, claim), binding)
+
+
+def _binding_snippet(conn, snapshot: str | None, binding: dict) -> dict:
+    """A step definition's body, from the row that records its file and line.
+
+    Shared with the copy a duplicate claim names, so both definitions are read the same way: the
+    body starts at the attribute's line and ends at the first blank line after it.
+    """
     uri, line = binding.get("uri"), binding.get("line")
     m = GITHUB.match(uri or "")
     path = m["path"] if m else (uri or "")
     if not isinstance(line, int) or line < 1:
         return {"state": SNIPPET_NOT_RECORDED, "path": path, "line": line,
                 "link": binding.get("link")}
-    snapshot = _claim_snapshot(conn, claim)
     artefact = _artefact_blob(conn, snapshot, uri)
     if artefact is None:
         return {"state": SNIPPET_NOT_RECORDED, "path": path, "line": line,
@@ -930,9 +950,125 @@ def _step_definition_snippet(conn, claim: dict) -> dict:
             "link": binding.get("link")}
 
 
+# ---------------------------------------------------------------- the copy a duplicate claim names
+#
+# TESTOPS-32. A duplicate claim says another scenario already asserts the same thing, and records
+# that copy's coordinates in ``established_by``. A page that names a copy and does not show it is
+# unfalsifiable: the reader cannot see for themselves whether the two assertions are the same. The
+# counterpart is resolved from the recorded coordinates and the stored blob - never by re-parsing
+# the corpus at render time - so the copy shown is the one the claim was raised against.
+
+# The one state a counterpart can be in that is not a snippet state: the stored file parsed, but no
+# scenario holds the recorded line. Distinct from "not stored", because the bytes are here.
+COUNTERPART_NO_SCENARIO = "no_scenario"
+
+# The coordinates a duplicate claim records, as the rule wrote them: the copy's ``file:line``. A
+# path may hold dots, slashes and hyphens, and a feature file ends in ``.feature``.
+COUNTERPART = re.compile(r"([\w./\\-]+\.feature):(\d+)")
+
+
+def counterpart_coordinates(claim: dict) -> tuple[str, int] | None:
+    """The ``file:line`` a duplicate claim names for its copy, read from ``established_by``.
+
+    ``None`` when the claim is not a duplicate, or when no coordinates were recorded: a v1 row, or
+    one written before the rule put the copy in its evidence. That is "nothing was recorded", and a
+    page must say so rather than invent a copy.
+    """
+    if claim.get("verdict") != "duplicate":
+        return None
+    match = COUNTERPART.search(claim.get("established_by") or "")
+    if match is None:
+        return None
+    return match.group(1), int(match.group(2))
+
+
+def counterpart_for(conn, claim: dict) -> dict | None:
+    """The copy this duplicate claim names, resolved from its own coordinates and stored blob.
+
+    The record carries the copy's ``file:line``, the title of the scenario that holds that line,
+    the scenario's source (its steps, tables and doc strings verbatim) and the step definition that
+    runs the step there. ``state`` says which of those are readable: a coordinate this snapshot
+    cannot place, or an artefact whose blob was not kept, is an absence with a name - never a blank
+    box and never a copy composed from somewhere else.
+    """
+    coordinates = counterpart_coordinates(claim)
+    if coordinates is None:
+        return None
+    path, line = coordinates
+    commit = (claim.get("provenance") or {}).get("assertion_commit")
+    snapshot = _claim_snapshot(conn, claim)
+    repo = _repo_for_coordinates(conn, _project_of_run(conn, claim["run_id"]), commit, path)
+    record = {"path": path, "line": line, "link": blob_permalink(repo, commit, path, line),
+              "state": SNIPPET_NOT_RECORDED, "scenario": None, "scenario_line": None,
+              "snippet": None, "definition": None}
+    artefact = _artefact_blob_at(conn, snapshot, commit, path)
+    if artefact is None:
+        return record
+    lines = _blob_lines(artefact["blob_sha"])
+    if lines is None:
+        record["state"] = SNIPPET_NOT_STORED
+        return record
+    if line < 1 or line > len(lines):
+        record["state"] = SNIPPET_PAST_END
+        record["total"] = len(lines)
+        return record
+    feature = gherkin.parse(path, "\n".join(lines))
+    scenario = _scenario_containing(feature, line)
+    if scenario is None:
+        record["state"] = COUNTERPART_NO_SCENARIO
+        return record
+    start = scenario.line
+    end = _scenario_end(feature, scenario, len(lines))
+    while end > start and not lines[end - 1].strip():
+        end -= 1
+    record.update({
+        "state": SNIPPET_OK,
+        "scenario": scenario.name,
+        "scenario_line": scenario.line,
+        "snippet": {"state": SNIPPET_OK, "path": path, "line": line, "start": start, "end": end,
+                    "lines": [{"n": n, "text": lines[n - 1], "asserted": n == line}
+                              for n in range(start, end + 1)],
+                    "link": record["link"]},
+    })
+    step = _step_at(scenario, line)
+    binding = _binding_for(conn, snapshot or "", step.text if step is not None else "", path)
+    if binding is None:
+        record["definition"] = {"state": SNIPPET_NO_BINDING, "path": path, "line": line,
+                                "link": record["link"]}
+    else:
+        record["definition"] = _binding_snippet(conn, snapshot, binding)
+    return record
+
+
+def _scenario_containing(feature, line: int):
+    """The scenario that holds ``line``: the latest one starting at or before it."""
+    if feature is None:
+        return None
+    best = None
+    for scenario in feature.scenarios:
+        if scenario.line <= line and (best is None or scenario.line > best.line):
+            best = scenario
+    return best
+
+
+def _scenario_end(feature, scenario, total: int) -> int:
+    """The last line of the scenario, before the next scenario starts, or the end of the file."""
+    later = [other.line for other in feature.scenarios if other.line > scenario.line]
+    return min(later) - 1 if later else total
+
+
+def _step_at(scenario, line: int):
+    """The step the claim names inside the copy's scenario, by the line the claim recorded."""
+    for step in scenario.steps:
+        if step.line == line:
+            return step
+    return None
+
+
 def _attach_snippets(conn, claim: dict) -> dict:
     """Attach the source excerpts after the evidence, which names the asserting binding."""
     claim["snippets"] = source_snippets(conn, claim)
+    claim["counterpart"] = counterpart_for(conn, claim)
     return claim
 
 
