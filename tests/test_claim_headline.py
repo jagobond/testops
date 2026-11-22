@@ -35,6 +35,15 @@ SUGGESTIONS_TITLE = "The same word is in different fields"
 ROW = re.compile(r'<h2 class="section">(.*?)</h2>|<li><a href="/case/([^"]+)">.*?'
                  r'<p class="claimtext">(.*?)</p>', re.S)
 
+# Any tag, so a test can count the attributes it carries.
+TAG = re.compile(r"<[A-Za-z][^>]*>")
+
+
+def _tags_with_duplicate_class(markup: str) -> list[str]:
+    """Every tag that carries ``class=`` more than once - malformed markup, whatever it renders."""
+    return [tag.group(0) for tag in TAG.finditer(markup) if tag.group(0).count("class=") > 1]
+
+
 # The judgement each verdict makes, in the list's own words (AC1).
 JUDGEMENT = {
     "distinct": "Checked",
@@ -285,3 +294,109 @@ def test_a_real_run_lists_no_row_whose_link_text_is_an_assertion_fragment(tmp_pa
         subject = headline.split(" \u2014 ", 1)[1]
         assert subject in titles, headline
     assert {row["verdict"] for row in claims} <= set(JUDGEMENT)
+
+
+# --------------------------------------------------------------------------- review defect 1
+#
+# The badge interpolated a whole attribute into another: ``f'class="badge{hot}"'`` with
+# ``hot = ' class="hot"'`` rendered ``<span class="badge class="hot"">``. A browser takes the first
+# ``class`` and drops ``hot``, so the state that needed to stand out never did.
+
+def test_no_tag_carries_its_class_attribute_twice(tmp_path):
+    """Both places the badge renders - the list row and the case page - while a case is open."""
+    conn = db.connect(tmp_path / "markup.db")
+    try:
+        # One finding and no decision: the state is "Open", the one that wears the hot class.
+        _seed_case(conn, case_id="case-hot", verdict="gap", findings=1)
+        index = app.index(conn).decode("utf-8")
+        case = app.case_page(conn, "case-hot").decode("utf-8")
+    finally:
+        conn.close()
+
+    assert _tags_with_duplicate_class(index) == [], index
+    assert _tags_with_duplicate_class(case) == [], case
+    # One class attribute, holding a class list.
+    assert '<span class="badge hot">Open</span>' in index
+    assert '<span class="badge hot">Open</span>' in case
+
+
+def test_the_duplicate_class_check_catches_the_markup_it_was_written_for():
+    """The check has teeth: the exact span the review found is reported, the fixed one is not."""
+    assert _tags_with_duplicate_class('<span class="badge class="hot"">Open</span>')
+    assert _tags_with_duplicate_class('<span class="badge hot">Open</span>') == []
+
+
+# --------------------------------------------------------------------------- review defect 2
+#
+# The tail trim deletes a word that cannot end a phrase. It also deleted negations and modifiers,
+# inverting the claim, and it could leave the judgement alone with no subject at all.
+
+def test_a_trailing_negation_is_never_trimmed_away():
+    """The three constructions the review reproduced: none may lose its ``not`` / ``no``."""
+    for subject in ("the row is skipped if not",
+                    "the value is set no",
+                    "The claim holds because the step is missing not"):
+        headline = app.case_headline("Not proved", subject)
+        assert headline == f"Not proved \u2014 {subject}", headline
+        assert subject.rsplit(" ", 1)[-1] in headline, headline
+        assert app.headline_problems(headline) == [], headline
+
+
+def test_the_inverted_headlines_the_review_reproduced_are_gone():
+    """Each of these read the opposite of its subject before the fix."""
+    inverted = {
+        "the row is skipped if not": "Not proved \u2014 the row is skipped",
+        "the value is set no": "Not proved \u2014 the value is set",
+    }
+    for subject, lie in inverted.items():
+        headline = app.case_headline("Not proved", subject)
+        assert headline != lie, headline
+        assert headline.endswith(subject.rsplit(" ", 1)[-1]), headline
+
+
+def test_an_unbroken_subject_is_shown_cut_short_never_dropped():
+    """200 characters with no space used to leave the judgement alone, with no sign of a subject."""
+    subject = "x" * 200
+    headline = app.case_headline("Not proved", subject)
+    assert headline.startswith("Not proved \u2014 "), headline
+    assert headline.endswith("\u2026"), headline
+    assert len(headline) <= app.HEADLINE_MAX, headline
+    assert "x" * 50 in headline, headline
+    assert app.headline_problems(headline) == [], headline
+
+
+def test_a_punctuation_only_subject_is_still_shown():
+    """Punctuation is not a word, but it is still what the claim was recorded against."""
+    for subject in ("!!! ??? ---", "!!! ???", "??"):
+        headline = app.case_headline("Not proved", subject)
+        assert headline != "Not proved", headline
+        assert headline.startswith("Not proved \u2014 "), headline
+        assert headline != f"Not proved \u2014 ", headline
+        assert app.headline_problems(headline) == [], headline
+
+
+def test_a_headline_is_never_the_judgement_alone_when_a_subject_exists():
+    """Every hostile subject the review listed, under every judgement shape the list uses."""
+    subjects = ["the row is skipped if not", "the value is set no", "x" * 200, "!!! ??? ---",
+                "word", "the suggestions list should be", "\U0001f680 \U0001f9ea \u2728 done \U0001f680",
+                "A " * 120 + "title"]
+    for judgement in (None, *JUDGEMENT.values(), "Cannot tell"):
+        for subject in subjects:
+            headline = app.case_headline(judgement, subject)
+            assert headline, (judgement, subject)
+            if judgement is None:
+                continue
+            assert headline.startswith(f"{judgement} \u2014 "), (judgement, headline)
+            assert headline[len(judgement) + len(" \u2014 "):].strip(), (judgement, headline)
+            assert len(headline) <= app.HEADLINE_MAX, (judgement, headline)
+
+
+def test_a_subject_of_dangling_words_keeps_both_its_ends():
+    """No clean prefix survives the trim, so the subject is cut in the middle, not thrown away."""
+    subject = "A " * 120 + "title"
+    headline = app.case_headline("Not proved", subject)
+    assert headline.startswith("Not proved \u2014 A"), headline
+    assert headline.endswith("title"), headline
+    assert " \u2026 " in headline, headline
+    assert app.headline_problems(headline) == [], headline
+

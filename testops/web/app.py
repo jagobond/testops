@@ -703,6 +703,24 @@ LEGACY_JUDGEMENT = {"necessary": "Checked", "optimal": "Checked",
 HEADLINE_MAX = 90
 HEADLINE_SEP = " \u2014 "
 
+# States whose badge wears the "hot" class, on the list and on the case page.
+HOT_STATES = ("Open", "Needs a fix")
+
+
+def badge_classes(label: str, base: str = "badge") -> str:
+    """A badge's ``class`` attribute, built as a list and joined once.
+
+    The row used to interpolate a whole attribute into another - ``f'class="badge{hot}"'`` with
+    ``hot = ' class="hot"'`` - which rendered ``class="badge class="hot""``: the browser took
+    ``badge`` and silently dropped ``hot`` (TESTOPS-33 review, defect 1). A class is appended to
+    a list, never spliced into an attribute string.
+    """
+    classes = [base]
+    if label in HOT_STATES:
+        classes.append("hot")
+    return " ".join(classes)
+
+
 # A word that cannot end a phrase. "the suggestions list should be" ends on "be", "the panel at" on
 # "at": the reader is left holding half a clause. The list trims these rather than printing them,
 # and ``headline_problems`` lets a test refuse any that survives.
@@ -720,8 +738,18 @@ there here more most much many few less least very only just also too again ever
 yet rather quite own same other another
 """.split())
 
+# Words that carry the meaning of the clause they end. ``DANGLING`` says they cannot end a phrase,
+# but deleting one silently inverts the claim: "the row is skipped if not" must never be trimmed to
+# "the row is skipped", and "the value is set no" must never read "the value is set" (TESTOPS-33
+# review, defect 2). A tail that ends on one of these is kept, and a headline that keeps it is
+# accepted rather than refused - an unfinished tail is honest, an inverted one is not.
+MEANING = frozenset("""
+not no never none without unless except only cannot isn't doesn't won't
+""".split())
+
 _TRAILING_MARKS = re.compile(r"[\s,;:.\-\u2013\u2014/|]+$")
 _WORDS = re.compile(r"[A-Za-z0-9']+")
+
 
 
 def list_judgement(verdict: str | None) -> str | None:
@@ -736,8 +764,18 @@ def list_judgement(verdict: str | None) -> str | None:
 
 
 def _dangling_word(text: str) -> bool:
+    """True when the last word cannot end a phrase and is not one the trim must keep."""
     words = _WORDS.findall(text or "")
-    return not words or words[-1].lower().strip("'") in DANGLING
+    if not words:
+        # Punctuation is not a word: there is nothing here to dangle, and an empty string is an
+        # absent subject rather than a fragment.
+        return False
+    word = words[-1].lower().strip("'")
+    if word in MEANING:
+        # A negation or modifier is the meaning of its clause. It is never a fragment to trim and
+        # never a tail to refuse: removing it would invert the claim (TESTOPS-33 review, defect 2).
+        return False
+    return word in DANGLING
 
 
 def ends_in_fragment(headline: str) -> bool:
@@ -760,18 +798,64 @@ def _trim_tail(text: str) -> str:
         text = " ".join(words[:-1])
 
 
-def _trim_to(text: str, limit: int) -> str:
-    """The longest whole-word prefix that fits ``limit`` characters, or ``""`` if none does."""
+def _middle_ellipsis(text: str, limit: int) -> str:
+    """``head … tail``: a subject's two ends, its middle dropped, never the subject itself.
+
+    The last resort for a subject that cannot be shortened at a word boundary: dropping the tail
+    can drop the negation that gave the sentence its meaning, and dropping the subject entirely
+    leaves a reader with a judgement and no case (TESTOPS-33 review, defect 2).
+    """
+    if limit <= 1:
+        return "\u2026"
+    budget = limit - 3                    # the two spaces and the ellipsis
+    if budget < 2:
+        return text[:limit - 1] + "\u2026"
+    words = text.split()
+    tail: list[str] = []
+    for word in reversed(words):
+        candidate = " ".join([word, *tail])
+        if len(candidate) > budget // 2:
+            break
+        tail.insert(0, word)
+    tail_text = " ".join(tail)
+    head_room = budget - (len(tail_text) + 1 if tail_text else 0)
+    head: list[str] = []
+    for word in words:
+        candidate = " ".join([*head, word])
+        if len(candidate) > head_room:
+            break
+        head.append(word)
+    head_text = " ".join(head)
+    if not head_text:
+        # An unbroken run has no whole words to place: keep its first characters instead.
+        head_text = text[:max(head_room, 0)].rstrip()
+    if head_text and tail_text:
+        return f"{head_text} \u2026 {tail_text}"
+    if tail_text:
+        return f"\u2026 {tail_text}"
+    return f"{head_text} \u2026"
+
+
+def _fit(text: str, limit: int) -> str:
+    """``text`` within ``limit`` characters: whole words where possible, never nothing.
+
+    A subject is shortened by dropping whole words before the ellipsis. It is never dropped to
+    ``""``: an unbroken run of 200 characters has no word boundary, so it keeps its first
+    characters and an ellipsis too - a reader must be able to see that a subject exists and was
+    cut, rather than being shown the judgement alone (TESTOPS-33 review, defect 2).
+    """
     if len(text) <= limit:
-        return _trim_tail(text)
-    if limit <= 0:
+        return text
+    if limit < 1:
         return ""
-    cut = text[:limit]
+    if limit == 1:
+        return "\u2026"
+    cut = text[:limit - 1]                # one character is kept for the ellipsis
     if " " in cut:
-        cut = cut[:cut.rindex(" ")]
-    else:
-        return ""
-    return _trim_tail(cut)
+        prefix = _trim_tail(cut[:cut.rindex(" ")])
+        if prefix:
+            return prefix + "\u2026"
+    return _middle_ellipsis(text, limit)
 
 
 def normalised_subject(text: str | None) -> str:
@@ -784,22 +868,20 @@ def normalised_subject(text: str | None) -> str:
 
 
 def case_headline(judgement: str | None, subject: str | None) -> str:
-    """``<judgement> — <subject>``: one line, never a trailing fragment, never over 90 characters."""
+    """``<judgement> — <subject>``: one line, never a trailing fragment, never over 90 characters.
+
+    The subject is never dropped while one exists: a claim that cannot be stated cleanly is
+    stated cut-short with an ellipsis, because the judgement alone tells a reader nothing about
+    what the case is about (TESTOPS-33 review, defect 2).
+    """
     head = " ".join((judgement or "").split())
     body = normalised_subject(subject)
-    if not head:
-        return _trim_to(body, HEADLINE_MAX)
-    if not body or _dangling_word(body):
+    if not body:
         return head
+    if not head:
+        return _fit(body, HEADLINE_MAX)
     room = HEADLINE_MAX - len(head) - len(HEADLINE_SEP)
-    if len(body) > room:
-        if room <= 3:
-            return head
-        body = _trim_to(body, room - 1)     # one character is kept for the ellipsis
-        if not body:
-            return head
-        body += "\u2026"
-    return f"{head}{HEADLINE_SEP}{body}"
+    return f"{head}{HEADLINE_SEP}{_fit(body, room)}"
 
 
 def headline_problems(headline: str) -> list[str]:
@@ -865,13 +947,13 @@ def index(conn) -> bytes:
             for r in group:
                 n = r["findings"]
                 shown = display_state(r["state"], n)
-                hot = ' class="hot"' if shown in ("Open", "Needs a fix") else ""
+                badge_class = badge_classes(shown)
                 # TESTOPS-33: the link text is a judgement and a subject, never the raw assertion
                 # fragment. A row whose step text is all there is falls back to its normalised step,
                 # and the badge beside it says which verdict the headline is stating.
                 body.append(
                     f'<li><a href="/case/{esc(r["id"])}">'
-                    f'<div><span class="badge{hot}">{esc(shown)}</span> {verdict_badge(r)}'
+                    f'<div><span class="{badge_class}">{esc(shown)}</span> {verdict_badge(r)}'
                     f'<span class="meta">{esc(analyser_text(r["analyser"]))} '
                     f'\u00b7 {n} finding{"s" if n != 1 else ""} \u00b7 {esc(age(r["created_at"]))}</span>'
                     f'</div><p class="claimtext">{esc(row_headline(r))}</p></a></li>')
@@ -1355,8 +1437,8 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
 
     body = [f'<p class="meta"><a href="/">\u2190 all cases</a></p>',
             f'<h1>{esc(row["project"])} \u00b7 {esc(analyser_text(row["analyser"]))}</h1>']
-    hot = ' class="hot"' if state_label in ("Open", "Needs a fix") else ""
-    body.append(f'<p class="meta"><span class="badge{hot}">'
+    badge_class = badge_classes(state_label)
+    body.append(f'<p class="meta"><span class="{badge_class}">'
                 f'{esc(state_label)}</span>'
                 f' \u00b7 Analysed {esc(age(row["created_at"]))}'
                 f'{" at " + esc(versions) if versions else ""}</p>')
