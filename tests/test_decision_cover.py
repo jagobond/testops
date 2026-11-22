@@ -132,19 +132,19 @@ def test_the_case_page_states_what_a_decision_covers_and_the_page_passes_the_lin
     finally:
         conn.close()
 
-    assert app.COVER_SENTENCE in htmllib.unescape(page)
-    for part in ("one assertion in one scenario", "same interaction", "same words",
-                 "any commit", "any test data", "renaming or moving the scenario",
-                 "adding or removing an identical assertion"):
+    assert level_fitness.COVER in htmllib.unescape(page)
+    for part in ("one assertion in one scenario", "same interaction", "words",
+                 "count of identical assertions", "any commit", "any test data",
+                 "earlier decision cover again"):
         assert part in htmllib.unescape(page), f"the cover sentence does not say {part!r}"
     assert problems == [], f"the case page fails the prose lint: {problems}"
 
 
 def test_the_cover_sentence_is_one_sentence():
     """AC1 says one sentence. The page is no place for a paragraph of contract."""
-    assert app.COVER_SENTENCE.count(".") == 1
-    assert app.COVER_SENTENCE.endswith(".")
-    assert len(app.COVER_SENTENCE.split()) <= english.MAX_SENTENCE_WORDS
+    assert level_fitness.COVER.count(".") == 1
+    assert level_fitness.COVER.endswith(".")
+    assert len(level_fitness.COVER.split()) <= english.MAX_SENTENCE_WORDS
 
 
 # ------------------------------------------------------- AC2: the commit and the data are ignored

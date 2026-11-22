@@ -66,6 +66,15 @@ uses_model = False
 NEEDS = frozenset({sources.TEST_CODE})
 CONSULTS = frozenset({sources.REQUIREMENTS})
 
+# What a decision recorded on a duplication case covers (TESTOPS-47). Its identity is the scenario
+# and the normalised signature of its steps and tables - the commit is not in it, so a deploy keeps
+# the decision; renaming or moving the scenario changes the subject, and changing either copy's
+# steps changes the signature, so both ask again. This is a different contract from the level
+# analyser's, which is why the page renders the declaring analyser's sentence and never a global one.
+COVER = ("A decision covers one duplicated scenario, recognised by its steps and data tables rather "
+         "than the commit; renaming or moving the scenario, or changing the steps in either copy, "
+         "asks you again.")
+
 # How a reader says what this copy does, per layer it reaches.
 _LAYER_READS = {
     "ui": "drives a browser",
