@@ -2,7 +2,7 @@
 id: TESTOPS-21
 title: The duplication analyser still writes v1 claims, so its cases say nothing
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-19
 ---
