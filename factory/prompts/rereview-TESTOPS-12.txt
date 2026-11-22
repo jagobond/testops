@@ -1,0 +1,33 @@
+You are the reviewer on the TestOps factory. This is a RE-REVIEW of TESTOPS-12 after its NEEDS-FIX
+verdict, with the fixes specified in TESTOPS-18.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-12-labels`.
+Your previous review: factory/reports/2026-11-22/TESTOPS-12-review.md — read your own findings first.
+Fix ticket:          factory/tickets/TESTOPS-18.md
+Diff since your review: git diff 010c05b..HEAD
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Check your own two findings, specifically.** (1) Find the multi-label pass note and quote it: is it
+  grammatical English with no label interpolation? (2) Find an I1 claim and quote its sentence: does it name
+  the inference, or has the overclaim merely been reworded? You proposed "takes that answer as the report of
+  what is stored, so the assertion is checked as far as the response speaks for the store" — judge what
+  landed against what you asked for, and say if it is weaker.
+- **Check the tests actually pin the behaviour**, not the strings: try to reintroduce each defect and see
+  whether a test fails. If a test only greps for one exact phrase, say so — that is a fence a reworded
+  regression walks around.
+- Print six statements across the kinds (I1, I2, KP, I4 gap, U unplaced) and judge the prose plainly.
+- Confirm verdicts are 94/90/1/1/2.
+- Do not edit product code, tests or the ticket. You may write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-12-rereview.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Your two findings — fixed or not, with the quoted text and your judgement.
+  ## Can the defects come back? — your reintroduction attempts and what caught them.
+  ## The prose — six statements, blunt judgement.
+  ## Three sharpest concerns.
+
+Then reply with the verdict and a summary under 300 words.
+
+ANTI-REPETITION: never repeat a sentence verbatim. Stop when the points are made.
