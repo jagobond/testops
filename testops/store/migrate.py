@@ -17,6 +17,12 @@ Three rules, in order of importance:
    copying the canonical DDL out of ``schema.sql`` itself, so a migrated store and a new store
    cannot drift apart while both claim to be the current version.
 
+v5 (TESTOPS-45) is additive and needs no rebuild: ``schema.sql`` creates the vocabulary table, seeds
+it with ``INSERT OR IGNORE`` and creates the two verdict triggers on every open. A store that already
+holds rows under retired names keeps them exactly as they are - a trigger constrains what is written
+next, never what was written before - and the upgrade records the new version without touching a
+claim.
+
 SQLite cannot add a table-level CHECK to an existing table, and AC4's refusal has to live in the
 database - a Python guard in ``add_claim`` would be skippable by the next caller. So the ``claim``
 table is rebuilt: same rows, same ids, same values, new columns defaulted to "not recorded", and the
@@ -34,7 +40,9 @@ from ..sources import assessment_for
 from ..config import LEGACY_PROJECTS
 
 # The schema this build writes and reads. A store above this is refused.
-CURRENT_VERSION = 4
+# v5 adds the verdict vocabulary table and its two claim triggers (TESTOPS-45): they change what may
+# be written, not the shape of any stored row, so no existing row is copied or rewritten to get them.
+CURRENT_VERSION = 5
 
 # The oldest store this build can still open. v1 is readable: its claims are evidence.
 MIN_SUPPORTED_VERSION = 1

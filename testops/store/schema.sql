@@ -10,6 +10,15 @@
 -- cannot read as a clean bill; the pairing of the two columns is a CHECK, not a convention. The row
 -- schema_version stays 1 or 2: it says what the row knows about the assertion, and this column says
 -- what it knows about the sources. Both are additive; neither rewrites a past statement.
+--
+-- schema_version 5: the verdict column is guarded at the store, not only described. Two triggers
+-- (BEFORE INSERT and BEFORE UPDATE OF verdict) refuse a value outside the current vocabulary, so
+-- an analyser, a fixture, the CLI or a future connector meets the same refusal. A trigger rather
+-- than a CHECK: 128 stored rows carry retired names (optimal 36, overbuilt 67, necessary 25), and a
+-- retroactive CHECK would either reject them or require rewriting evidence to satisfy it. The
+-- triggers read the vocabulary table below, so the allowed set has one definition; retired names
+-- are recorded there with the ticket that retired them (TESTOPS-9), kept readable and never
+-- writable again.
 
 CREATE TABLE IF NOT EXISTS schema_meta (
   key TEXT PRIMARY KEY,
@@ -55,6 +64,30 @@ CREATE TABLE IF NOT EXISTS run (
   budget TEXT NOT NULL DEFAULT '{}',
   error TEXT
 );
+
+-- TESTOPS-45. The verdict vocabulary is data, not prose: the claim triggers read this table, and
+-- `testops check-store` reads it to tell a historical name from an unknown one. A current row is a
+-- value an analyser may write today. A retired row is a value that stored evidence still carries;
+-- it is historical fact and cannot be written again, which is why the triggers never consult it.
+CREATE TABLE IF NOT EXISTS verdict_vocabulary (
+  name TEXT PRIMARY KEY,
+  status TEXT NOT NULL CHECK (status IN ('current', 'retired')),
+  retired_by TEXT,                         -- the ticket that retired the name; NULL while current
+  CONSTRAINT verdict_retired_names_have_a_ticket CHECK (
+    (status = 'current' AND retired_by IS NULL)
+    OR (status = 'retired' AND retired_by IS NOT NULL AND length(trim(retired_by)) > 0)
+  )
+);
+
+INSERT OR IGNORE INTO verdict_vocabulary (name, status, retired_by) VALUES
+  ('distinct',  'current', NULL),
+  ('gap',       'current', NULL),
+  ('review',    'current', NULL),
+  ('unplaced',  'current', NULL),
+  ('duplicate', 'current', NULL),
+  ('optimal',   'retired', 'TESTOPS-9'),
+  ('overbuilt', 'retired', 'TESTOPS-9'),
+  ('necessary', 'retired', 'TESTOPS-9');
 
 -- A v2 claim is about one assertion: which Gherkin step says it, where that step lives, and at
 -- which commit. The store refuses a v2 row without those three coordinates, so no caller can write
@@ -107,6 +140,29 @@ CREATE TABLE IF NOT EXISTS claim (
     )
   )
 );
+
+-- TESTOPS-45. The store's verdict guard. A trigger, not a CHECK, because the 128 historical rows
+-- under retired names must stay readable and unrewritten (AC3); a CHECK would have to reject them.
+-- Two triggers, because INSERT and UPDATE are different events: a row's other columns may change
+-- freely, but its verdict may not become a name no analyser emits. Both read the vocabulary table,
+-- so the allowed set has one definition. RAISE() takes a literal message only, so the message names
+-- the allowed set while the offending value is named by `verdicts.validate_verdict` for callers,
+-- by this refusal's row context, and by `testops check-store` for a legacy store.
+CREATE TRIGGER IF NOT EXISTS claim_verdict_insert
+BEFORE INSERT ON claim
+WHEN NEW.verdict NOT IN (SELECT name FROM verdict_vocabulary WHERE status = 'current')
+BEGIN
+  SELECT RAISE(ABORT,
+    'claim.verdict is not one of distinct|gap|review|unplaced|duplicate: the store refuses an unknown verdict');
+END;
+
+CREATE TRIGGER IF NOT EXISTS claim_verdict_update
+BEFORE UPDATE OF verdict ON claim
+WHEN NEW.verdict NOT IN (SELECT name FROM verdict_vocabulary WHERE status = 'current')
+BEGIN
+  SELECT RAISE(ABORT,
+    'claim.verdict is not one of distinct|gap|review|unplaced|duplicate: the store refuses an unknown verdict');
+END;
 
 CREATE TABLE IF NOT EXISTS inference (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
