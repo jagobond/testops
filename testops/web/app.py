@@ -407,21 +407,52 @@ def _without_step(action: str, step: str | None) -> str:
     return action
 
 
-def action_line(claim: dict, step: str | None) -> str:
-    """The action as one line a reader can act on: the stored first clause, and nothing after it.
+# The page shows the whole stored action (TESTOPS-28).
+#
+# A stored action is one string, and it may hold more than one clause: an instruction, then -
+# after a semicolon - a second order ("keep one"), or the reason for the first ("this level is the
+# cheapest one that establishes it"). The page cannot tell which, and does not try. Two review
+# passes read that tail's grammar to decide, and between them lost three orders - "the duplicate
+# is deletable", "the second one can go", "the copy would be deleted by whoever owns it" - each one
+# a different shape. A word list is the wrong tool for a judgement about a reader's reading.
+#
+# The asymmetry decides it: a clause cut from a stored action is invisible, and the reader holds
+# half an instruction without knowing it; a clause kept is merely wordy, and the reader can see it
+# and skip it. So nothing is removed here. The whole stored action is rendered, split at its
+# semicolons into sentences so that two clauses never run together.
+#
+# Redundancy belongs to the analyser that writes the action. If a tail repeats the argument, that
+# is the analyser's copy to fix, not something the renderer may delete (TESTOPS-28, AC4).
 
-    The store keeps one string with the action in its first clause and the argument's conclusion
-    in the clauses after a semicolon. The opening block already states the argument, so the tail
-    is dropped here instead of restating it (TESTOPS-26, AC3). "No change" is an action: a
-    distinct claim says plainly that nothing needs doing.
+
+def _sentences(text: str) -> list[str]:
+    """The stored action's clauses, split at its semicolons and nowhere else."""
+    return [part.strip() for part in re.split(r";\s*", text) if part.strip()]
+
+
+def _as_sentence(text: str) -> str:
+    """One clause with an initial capital and one full stop, so two clauses never run together."""
+    text = text.strip().strip(";").strip().rstrip(".").strip()
+    if not text:
+        return ""
+    return text[:1].upper() + text[1:] + "."
+
+
+def action_line(claim: dict, step: str | None) -> str:
+    """The whole stored action, rendered as sentences: nothing classified, nothing cut.
+
+    The store keeps one string and may hold two clauses; the page shows both, as two sentences
+    with one full stop each, so the action reads as an instruction and never as a run-on
+    (TESTOPS-28, AC1, AC5). "No change" is an action: a distinct claim says plainly that nothing
+    needs doing.
     """
     action = (claim.get("proposed_action") or "").strip()
     if not action:
         return "No proposed action was recorded for this claim."
     raw_step = (claim.get("provenance") or {}).get("assertion_text") or step
     action = _without_step(action, raw_step)
-    first = action.split("; ")[0].strip().rstrip(".")
-    return first + "."
+    sentences = (_as_sentence(part) for part in _sentences(action))
+    return " ".join(sentence for sentence in sentences if sentence)
 
 
 def wrong_sentence(claim: dict, quote: str | None) -> str:
@@ -435,7 +466,8 @@ def wrong_sentence(claim: dict, quote: str | None) -> str:
         sentence = assessment.get("sentence") or ("Nobody could look at the sources this claim "
                                                   "needs.")
         if quote:
-            return f"The test asserts {_step_quote(quote)}, but {rich_prose(_lower_first(sentence))}"
+            return (f"The test asserts the step {_step_quote(quote)}, but "
+                    f"{rich_prose(_lower_first(sentence))}")
         return rich_prose(sentence)
     if quote is None:
         recorded = (claim.get("statement") or "").strip()
@@ -450,17 +482,17 @@ def wrong_sentence(claim: dict, quote: str | None) -> str:
     does = _does_clause(claim)
     verdict = claim.get("verdict")
     if verdict == "distinct":
-        return f"The test asserts {q}, and {fact}."
+        return f"The test asserts the step {q}, and {fact}."
     if verdict == "duplicate":
-        return (f"The test asserts {q}, but another scenario in this run already asserts the same "
-                f"thing, so the project runs it twice.")
+        return (f"The test asserts the step {q}, but another scenario in this run already asserts "
+                f"the same thing, so the project runs it twice.")
     if verdict == "unplaced":
-        return f"The test asserts {q}, but {fact}."
+        return f"The test asserts the step {q}, but {fact}."
     if verdict == "review" and does is not None:
-        return f"The test asserts {q}, but {fact}, and {rich_prose(does)} to read it."
+        return f"The test asserts the step {q}, but {fact}, and {rich_prose(does)} to read it."
     if does is not None:
-        return f"The test asserts {q}, but {fact}, and {rich_prose(does)} instead."
-    return f"The test asserts {q}, but {fact}."
+        return f"The test asserts the step {q}, but {fact}, and {rich_prose(does)} instead."
+    return f"The test asserts the step {q}, but {fact}."
 
 
 def argument_block(claim: dict) -> list[str]:

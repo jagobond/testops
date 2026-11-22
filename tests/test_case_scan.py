@@ -27,6 +27,9 @@ from testops.web import lint as english
 
 ROOT = Path(__file__).resolve().parents[1]
 STORED = ROOT / "data" / "testops.db"
+# The run the ticket names, pinned by id rather than picked by a query: a re-run of the analyser
+# must not move what these tests measure (TESTOPS-28 AC3, AC6).
+PINNED_RUN = "cotw-levels-20261122T011316"
 STEPS = "Steps/PanelSteps.cs"
 
 TS = "2020-01-01T00:00:00+00:00"
@@ -341,6 +344,68 @@ def test_plain_english_lint_over_every_claim_of_a_real_pipeline_run(tmp_path, mo
 
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
+def test_no_action_on_the_real_run_is_cut():
+    """TESTOPS-28 AC1 and AC3: every stored action reaches the page whole, on the real run.
+
+    What is measured is the cut, and now the answer must be that there is none. The stored string
+    is the corpus; the page's line is the whole of it, split at its semicolons into sentences,
+    with the step's own words referred to as "this step" because the block has already quoted the
+    step directly above. That reference is the only shortening allowed here: the line is the stored
+    action with the step's words swapped out, sentence by sentence, and every other word intact.
+
+    The 94 restatement tails the old rule dropped ("this level is the cheapest one that
+    establishes it") are on the page now. That makes the action wordy, which is the intended
+    trade: a dropped clause is invisible, a kept one is merely repetitive.
+    """
+    conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        run = PINNED_RUN
+        assert conn.execute("SELECT COUNT(*) FROM claim WHERE run_id = ?",
+                            (run,)).fetchone()[0], f"the pinned run {run} is not in the store"
+        checked = 0
+        for row in conn.execute("SELECT id FROM claim WHERE run_id = ? ORDER BY id", (run,)):
+            claim = queries.claim_read(conn, row["id"]) or {}
+            whole = (claim.get("proposed_action") or "").strip()
+            if not whole:
+                continue
+            step = (claim.get("provenance") or {}).get("assertion_text") or ""
+            expected = whole
+            for form in (f'the step "{step}"', f'step "{step}"', f'"{step}"'):
+                if step and form in expected:
+                    expected = expected.replace(form, "this step", 1)
+                    break
+            expected = " ".join(
+                (clause := part.strip().rstrip("."))[:1].upper() + clause[1:] + "."
+                for part in expected.split("; ") if part.strip())
+            visible = app.action_line(claim, app.quoted_assertion(claim))
+            where = f"{claim.get('assertion_text')!r} in run {run}"
+            assert visible == expected, (
+                f"the page did not render the whole action ({where}): stored {whole!r}, "
+                f"rendered {visible!r}")
+            assert ";" not in visible, (where, visible)
+            checked += 1
+    finally:
+        conn.close()
+    assert checked == 94, f"the corpus held only {checked} actions"
+
+
+@pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
+def test_the_pinned_run_keeps_its_verdicts():
+    """TESTOPS-28 AC6: the same store, the same verdict counts - the renderer never judged one."""
+    conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        counts = {row["verdict"]: row["n"] for row in conn.execute(
+            "SELECT verdict, COUNT(*) AS n FROM claim WHERE run_id = ? GROUP BY verdict",
+            (PINNED_RUN,))}
+    finally:
+        conn.close()
+    assert counts == {"distinct": 90, "unplaced": 1, "gap": 1, "review": 2}, counts
+    assert sum(counts.values()) == 94, counts
+
+
+@pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
 def test_the_stored_cotw_corpus_keeps_its_verdicts_and_passes_the_lint(tmp_path, monkeypatch):
     """The real 94-claim run: same verdict counts, every page through the same lint."""
     copy = tmp_path / "corpus.db"
@@ -350,15 +415,13 @@ def test_the_stored_cotw_corpus_keeps_its_verdicts_and_passes_the_lint(tmp_path,
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     try:
-        run = conn.execute(
-            "SELECT run_id FROM claim WHERE analyser = 'level_fitness'"
-            " GROUP BY run_id ORDER BY COUNT(*) DESC, run_id DESC LIMIT 1").fetchone()["run_id"]
         counts = {row["verdict"]: row["n"] for row in conn.execute(
-            "SELECT verdict, COUNT(*) AS n FROM claim WHERE run_id = ? GROUP BY verdict", (run,))}
-        assert counts == {"distinct": 90, "unplaced": 1, "gap": 1, "review": 2}, (run, counts)
+            "SELECT verdict, COUNT(*) AS n FROM claim WHERE run_id = ? GROUP BY verdict",
+            (PINNED_RUN,))}
+        assert counts == {"distinct": 90, "unplaced": 1, "gap": 1, "review": 2}, (PINNED_RUN, counts)
 
         for i, row in enumerate(conn.execute(
-                "SELECT id FROM claim WHERE run_id = ? ORDER BY id", (run,))):
+                "SELECT id FROM claim WHERE run_id = ? ORDER BY id", (PINNED_RUN,))):
             case_id = f"probe-{row['id']}"
             context = conn.execute(
                 "SELECT c.run_id, c.analyser, r.snapshot_id FROM claim c"

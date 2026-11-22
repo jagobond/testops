@@ -236,7 +236,8 @@ def test_the_claim_is_quoted_once_and_there_is_no_summary_block(tmp_path, monkey
 
     assert 'class="summary"' not in html
     assert '<section class="scan">' in html
-    assert ("The test asserts <code class=\"ident\">Then the panel is served</code>" in html)
+    assert ("The test asserts the step <code class=\"ident\">Then the panel is served</code>"
+            in html)
     assert " ".join(text.split()).count("Then the panel is served") == 1
     # The analyser's essay, which restated the claim and the rule, is gone from the page.
     assert "The run only reads the responses the server sends" not in text

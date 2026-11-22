@@ -1,0 +1,29 @@
+You are the reviewer on the TestOps factory. This is a second pass on TESTOPS-27, restricted to the
+Addendum (AC7-AC9) — the first pass found two probes that lost an instruction.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-27-action-line`, tree clean.
+Ticket:     factory/tickets/TESTOPS-27.md (read the Addendum)
+Diff:       git diff feature/f1..HEAD, and `git diff 1d20cac..HEAD` for just the fix
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Re-run your own eight probes** and confirm all eight are now kept. If any still drops, that is NEEDS-FIX.
+- **Then attack the new morphology handling.** Try: "the duplicate is deletable", "removal of the copy is
+  advisable", "ought to be removed", "would be better gone", "the second one can go", "there is no need for
+  this copy", "both copies are unnecessary", "it must not be kept". Report each result. The rule now matches
+  inflections and obligation passives — find what still walks past it.
+- **Check the over-correction (AC9).** The 94 real restatement tails must still drop. State the before/after
+  drop counts you measured from the store, not from the test output.
+- Confirm the eight probes exist as tests that bite — mutate the vocabulary (remove one inflection arm) and
+  confirm a test fails.
+- Do not edit product code, tests or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-27-review-2.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## The eight probes — result now.
+  ## New attacks — each probe and the exact rendering.
+  ## Drop counts — before and after, measured.
+  ## Residual risk — what a future analyser could still write that would be lost.
+
+Then reply with the verdict and a summary under 300 words.

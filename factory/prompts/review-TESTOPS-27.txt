@@ -1,0 +1,31 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-27 against its acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-27-action-line`, tree clean.
+Ticket:     factory/tickets/TESTOPS-27.md
+Diff:       git diff feature/f1..HEAD
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Find an action the rule drops.** The rule fails open, so drops are rare — which means the drop path may be
+  untested in practice. Construct a tail the rule classifies as restatement, confirm it is dropped, and confirm
+  a test exists that proves the overlap. If no stored action is ever dropped, say so and judge whether AC2 is
+  then vacuous or merely rare.
+- **Try to smuggle an instruction past it.** Tails opening with a continuation word that still carry an order
+  ("this should be split into two steps and the second deleted"), a tail with two orders ("move it and rename
+  it"), an order in the imperative with a noun first ("one copy to keep"), and lowercase or no apostrophes.
+  Report which survived and which vanished.
+- **Check the vocabulary does not mangle ordinary prose** — does any dropped clause actually carry information?
+- Confirm AC4 (corpus test: no action truncated under 40 chars unless the whole action was shorter) exists and
+  would fail; AC5's wording is applied in all four verdicts; verdicts 94/90/1/1/2.
+- Do not edit product code, tests or the ticket. You may write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-27-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC6 HOLDS / WEAK / NOT MET.
+  ## Smuggling attempts — each probe, and what the page actually showed.
+  ## The drop path — whether it is exercised, and what proves the drop is safe.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 350 words.
