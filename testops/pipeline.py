@@ -138,6 +138,14 @@ def _readings(arms: list[tuple[str, github.Collected]]) -> dict[str, list[source
             continue                       # this run had no arm for it; not a result about it
         skipped = tuple(entry.record() for role, collected in serving
                         for entry in collected.skipped)
+        # TESTOPS-43. A file this reader handles, refused for its size, is a file the capability
+        # lost - the count it reports is partial, and the sentence says so. A file of a kind no
+        # reader here handles is not this capability's loss: the run never claimed to read that
+        # kind, and the page lists it under "Files this run could not read" with its reason.
+        # Folding the two together would make every README in a .NET repository a caveat on a
+        # complete reading, which is the noise the sentence exists to avoid.
+        lost = tuple(entry.record() for role, collected in serving
+                     for entry in collected.skipped if entry.reason == github.SIZE_CAP)
         # A capability with nothing fetched is only *unreadable* when the tree held files that fell
         # outside the kinds. An arm that fetched nothing and skipped nothing is a real zero: the
         # reader looked and the repository had nothing for it.
@@ -148,6 +156,7 @@ def _readings(arms: list[tuple[str, github.Collected]]) -> dict[str, list[source
             unreadable="" if observed or not unread else _skip_reason(capability, serving),
             arms={role: count for role, count in per_arm.items() if count},
             skipped=skipped,
+            lost=lost,
         ))
     return {sources.GITHUB: readings}
 

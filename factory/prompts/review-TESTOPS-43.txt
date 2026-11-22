@@ -1,0 +1,26 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-43.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t43 (branch `factory/testops-43-partial-reads`). Work only here.
+Ticket: factory/tickets/TESTOPS-43.md
+Prior review (the evidence): factory/reports/2026-11-22/TESTOPS-41-review.md, section "Three sharpest concerns".
+
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+The three faults to be judged: (1) an aggregate sentence hiding a per-capability zero ("returned 2 items" when 2 came
+from test code and 0 from code); (2) a skip that breaks nothing renders nowhere; (3) a partially-read capability still
+says only "consulted".
+
+HARD RULES
+- Run the suite from this worktree with the interpreter above.
+- **Build the stores, do not trust the tests.** argv: construct a snapshot where `code` reads 0 of 40 (all unsupported)
+  while `test code` reads 12; then one where code reads 40 and skips 500 `.sql`; then one where code reads 30 of 40.
+  For each, quote the FULL sentence the page renders, and say whether a reader can name the loss without clicking.
+- **AC4 is absolute:** CotW and ReqOverflow today have zero skips. Diff the exact sentence strings before and after
+  (check out `main`'s sources.py into a temp file if needed) and quote both. Any change there is a fail.
+- **Prose:** read the rendered sentence aloud as a tired reader. Does it become a paragraph? Is "consulted" still used
+  where it is now misleading? Is there vocabulary a reader must learn ("capability", "arm", "kind")?
+- **No template-built wording:** grep the web templates for any sentence assembly; AC5 says sources.py only.
+- Do not edit product code or the ticket. Write exactly one file: factory/reports/2026-11-22/TESTOPS-43-review.md
+  with: ## Verdict; ## Sentences rendered (three stores, quoted); ## AC4 diff (both strings); ## Prose; ## Template
+  check; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 300 words.

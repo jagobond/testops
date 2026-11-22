@@ -89,12 +89,21 @@ class Reading:
 
     ``arms`` is the count per repository, so a record can say which of two repositories supplied
     the items without anyone guessing. Nothing here is a percentage: counts, or an absence.
+
+    ``skipped`` is every file the run did not fetch from the arms that serve this capability.
+    ``lost`` is the subset of those the reader *would* have read - a kind it handles, refused for
+    its size - which is the only thing that makes a reading partial. A file of a kind no reader
+    here reads is not a file this capability lost: it is a kind the run never had, and the run
+    page lists it under *Files this run could not read* (TESTOPS-43). Keeping the two apart is
+    what lets the sentence say "code returned 12 items (3 .cs files unreadable)" without turning
+    every README in the tree into a caveat on a complete reading.
     """
     capability: str
     observed: int | None = None
     unreadable: str = ""
     arms: dict[str, int] = field(default_factory=dict)
     skipped: tuple[dict, ...] = ()
+    lost: tuple[dict, ...] = ()
 
     def __post_init__(self) -> None:
         if self.capability not in CAPABILITIES:
@@ -121,6 +130,12 @@ class Reading:
                "unreadable": self.unreadable, "arms": dict(self.arms)}
         if include_skipped:
             out["skipped"] = [dict(entry) for entry in self.skipped]
+            if self.lost:
+                # Counts and kinds only: these are already inside ``skipped`` with their file
+                # lists, and the sentence needs the summary, not a second copy of the tree.
+                out["lost"] = [{"reason": entry.get("reason", ""),
+                                "kind": entry.get("kind", ""),
+                                "count": int(entry.get("count") or 0)} for entry in self.lost]
         return out
 
 # ---------------------------------------------------------------- the Quilter deployment
@@ -347,7 +362,18 @@ class Assessment:
             verb = "were" if plural else "was"
             count = self.observed if self.observed is not None else 0
             item = "item" if count == 1 else "items"
-            return f"Assessed: {titles} {verb} consulted and returned {count} {item}."
+            # TESTOPS-43. An aggregate is only enough when it hides nothing: every capability it
+            # adds up returned something, and none of them lost a file it would have read. When a
+            # capability returned nothing, the total cannot say which one did, so each capability
+            # is named with its own count - "code and test code returned 2 items" is true of a
+            # 2-and-0 and of a 1-and-1, and a reader cannot tell them apart.
+            if any(reading.observed == 0 for reading in self.readings if reading.readable):
+                return "Assessed: " + "; ".join(_result_clause(reading)
+                                                for reading in self.readings) + "."
+            partial = _lost_clause([entry for reading in self.readings
+                                    for entry in reading.lost])
+            note = f" ({partial})" if partial else ""
+            return f"Assessed: {titles} {verb} consulted and returned {count} {item}{note}."
         verb = "were" if plural else "was"
         return (f"Assessed: {titles} {verb} available, but the run did not record what was "
                 "returned.")
@@ -381,6 +407,42 @@ def _reading_clause(reading: Reading) -> str:
         item = "item" if count == 1 else "items"
         return f"{title} was consulted and returned {count} {item}"
     return f"{title} was not read: {reading.unreadable.strip().rstrip('.')}"
+
+
+def _result_clause(reading: Reading) -> str:
+    """One capability in a sentence that names each: what it returned, and what it lost.
+
+    Used when the capabilities' counts must not be added up (TESTOPS-43): a total cannot say
+    that one capability returned nothing. The parenthetical is only there when the reading is
+    genuinely partial, so a complete reading stays one short clause.
+    """
+    title = CAPABILITY_TITLE.get(reading.capability, reading.capability)
+    count = reading.observed or 0
+    item = "item" if count == 1 else "items"
+    clause = f"{title} returned {count} {item}"
+    lost = _lost_clause(reading.lost)
+    return f"{clause} ({lost})" if lost else clause
+
+
+def _lost_clause(lost) -> str:
+    """What one reading could not read, as the parenthetical a reader meets: kind and count.
+
+    "142 .java files and 3 other kinds unreadable". No reason and no file list: the run page
+    names every skipped kind with its reason and lets the reader open the list (TESTOPS-43).
+    """
+    entries = [entry for entry in lost or () if int(entry.get("count") or 0)]
+    if not entries:
+        return ""
+    entries.sort(key=lambda entry: (-int(entry.get("count") or 0),
+                                    str(entry.get("kind") or "")))
+    biggest = entries[0]
+    count = int(biggest.get("count") or 0)
+    kind = str(biggest.get("kind") or "").strip() or "file"
+    clause = f"{count} {kind} file" if count == 1 else f"{count} {kind} files"
+    others = len(entries) - 1
+    if others:
+        clause += f" and {others} other kind" + ("s" if others != 1 else "")
+    return clause + " unreadable"
 
 
 # ---------------------------------------------------------------- the registry
@@ -476,7 +538,11 @@ class Registry:
                     observed=sum(reading.observed or 0 for _kind, reading in readable),
                     arms=_merge_arms(reading for _kind, reading in readable),
                     skipped=tuple(entry for _kind, reading in readable
-                                  for entry in reading.skipped)))
+                                  for entry in reading.skipped),
+                    # Only the files this reader would have read: what makes the count partial
+                    # rather than complete, and the one thing the sentence has to say out loud.
+                    lost=tuple(entry for _kind, reading in readable
+                               for entry in reading.lost)))
                 continue
             # Every source that could serve this capability was consulted and none could read it.
             for kind, reading in served:
@@ -600,12 +666,14 @@ def _readings_from(stored) -> tuple[Reading, ...]:
         if not isinstance(arms, dict):
             raise ValueError(f"a reading's arms must be a mapping, found {arms!r}")
         skipped = entry.get("skipped") or ()
+        lost = entry.get("lost") or ()
         out.append(Reading(
             capability=entry.get("capability") or "",
             observed=entry.get("observed"),
             unreadable=entry.get("unreadable") or "",
             arms={str(arm): int(count) for arm, count in arms.items()},
             skipped=tuple(entry for entry in skipped if isinstance(entry, dict)),
+            lost=tuple(entry for entry in lost if isinstance(entry, dict)),
         ))
     return tuple(out)
 
