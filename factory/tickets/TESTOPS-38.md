@@ -2,7 +2,7 @@
 id: TESTOPS-38
 title: A project is a group of services, and a user sets it up without touching code
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-37
 ---

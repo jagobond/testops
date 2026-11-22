@@ -48,12 +48,13 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-35 | A reviewer's fixture case is sitting in Harry's live store | F1 | done | Scrub ran on the live store: case_ 168->167, 1 fixture removed; PR #27 |
 | TESTOPS-36 | Two analysers, one step, two pages that never mention each other | F1 | done | Cross-reference both ways; four adversarial stores, no lie; PR #30 |
 | TESTOPS-37 | Nothing proves a recorded decision stops the next run reporting the same thing | F1 | done | 417 tests; six user edits probed, gates proven by deletion; PR #31 |
-| TESTOPS-38 | A project is a group of services, and a user sets it up without touching code | F2 | ready | **Product Owner** — repos + Jira board + ADO pipelines grouped as the CotW project; configurable, and container-ready for Azure/Foundry |
+| TESTOPS-38 | A project is a group of services, and a user sets it up without touching code | F2 | done | ADR-1 built; live store migrated v3→v4, 23 pages byte-identical; PR #34 |
 | TESTOPS-39 | A second specimen of a different shape, to find out whether the analyses generalise | F2 | ready | JS/Cypress+Cucumber tests against a Java multi-service platform — different ecosystem, different bindings, separate repos |
 | TESTOPS-40 | Say what a decision covers, and stop a shifted twin from silencing one | F1 | ready | From the TESTOPS-37 review: commit and data-table blindness undocumented; a shifted identical-twin index silences a decision with no notice |
 | TESTOPS-41 | Files the collector cannot read are silently dropped, and the page then says they were read | F1 | done | 428 tests; three capability states; kind list is data; PR #33 |
 | TESTOPS-42 | The tool reads one ecosystem, and says nothing when it does not | F2 | blocked | **From TESTOPS-39** — 0 of 44 cucumber-js bindings read, 43/43 claims unplaced, and a page telling the team its steps are unbound. Needs the Product Owner's decision: declare support, or make the binding layer pluggable |
 | TESTOPS-43 | A sentence that hides its own partial reads | F1 | ready | From the TESTOPS-41 review: aggregate totals hide a per-capability zero, a harmless skip renders nowhere, partial reads say "consulted" |
+| TESTOPS-44 | The secret guard errs in both directions, and the store upgrades without saying so | F2 | ready | From the TESTOPS-38 review: base64 key accepted because the guard exempts `/`, a real 32-char key refused, migration silent on open |
 
 |----|-------|---------|--------|------|
 
