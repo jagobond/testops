@@ -47,9 +47,10 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-34 | A run with no findings is listed as an open case awaiting a decision | F1 | done | Rule moved into the list query; closed and quiet provably distinct; PR #29 |
 | TESTOPS-35 | A reviewer's fixture case is sitting in Harry's live store | F1 | done | Scrub ran on the live store: case_ 168->167, 1 fixture removed; PR #27 |
 | TESTOPS-36 | Two analysers, one step, two pages that never mention each other | F1 | done | Cross-reference both ways; four adversarial stores, no lie; PR #30 |
-| TESTOPS-37 | Nothing proves a recorded decision stops the next run reporting the same thing | F2 | ready | **Product Owner** — 'do decisions actually get recorded and prevent future claims?' `pipeline.py` has three suppression gates and no test touches any of them |
+| TESTOPS-37 | Nothing proves a recorded decision stops the next run reporting the same thing | F1 | done | 417 tests; six user edits probed, gates proven by deletion; PR #31 |
 | TESTOPS-38 | A project is a group of services, and a user sets it up without touching code | F2 | ready | **Product Owner** — repos + Jira board + ADO pipelines grouped as the CotW project; configurable, and container-ready for Azure/Foundry |
 | TESTOPS-39 | A second specimen of a different shape, to find out whether the analyses generalise | F2 | ready | JS/Cypress+Cucumber tests against a Java multi-service platform — different ecosystem, different bindings, separate repos |
+| TESTOPS-40 | Say what a decision covers, and stop a shifted twin from silencing one | F1 | ready | From the TESTOPS-37 review: commit and data-table blindness undocumented; a shifted identical-twin index silences a decision with no notice |
 
 |----|-------|---------|--------|------|
 

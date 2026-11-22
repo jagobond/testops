@@ -2,7 +2,7 @@
 id: TESTOPS-37
 title: Nothing proves a recorded decision stops the next run reporting the same thing
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-36
 ---
