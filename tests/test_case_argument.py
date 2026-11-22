@@ -32,6 +32,7 @@ import pytest
 from testops import blobs, queries
 from testops.store import db
 from testops.web import app
+from testops.web import lint as english
 
 TS = "2020-01-01T00:00:00+00:00"
 CASE = "case-argument"
@@ -107,8 +108,13 @@ def prose(html: str) -> str:
 
 
 def sentences(text: str) -> list[str]:
-    flat = " ".join(line.strip() for line in text.splitlines() if line.strip())
-    return [part.strip() for part in re.split(r"(?<=[.!?])\s+", flat) if part.strip()]
+    out: list[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        out.extend(part.strip() for part in re.split(r"(?<=[.!?])\s+", line) if part.strip())
+    return out
 
 
 def lint(html: str, *, quoted: str | None = None) -> list[str]:
@@ -142,6 +148,15 @@ def lint(html: str, *, quoted: str | None = None) -> list[str]:
     if re.search(r"<p[^>]*><strong>[^<]{0,80}(\.|:)</strong>", html):
         problems.append("fragment pseudo-heading")
 
+    # TESTOPS-26: the plain-English rules, one quote style, and no identifier left as prose.
+    problems.extend(english.plain_english(text))
+    clause = english.repeated_clause(english.opening_block(html))
+    if clause:
+        problems.append(f"the scan block repeats a clause: {clause!r}")
+    problems.extend(f"a straight {quote!r} survives in prose"
+                    for quote in english.straight_quotes(html))
+    problems.extend(f"identifier {name!r} is prose, not monospace"
+                    for name in english.bare_identifiers(html, quoted))
     return problems
 
 
@@ -220,7 +235,8 @@ def test_the_claim_is_quoted_once_and_there_is_no_summary_block(tmp_path, monkey
         conn.close()
 
     assert 'class="summary"' not in html
-    assert ("The test asserts the step \u201cThen the panel is served\u201d." in text)
+    assert '<section class="scan">' in html
+    assert ("The test asserts <code class=\"ident\">Then the panel is served</code>" in html)
     assert " ".join(text.split()).count("Then the panel is served") == 1
     # The analyser's essay, which restated the claim and the rule, is gone from the page.
     assert "The run only reads the responses the server sends" not in text
@@ -235,7 +251,7 @@ def test_provenance_is_a_labelled_footnote_under_the_quote_not_a_section(tmp_pat
         conn.close()
 
     assert "Where the name came from" not in text
-    quote_at = html.index('class="argument"')
+    quote_at = html.index('class="scan"')
     provenance_at = html.index('class="meta provenance"')
     next_section = html.index('<h2 class="section">2.')
     assert quote_at < provenance_at < next_section
@@ -256,7 +272,7 @@ def test_no_sentence_talks_about_the_words_or_the_classification(tmp_path, monke
     assert "Why it was classified this way" not in text
     assert "the words name the page as served" not in text
     # What the rule found is stated as a fact about the claim.
-    assert "That is settled by the page the server sends" in text
+    assert "the page the server sends settles it" in text
 
 
 def test_no_fragment_pseudo_headings(tmp_path, monkeypatch):

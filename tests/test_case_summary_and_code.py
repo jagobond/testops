@@ -148,10 +148,10 @@ def _html(conn) -> str:
 # --------------------------------------------------------------------------- AC1
 
 def test_the_argument_is_the_first_content_and_states_the_stored_rows(tmp_path):
-    """TESTOPS-23 AC2: the first paragraph answers whether, what is wrong, and what to do.
+    """TESTOPS-26 AC1/AC2: the first content is a scan block with judgement, fault and action.
 
-    It opens with the verdict, quotes the step the file holds (keyword included) and ends with the
-    stored action. There is no summary block above it restating the claim.
+    It opens with the verdict as a headline, quotes the step the file holds (keyword included)
+    once, in monospace, and ends with the stored action on its own line.
     """
     conn, _ = _seed(tmp_path)
     try:
@@ -159,15 +159,18 @@ def test_the_argument_is_the_first_content_and_states_the_stored_rows(tmp_path):
     finally:
         conn.close()
 
-    argument = re.search(r'<p class="argument">(.*?)</p>', body, re.S)
-    assert argument is not None, body[:400]
-    text = htmllib.unescape(re.sub(r"<[^>]+>", "", argument.group(1))).strip()
+    scan = re.search(r'<section class="scan">(.*?)</section>', body, re.S)
+    assert scan is not None, body[:400]
+    block = scan.group(1)
+    text = htmllib.unescape(re.sub(r"<[^>]+>", " ", block))
+    text = " ".join(text.split())
     assert text.startswith("Not proved"), text
-    assert 'The test asserts the step \u201cThen the panel is served\u201d.' in text
-    assert text.endswith(ACTION), text
+    assert '<code class="ident">Then the panel is served</code>' in block
+    assert "What to do" in text
+    assert text.endswith("Call the HTTP client for this step instead of the browser."), text
     assert "asserts the same" not in text
-    # The paragraph is the first content of section 1, before the evidence sections.
-    assert body.index('class="argument"') < body.index('<h2 class="section">2. The step')
+    # The block is the first content of section 1, before the evidence sections.
+    assert body.index('class="scan"') < body.index('<h2 class="section">2. The step')
 
 
 def test_the_argument_carries_no_decision_control(tmp_path):
@@ -177,8 +180,8 @@ def test_the_argument_carries_no_decision_control(tmp_path):
         body = _html(conn)
     finally:
         conn.close()
-    argument = body.split('class="argument"', 1)[1].split("</p>", 1)[0]
-    assert "<form" not in argument and "<button" not in argument
+    scan = body.split('class="scan"', 1)[1].split("</section>", 1)[0]
+    assert "<form" not in scan and "<button" not in scan
 
 
 # --------------------------------------------------------------------------- AC2
@@ -228,7 +231,7 @@ def test_the_verdict_states_what_is_true_and_the_provenance_sits_under_the_quote
     finally:
         conn.close()
 
-    assert "Not proved \u2014 nothing runs a browser." in text
+    assert "Not proved \u2014 nothing runs a browser" in text
     for old in ("Browser not needed", "Never actually proved", "Could not be judged",
                 "Established", "Already covered"):
         assert old not in text, old

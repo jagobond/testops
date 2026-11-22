@@ -268,7 +268,8 @@ def test_span_label_and_rule_render_as_reader_words_not_data(tmp_path):
     assert "['api', 'ui']" not in text
     assert '"span"' not in text
     # TESTOPS-23: the argument states the fact the rule found, never the rule or its vocabulary.
-    assert "Nothing but a browser settles it, and the test drives a browser." in text
+    assert ("nothing short of a browser settles it, and the test drives a browser instead."
+            in text)
     assert "Why it was classified this way" not in text
     assert "the words" not in text
     assert "asserts an accessibility property the browser computes" not in text

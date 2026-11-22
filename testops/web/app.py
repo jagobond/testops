@@ -10,17 +10,18 @@ vocabulary, which is what the Product Owner meant by "the verbiage is still not 
 
 What the page says now:
 
-  1. what is asserted, and what settles it - the step quoted with its Gherkin keyword, the fact that
-     settles it, what the test does about that, and the stored action, in one paragraph
+  1. a scan block - the judgement as a headline, one sentence saying what is wrong, and one line
+     saying what to do, on its own row so the eye lands on it; then the quote's provenance
   2. the step that is asserted - the feature file around it and the definition that runs it
   3. the other steps in this scenario, for context - never presented as evidence
   4. what could not be checked - the sources that were never connected
   5. the decision
 
-Every sentence above is built from the stored row by a rule (``argument_middle`` and the label
-functions below), not written for one claim, so any claim gets the same shape. No reader-facing
-sentence mentions the analyser, its rules or its vocabulary; where a rule matters, the page states
-the fact it found.
+Every sentence above is built from the stored row by a rule (``wrong_sentence``, ``action_line``
+and the label functions below), not written for one claim, so any claim gets the same shape. The
+step text is quoted once, in monospace; the action refers to "this step" rather than repeating it.
+No reader-facing sentence mentions the analyser, its rules or its vocabulary; where a rule matters,
+the page states the fact it found.
 
 Design decisions that matter, from ui-design-v2 and the Product Owner's reading of the old page:
 
@@ -121,9 +122,18 @@ form.decide input[type=text] { font:inherit; padding:.45rem .6rem; border:1px so
                                border-radius:5px; width:min(28rem,100%); }
 .warn { color: var(--bad); font-size:.9rem; }
 .quiet { color:var(--dim); }
-p.argument { margin:1rem 0 .55rem; font-size:1.06rem; line-height:1.6; }
-strong.verdict { font-weight:700; }
-strong.verdict.hot { color:var(--bad); }
+.scan { margin:1.15rem 0 1rem; padding:.85rem 1rem .9rem; background:#fff;
+        border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:6px; }
+p.judgement { margin:0 0 .5rem; }
+p.judgement strong.verdict { font-size:1.32rem; font-weight:700; line-height:1.25; }
+p.judgement strong.verdict.hot { color:var(--bad); }
+p.wrong { margin:0 0 .85rem; font-size:1.06rem; line-height:1.6; }
+p.action { margin:0; padding:.6rem .8rem; background:#f6f4f0; border-radius:5px;
+           font-weight:600; line-height:1.5; }
+p.action .act { display:inline-block; margin-right:.55rem; font-size:.72rem; font-weight:700;
+                letter-spacing:.09em; text-transform:uppercase; color:var(--accent); }
+code.ident { font-family: ui-monospace, Consolas, monospace; font-size:.9em; background:#f3f1ec;
+             padding:.05em .25em; border-radius:3px; white-space:nowrap; }
 p.provenance { margin:0 0 1rem; }
 p.provenance .fn { font-weight:600; color:var(--ink); }
 ul.context { margin:.35rem 0 0; padding-left:1.1rem; color:var(--dim); }
@@ -295,20 +305,20 @@ def quoted_assertion(claim: dict) -> str | None:
     return "Then " + text.strip()
 
 
-def _settles_clause(label: str | None) -> str:
-    """What settles this claim, as a clause - the fact the rule found, never the rule.
+def _fact_clause(label: str | None) -> str:
+    """What settles this claim, as a subject-and-verb clause.
 
     The label is the stored phrase for what decides the claim ("settled by the page the server
-    sends", "needs a browser"). It is used as the predicate it is: "That is settled by ...". It is
-    never quoted back at the reader and never dropped into a sentence as a placeholder.
+    sends", "needs a browser"). It is used as a fact about the claim, never quoted back at the
+    reader and never dropped into a sentence as a placeholder.
     """
     if label and label.startswith(SETTLED_BY):
-        return f"That is settled by {label[len(SETTLED_BY):]}"
+        return f"{label[len(SETTLED_BY):]} settles it"
     if label == NEEDS_BROWSER:
-        return "Nothing but a browser settles it"
+        return "nothing short of a browser settles it"
     if label and label.startswith(UNCLEAR):
-        return ("Nothing in that assertion says what it is compared with, so nothing settles it")
-    return "What would settle it was not recorded"
+        return "nothing in it says what it is compared with, so nothing settles it"
+    return "what would settle it was not recorded"
 
 
 def _does_clause(claim: dict) -> str | None:
@@ -324,99 +334,151 @@ def _does_clause(claim: dict) -> str | None:
     return f"the test {INSTRUMENT_WORD[used]}"
 
 
-def _does_sentence(claim: dict) -> str:
-    """What the test does, as its own sentence, for the cases the clause form cannot carry."""
-    span = claim.get("span")
-    if span is None:
-        return "What this test reaches was not recorded."
-    if not span:
-        return "This run recorded no layer that this test reaches."
-    if instrument(span) == "unknown":
-        return "No instrument could be identified for this test."
-    return f"The test {INSTRUMENT_WORD[instrument(span)]}."
+def _lower_first(text: str) -> str:
+    return text[:1].lower() + text[1:] if text else text
 
 
-def argument_middle(claim: dict) -> str:
-    """The sentence between the quote and the action: what settles it, and what the test does.
+def _typo(text: str) -> str:
+    """One quote style for prose: curly double quotes, typographic apostrophes.
 
-    One sentence per verdict, from the stored fields:
-      * distinct  - the claim is settled, and the test is the instrument that reaches it
-      * review    - settled by a cheaper answer, which the test reaches the dearer way; the cost is
-                    stated, never implied by a negation
-      * gap       - nothing but the dearer instrument settles it, and the test uses the cheaper one
-      * duplicate - settled, and another scenario already asserts the same thing
-      * unplaced  - the assertion names nothing to compare against, so nothing settles it
+    Code spans are built after this runs and skip it, so an identifier matched by ``IDENTIFIER``
+    keeps its own characters (AC5). A spaced hyphen used as a dash becomes an em dash; the
+    unspaced hyphens inside an identifier such as ``data-fact-id`` are untouched.
     """
-    verdict = claim.get("verdict")
-    settles = _settles_clause(claim.get("interaction_label"))
-    does = _does_clause(claim)
-    if verdict == "unplaced":
-        return f"{settles}. {_does_sentence(claim)}"
-    if verdict == "duplicate":
-        return (f"{settles}, and another scenario in this run already asserts the same thing, "
-                f"so the project runs it twice.")
-    if verdict == "review":
-        if does is None:
-            return f"{settles}. {_does_sentence(claim)}"
-        return f"{settles}, and {does}, which is a dearer way to reach it."
-    if does is None:
-        return f"{settles}. {_does_sentence(claim)}"
-    return f"{settles}, and {does}."
+    text = text.replace(" - ", " \u2014 ")
+    out: list[str] = []
+    opening = True
+    for ch in text:
+        if ch == '"':
+            out.append("\u201c" if opening else "\u201d")
+            opening = not opening
+        elif ch == "'":
+            out.append("\u2019")
+        else:
+            out.append(ch)
+    return "".join(out)
 
 
-def action_sentence(claim: dict) -> str:
-    """The stored action, once, as the paragraph's last sentence - never invented when absent.
+# An identifier a reader may meet in the summary: the HTTP client by its product name, an
+# attribute name, a path, a snake_case symbol or the CSS class an assertion is about. These are
+# read as code, not as prose that happens to contain punctuation (AC4).
+IDENTIFIER = re.compile(
+    r"(?:HTTP client"
+    r"|\bdata-[a-z0-9]+(?:-[a-z0-9]+)*\b"
+    r"|\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+\b"
+    r"|\b[\w.-]+(?:/[\w.-]+)+\b"
+    r"|\bCSS class\b)")
 
-    The store keeps one string; a reader needs sentences. A clause after a semicolon is already a
-    sentence a writer separated with the lighter mark, so the page renders each as its own (and
-    starts it with a capital), which is also how a stored action stays inside the page's sentence
-    budget without a word being changed.
+
+def rich_prose(text: str) -> str:
+    """Escaped prose with identifiers in monospace and one typographic quote style (AC4, AC5)."""
+    text = _typo(text)
+    out: list[str] = []
+    at = 0
+    for match in IDENTIFIER.finditer(text):
+        out.append(esc(text[at:match.start()]))
+        out.append(f'<code class="ident">{esc(match.group(0))}</code>')
+        at = match.end()
+    out.append(esc(text[at:]))
+    return "".join(out)
+
+
+def _step_quote(quote: str) -> str:
+    """The step text, in monospace - the one place the block quotes it (AC2)."""
+    return f'<code class="ident">{esc(quote)}</code>'
+
+
+def _without_step(action: str, step: str | None) -> str:
+    """The action with its quoted copy of the step replaced by "this step" (AC2).
+
+    The stored action repeats the step in straight quotes. The block has already quoted it once,
+    so the action refers to it rather than quoting it a second time.
+    """
+    if not step:
+        return action
+    for form in (f'the step "{step}"', f'step "{step}"', f'"{step}"'):
+        if form in action:
+            return action.replace(form, "this step", 1)
+    return action
+
+
+def action_line(claim: dict, step: str | None) -> str:
+    """The action as one line a reader can act on: the stored first clause, and nothing after it.
+
+    The store keeps one string with the action in its first clause and the argument's conclusion
+    in the clauses after a semicolon. The opening block already states the argument, so the tail
+    is dropped here instead of restating it (TESTOPS-26, AC3). "No change" is an action: a
+    distinct claim says plainly that nothing needs doing.
     """
     action = (claim.get("proposed_action") or "").strip()
     if not action:
         return "No proposed action was recorded for this claim."
-    parts = [part.strip() for part in action.split("; ") if part.strip()]
-    rendered = [parts[0]]
-    for part in parts[1:]:
-        rendered.append(part[0].upper() + part[1:])
-    text = ". ".join(part.rstrip(".") for part in rendered)
-    return text + "."
+    raw_step = (claim.get("provenance") or {}).get("assertion_text") or step
+    action = _without_step(action, raw_step)
+    first = action.split("; ")[0].strip().rstrip(".")
+    return first + "."
+
+
+def wrong_sentence(claim: dict, quote: str | None) -> str:
+    """The one sentence that says what is wrong, built from the stored row.
+
+    It names the assertion once, in monospace, and then the fact the rule found. The verdict only
+    changes the connective: what a distinct claim lacks is a fault, and its sentence says so.
+    """
+    assessment = claim.get("assessment") or {}
+    if assessment.get("state") == sources.NOT_ASSESSABLE:
+        sentence = assessment.get("sentence") or ("Nobody could look at the sources this claim "
+                                                  "needs.")
+        if quote:
+            return f"The test asserts {_step_quote(quote)}, but {rich_prose(_lower_first(sentence))}"
+        return rich_prose(sentence)
+    if quote is None:
+        recorded = (claim.get("statement") or "").strip()
+        sentence = ("This claim was recorded before provenance was captured, so there is no quoted "
+                    "step, no line and no commit to check it against.")
+        if recorded:
+            sentence += f' The claim as recorded was: \u201c{rich_prose(recorded)}\u201d.'
+        return sentence
+
+    q = _step_quote(quote)
+    fact = rich_prose(_fact_clause(claim.get("interaction_label")))
+    does = _does_clause(claim)
+    verdict = claim.get("verdict")
+    if verdict == "distinct":
+        return f"The test asserts {q}, and {fact}."
+    if verdict == "duplicate":
+        return (f"The test asserts {q}, but another scenario in this run already asserts the same "
+                f"thing, so the project runs it twice.")
+    if verdict == "unplaced":
+        return f"The test asserts {q}, but {fact}."
+    if verdict == "review" and does is not None:
+        return f"The test asserts {q}, but {fact}, and {rich_prose(does)} to read it."
+    if does is not None:
+        return f"The test asserts {q}, but {fact}, and {rich_prose(does)} instead."
+    return f"The test asserts {q}, but {fact}."
 
 
 def argument_block(claim: dict) -> list[str]:
-    """The page's first paragraph, and the only place the claim is stated.
+    """The opening block: three parts a reader can scan, in the order they decide with (AC1).
 
-    It answers, in order, whether the claim is checked (the label), what is wrong with it (the
-    middle sentence) and what should happen (the action). A claim the run could not assess is not
-    given a level verdict: the headline says so and the recorded sentence says why, because a
-    verdict about a claim whose needed source nobody could consult is a conclusion the run was not
-    entitled to draw. A v1 claim has no quoted step: the page says so and shows the claim as it was
-    recorded, rather than pretending a quote exists.
+    The judgement is a headline, not a category. One sentence says what is wrong; one line says
+    what to do, on its own row with its own label, so the eye lands on the action. The argument
+    itself is not shortened away: the evidence, the context and the blind spots follow below.
+    A claim the run could not assess says so in the headline, and a v1 claim says it has no
+    quoted step instead of inventing one.
     """
     assessment = claim.get("assessment") or {}
     not_assessable = assessment.get("state") == sources.NOT_ASSESSABLE
     label = "Cannot assess" if not_assessable else verdict_label(claim)
     hot = " hot" if not_assessable or claim.get("verdict") in ("gap", "review", "duplicate") else ""
     quote = quoted_assertion(claim)
-    if quote is None:
-        sentence = ("This claim was recorded before provenance was captured, so there is no quoted "
-                    "step, no line and no commit to check it against.")
-        recorded = (claim.get("statement") or "").strip()
-        if recorded:
-            sentence += f' The claim as recorded was: \u201c{esc(recorded)}\u201d.'
-        body = [sentence, esc(action_sentence(claim))]
-    elif not_assessable:
-        body = [esc(assessment.get("sentence") or ""),
-                f"The test asserts the step \u201c{esc(quote)}\u201d.",
-                esc(action_sentence(claim))]
-    else:
-        body = [f"The test asserts the step \u201c{esc(quote)}\u201d.",
-                argument_middle(claim),
-                esc(action_sentence(claim))]
-    return ['<p class="argument">',
-            f'<strong class="verdict{hot}">{esc(label)}.</strong> ',
-            " ".join(body),
-            "</p>"]
+    return ['<section class="scan">',
+            f'<p class="judgement"><strong class="verdict{hot}">{esc(label)}</strong></p>',
+            f'<p class="wrong">{wrong_sentence(claim, quote)}</p>',
+            f'<p class="action"><span class="act">What to do</span> '
+            f'{rich_prose(action_line(claim, quote))}</p>',
+            "</section>"]
+
 
 
 def assessment_note(claim: dict) -> list[str]:
@@ -452,8 +514,9 @@ def provenance_line(claim: dict) -> list[str]:
                 "to open.")
     scenario = claim.get("scenario")
     if scenario:
-        title = (f', in the scenario \u201c{esc(scenario)}\u201d \u2014 the test author\u2019s own '
-                 f'name for the scenario, not a requirement; nothing here was checked against one.')
+        title = (f', in the scenario \u201c{rich_prose(scenario)}\u201d \u2014 the test author\u2019s '
+                 f'own name for the scenario, not a requirement; nothing here was checked '
+                 f'against one.')
     else:
         title = ". The scenario this assertion belongs to was not recorded."
     return [f'<p class="meta provenance"><span class="fn">Where this comes from:</span> {source} '
@@ -681,12 +744,13 @@ def _context_line(item: dict, *, hoisted: str | None) -> str:
     key = item.get("key") or ""
     if key.startswith("binding:"):
         _, verb, pattern = key.split(":", 2)
-        line = f'a {verb.capitalize()} step definition for \u201c{esc(pattern)}\u201d'
+        line = (f'a {verb.capitalize()} step definition for '
+                f'<code class="ident">{esc(pattern)}</code>')
         if hoisted is None:
             word = INSTRUMENT_WORD.get(item.get("layer") or "", INSTRUMENT_WORD["unknown"])
-            line += f" that {word}"
+            line += f" that {rich_prose(word)}"
         return f"<li>{_where(item)} \u2014 {line}.</li>"
-    return f'<li>{_where(item)} \u2014 {esc(item.get("shows"))}.</li>'
+    return f'<li>{_where(item)} \u2014 {rich_prose(item.get("shows") or "")}.</li>'
 
 
 def context_block(claim: dict) -> list[str]:
@@ -706,7 +770,7 @@ def context_block(claim: dict) -> list[str]:
     hoisted = next(iter(layers)) if len(layers) == 1 else None
     intro = "These are the other steps in the same scenario"
     if hoisted:
-        intro += f", and each of them uses {LAYER_WORD[hoisted]}"
+        intro += f", and each of them uses {rich_prose(LAYER_WORD[hoisted])}"
     intro += (". They are not evidence for this claim; they are here so you can see what the test "
               "does around it.")
     out = [f"<p>{intro}</p>", '<ul class="ev context">']
@@ -777,9 +841,8 @@ def _blind_spot_sentence(note: dict) -> str:
 def claim_sections(c: dict) -> list[str]:
     """One claim, one argument: five sections, and the claim stated once (TESTOPS-23, AC3).
 
-    1. what is asserted, and what settles it - one paragraph, the quote with its keyword, the fact
-       that settles it, what the test does, the action; the provenance footnote sits under the
-       quote, never as a section of its own
+    1. a scan block - the judgement, the one wrong thing, and the action on its own line; the
+       provenance footnote sits under it, never as a section of its own
     2. the step that is asserted - the file around it and the definition that runs it
     3. the other steps in this scenario, for context - separated from evidence, introduced together
     4. what could not be checked
@@ -1004,9 +1067,9 @@ def case_page(conn, case_id: str) -> bytes | None:
     if decision is not None:
         body.extend(decision_block(decision))
     if findings:
-        # Each claim gets one argument, and its first paragraph is the only place the claim is
-        # stated (TESTOPS-23). There is no summary block above sections: it restated the claim a
-        # second time, which is the repetition the Product Owner was reading.
+        # Each claim opens with a scan block: the judgement as a headline, one sentence saying
+        # what is wrong, and the action on its own line (TESTOPS-26). The evidence follows below,
+        # and the step is quoted once, in monospace, inside the block.
         for i, f in enumerate(findings, start=1):
             if len(findings) > 1:
                 body.append(f'<h2>Finding {i} of {len(findings)}</h2>')

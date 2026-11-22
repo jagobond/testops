@@ -192,7 +192,7 @@ def test_each_case_page_shows_only_its_own_claim(tmp_path, monkeypatch):
         # TESTOPS-23: the page quotes its own claim's step, with the keyword the file gives it.
         assert assertion
         assert assertion in page, assertion
-        argument = re.search(r'<p class="argument">(.*?)</p>', html, re.S)
+        argument = re.search(r'<section class="scan">(.*?)</section>', html, re.S)
         assert argument is not None
         assert assertion in htmllib.unescape(argument.group(1))
     # The analyser's essay is no longer reader-facing prose on any page.
