@@ -64,7 +64,24 @@ The suite is deliberately small. It pins the invariants later tickets depend on:
 - `cases.fingerprint` is stable for the same evidence and differs for a different subject
   (`test_fingerprint.py`);
 - a suite with no test files exits 5 (no tests collected), never 0 (`test_collection_gate.py`);
-- nothing in the run writes to the repository or to `data/` (`test_isolation.py`).
+- nothing in the run writes to the repository or to `data/` (`test_isolation.py`);
+- the suite cannot open a product store for writing: a test that calls `sqlite3.connect` or
+  `db.connect` on `data/testops.db` fails at the connection, a store under `tmp_path` works, and
+  the only permitted access to a real store is a declared read-only open
+  (`file:<path>?mode=ro`), which SQLite enforces (`test_store_guard.py`, guard in
+  `conftest.py`/`support.py`);
+- `testops scrub-fixtures` reports every case whose `analyser` is not a registered analyser, and
+  removes only with `--yes`: the case, its findings, its decisions and its orphaned suppressions
+  go; the run, snapshot, artefacts, observations and claims stay (`test_scrub_fixtures.py`);
+- a case naming an unregistered analyser answers 404 with the "no longer in the store" page, is
+  not listed on the dashboard, and a registered case still renders (`test_unregistered_case_page.py`).
 
 Every test that needs a database creates it under pytest's `tmp_path`. No test reads the network,
-credentials, Jira, or an external repository.
+credentials, Jira, or an external repository - and no test may write to the live store.
+
+## Fixtures and the live store
+
+A review fixture belongs in a COPY of `data/`, never in the live store (TESTOPS-35). The reviewer
+workflow is `factory/prompts/REVIEW-WORKFLOW.txt`. If a fixture has already reached the live
+store, run `python -m testops.cli scrub-fixtures --dry-run` first and `--yes` only after reading
+what it will remove; never hand-edit SQLite.

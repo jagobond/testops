@@ -11,6 +11,7 @@ import re
 import sqlite3
 
 from . import blobs, cases, sources
+from .analysers import is_registered
 from .extract import csproj, gherkin, stepbindings
 from .links import GITHUB, blob_permalink, permalink, short_location
 
@@ -1111,6 +1112,11 @@ def latest_per_analyser(conn, project: str | None = None) -> tuple[list[dict], i
     seen: set[tuple[str, str]] = set()
     latest, older = [], 0
     for r in rows:
+        # A case written by something this build cannot run is not a work item on the dashboard
+        # (TESTOPS-35). The page for it answers 404, and a list that links to a 404 while
+        # repeating its statement would still be showing the fixture.
+        if not is_registered(r["analyser"]):
+            continue
         key = (r["project"], r["analyser"])
         if key in seen:
             older += 1
