@@ -50,3 +50,10 @@ The judgement is in the first sentence, in bold, which is right. Then everything
 - Do not shorten by deleting the argument. Shorten the summary and keep the argument below it.
 - The action line is the thing the Product Owner reads second and acts on. If it is a sentence he has to hunt
   for, the page has failed again.
+
+## Addendum — two typographic defects seen in the rendered build
+
+| id | criterion |
+|----|-----------|
+| AC10 | No space between an inline code span and the punctuation that follows it: "…both loads , but…" renders as "…both loads, but…". A test asserts no `</code> ,` / `</code> .` pattern reaches the output. |
+| AC11 | The "What to do" box has even vertical padding, so descenders are not tight against the bottom border (visual check, screenshot in the report). |
