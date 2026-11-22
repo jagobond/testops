@@ -1,4 +1,24 @@
-"""Level fitness v0.9 - one claim per assertion, in words a reader can act on.
+"""Level fitness v0.10 - one claim per assertion, in words a reader can act on.
+
+v0.10 is TESTOPS-12: four readability defects, recorded by reviewers, and not one verdict moves.
+
+  * one verification pass carries one label. The label answers "what settles it", so the suite
+    answers it, not the assertion's subject: an api suite's store claim and response claim now both
+    read "settled by the response the server sends". What the assertion is *about* moved into the
+    statement ("The assertion is about the data as stored: ..."), which is where a reader can use
+    it. Eleven scenarios used to show two or three wordings for one run answering one way; two
+    still do, and each says why on the page (a claim naming nothing that could settle it, or one
+    only a browser can work out);
+  * restraint recognises a judgement by meaning, not by be-verb + adjective. "That number comes out
+    right", "the report checks out" and "it verifies the count" are judgements with no comparison,
+    and they now stay `unplaced` for the same reason "is correct" does;
+  * a compound assertion is not unplaced by its meta half. "The stored hash is correct and the
+    response returns 200" is placed by the half that says what settles it;
+  * statements do not open "This test" on every claim and do not repeat their own subject inside one
+    statement. The opener follows what the assertion is about, and the second sentence - the one
+    that says what settles it - has its own subject.
+
+Level fitness v0.9 - one claim per assertion, in words a reader can act on.
 
 v0.9 records what the claim could be checked against, and what the run could not see. Every claim
 carries, in ``detail["assessment"]``, the verdict the source registry reached for the capabilities
@@ -112,7 +132,7 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.9.0"
+version = "0.10.0"
 uses_model = False
 
 # What this analyser's verdict rests on, and what it would like to check itself against but does
@@ -144,17 +164,41 @@ STORE = re.compile(r"\b(bytes?|byte-identical|persist(s|ed)?|stored|stores?|data
                    r"hash|fingerprint|file|admits?|admitted|excludes?|excluded|commits?|transaction|"
                    r"records?|recorded|tables?)\b", re.I)
 
-# A claim that asserts a *meta* property - "that count is correct", "the report is accurate" -
-# judges something instead of saying what settles the judgement. The nouns such a claim leans on
-# ("count", "report", "result", "store", "data") appear in almost any sentence, so no noun in it
-# can place the claim. Only an explicit comparison makes it checkable, because a comparison is
-# something a test can actually run. This is restraint, not coverage: a claim checked only in name
-# is worse than an honest `unplaced`, because a reader trusts it.
-META_PROPERTY = re.compile(r"\b(is|are|was|were|stays?|remains?|seems?|appears?)\s+"
-                           r"(?:not\s+|only\s+|still\s+|also\s+)?(correct|accurate|right|wrong)\b", re.I)
+# A claim that asserts a *meta* property - "that count is correct", "the report is accurate",
+# "that number comes out right", "the report checks out" - judges something instead of saying what
+# settles the judgement. The nouns such a claim leans on ("count", "report", "result", "store",
+# "data") appear in almost any sentence, so no noun in it can place the claim. Only an explicit
+# comparison makes it checkable, because a comparison is something a test can actually run. This is
+# restraint, not coverage: a claim checked only in name is worse than an honest `unplaced`, because
+# a reader trusts it.
+#
+# The judgement is recognised by what the words mean, not by one verb: "is correct" was the only
+# shape TESTOPS-11 caught, and "that number comes out right" - a judgement with the same meaning and
+# a different verb - walked straight past it (TESTOPS-12, AC3).
+META_PROPERTY = re.compile(
+    # A judgement adjective after any verb that ends in a verdict: is/comes out/turns out/stays.
+    r"(?:\b(?:is|are|was|were|stays?|remains?|seems?|appears?|looks?|comes? out|turns? out|"
+    r"ends? up|works? out)\b"
+    r"\s+(?:not\s+|only\s+|still\s+|also\s+|all\s+|just\s+|quite\s+)?"
+    r"(?:correct|accurate|right|wrong|as expected|as it should(?: be)?|in order)\b"
+    # A judgement verb with no adjective at all: "the report checks out", "the check holds up".
+    r"|\b(?:checks?|holds?|passes?)\s+(?:out|up)\b"
+    # "it verifies the count" - the judgement is the verb, and the object is a generic noun that
+    # appears in almost any sentence.
+    r"|\b(?:verif(?:y|ies|ied)|validates?|validated|confirm(?:s|ed)?)\s+"
+    r"(?:that\s+)?(?:the\s+|this\s+|its\s+|a\s+)?"
+    r"(?:count|counts|number|numbers|total|report|reports|result|results|data|store|output|"
+    r"summary|figure|figures)\b)",
+    re.I)
 COMPARISON = re.compile(r"\b(matches?|matched|matching|equals?|identical to|the same as|"
                         r"agrees? with|compares?|compared (with|against)|reconcil\w*|"
                         r"differs? from|as many as|consistent with)\b", re.I)
+
+# A compound assertion can carry a checkable claim beside a meta one: "the stored hash is correct
+# and the response returns 200". The meta half says nothing about what settles the claim, but it
+# must not unplace the sibling that does say (TESTOPS-12, AC2). Split on the words that join two
+# assertions, never on a comma alone - a list inside one assertion is not two assertions.
+_CLAUSE_SPLIT = re.compile(r"\s+(?:and|but|while|yet)\s+|;\s*")
 
 # The one reason an assertion stays unplaced after its instrument is known: the words made a
 # judgement and never said what the judgement is against, so no instrument could settle it.
@@ -206,9 +250,31 @@ _SUBJECTLESS = re.compile(r"^(says|shows|records|reports|names|lists|contains|ho
                           r"returns|exits|reads|writes|includes|carries)\b", re.I)
 
 
-def _assertion_phrase(clause: str) -> str:
-    """The clause as the object of "This test asserts ...", keeping the sentence grammatical."""
-    return f'the step "{clause}"' if _SUBJECTLESS.match(clause) else f"that {clause}"
+# What the assertion is about, keyed by interaction. This is the statement's opening, and it is
+# what varies between claims: "This test asserts that ..." on all ninety-four opened every claim
+# with the same four words, and the subject then repeated inside the same statement ("This test ...
+# This test ..."), which reads as a stutter rather than a sentence (TESTOPS-12, AC4). The opener
+# says what the assertion is about; the second sentence says what settles it, which is the label's
+# question and never the opener's.
+_OPENER = {
+    "I1": "The assertion is about the data as stored",
+    "I2": "The assertion is about the response itself",
+    "KP": "The assertion is about the page as served",
+    "I3": "The assertion is about what a person sees",
+    "I4": "The assertion is about what only a browser works out",
+}
+
+
+def _opening(interaction: str, clause: str) -> str:
+    """The statement's first sentence: what is asserted, without a repeated subject.
+
+    A step may continue the sentence before it ("And says the approval no longer covers the text"),
+    so it can arrive with no subject of its own. It is quoted as the step's words rather than
+    forced into "the assertion is about ...: says ...", which is not English.
+    """
+    if _SUBJECTLESS.match(clause):
+        return f'The step reads "{clause}"'
+    return f"{_OPENER.get(interaction, 'The assertion')}: {clause}"
 
 
 def _meta_without_comparison(text: str) -> bool:
@@ -240,9 +306,25 @@ def classify_claims(text: str, context: str = "") -> list[tuple[str, str]]:
     about a page's content, with no person acting, is the page as served (``KP``) rather than data
     reaching a presentation (``I3``).
     """
-    out: list[tuple[str, str]] = []
     if _meta_without_comparison(text):
+        # A compound sentence can carry a checkable claim beside the meta half. The meta half
+        # cannot place anything, but it must not unplace a sibling that can be placed (AC2): the
+        # claim a reader is asked to trust is the checkable one, and "I cannot place half of this"
+        # is not "nothing here is placeable".
+        siblings = [part.strip() for part in _CLAUSE_SPLIT.split(text)
+                    if part.strip() and not _meta_without_comparison(part)]
+        placed = _place(" and ".join(siblings)) if siblings else []
+        if placed:
+            return [(code, f"the sentence also judges something correct without saying what it is "
+                           f"compared with, so that half places nothing; {why}")
+                    for code, why in placed]
         return [("U", WHY_META)]
+    return _place(text)
+
+
+def _place(text: str) -> list[tuple[str, str]]:
+    """Where an assertion that has already passed restraint belongs, from its own words."""
+    out: list[tuple[str, str]] = []
     markup, access = bool(MARKUP.search(text)), bool(ACCESSIBILITY.search(text))
     if markup:
         out.append(("KP", "the words name the page as served, which the response body settles"))
@@ -361,20 +443,31 @@ def _reads(instrument: str) -> str:
 def _label(interaction: str, instrument: str) -> str:
     """The reader's phrase for what settles this claim, in the suite it actually ran in.
 
-    One table feeds both this and the statement, so a label cannot name one instrument while the
-    statement names another. A suite with no server behind it (engine, storage) gives its own
-    answer; telling a reader that "the response the server sends" settles a claim in a suite with
-    no server is the contradiction that made one verification pass read as three stories.
+    The label answers one question - what settles it - and the suite gives one answer, so a
+    verification pass that runs one suite carries one label (TESTOPS-12, AC1). What the assertion
+    is *about* (the stored data, the response, the page) is the statement's job, not the label's:
+    TESTOPS-11 gave an api suite's store claim a different label from its response claim, and a
+    reader then met two or three wordings for one run answering one way. The distinction was real;
+    it belonged in the statement, which now names both what the assertion is about and what
+    settles it.
+
+    A suite with no server behind it (engine, storage) gives its own answer, because telling a
+    reader that "the response the server sends" settles a claim in a suite with no server is a
+    contradiction. In a browser suite the interaction still decides: a claim the page as served
+    settles is the finding (`review`), and a claim only a browser can work out needs one.
     """
     if interaction in NEEDS_BROWSER or interaction == "U":
         return INTERACTION_LABEL[interaction]
-    if interaction in ("I1", "I2") and instrument == "engine":
+    if instrument == "engine":
         return "settled by the engine's own answer about the stored data"
-    if interaction in ("I1", "I2") and instrument == "storage":
+    if instrument == "storage":
         return "settled by the data as stored"
-    if interaction == "I1" and instrument in ("api", "controller"):
-        return "settled by the data as stored, read through the response the server sends"
-    return INTERACTION_LABEL[interaction]
+    if instrument == "controller":
+        return "settled by the answer the application returns"
+    if instrument in ("ui", "unknown"):
+        return INTERACTION_LABEL[interaction]
+    # api: every answer this suite can give arrives in the response the server sends.
+    return INTERACTION_LABEL["I2"]
 
 
 def _settles(interaction: str) -> str:
@@ -383,31 +476,52 @@ def _settles(interaction: str) -> str:
     return phrase[0].upper() + phrase[1:]
 
 
+def _second(interaction: str, instrument: str) -> str:
+    """The sentence after the opening: what settles it, as the run actually reads it.
+
+    Built from the same table as the label, so the two cannot name different instruments. Where an
+    api suite settles a claim about stored data, the sentence says how the answer arrives rather
+    than leaving a reader to wonder how a store can be read without opening it.
+    """
+    if interaction == "I1" and instrument in ("api", "controller"):
+        return (f"The run {_reads(instrument)}, and that answer says what is stored, so the "
+                f"assertion is checked.")
+    if interaction == "KP" and instrument in ("api", "controller"):
+        return (f"The run {_reads(instrument)}, and that page arrives in the response, so the "
+                f"assertion is checked.")
+    if interaction == "I2" and instrument in ("api", "controller"):
+        return (f"The run {_reads(instrument)}, which is exactly the answer it asks about, so the "
+                f"assertion is checked.")
+    if instrument == "engine":
+        return (f"The run {_reads(instrument)}, whose own answer about the stored data settles it, "
+                f"so the assertion is checked.")
+    return f"The run {_reads(instrument)}, which settles it, so the assertion is checked."
+
+
 def _statement(interaction: str, clause: str, verdict: str, instrument: str,
                why: str = "") -> str:
     """What is asserted, what establishing it needs, and what the test actually did."""
-    is_asserted = _assertion_phrase(clause)
+    opening = _opening(interaction, clause)
     if verdict == "gap":
-        return (f"This test asserts {is_asserted}. Only a browser works that out, and this test "
+        return (f"{opening}. Nothing short of a browser can decide it, and the run "
                 f"{_reads(instrument)} instead, so nothing checks it.")
     if verdict == "review":
-        return (f"This test asserts {is_asserted}. {_settles(interaction)} settles that, but this "
-                f"test drives a browser, so it pays for a browser that decides nothing extra.")
+        return (f"{opening}. {_settles(interaction)} settles it, yet the run drives a browser, so it "
+                f"pays for a browser that decides nothing extra.")
     if verdict == "unplaced":
         if why == WHY_META:
-            return (f"This step says \"{clause}\", which calls it correct without saying what it is "
-                    f"compared with, so nothing can be said about whether it is checked.")
+            return (f'The step reads "{clause}". Those words judge something right without saying '
+                    f"what it is compared with, so nothing can be said about whether it is checked.")
         if interaction == "U":
-            return (f"This step says \"{clause}\", which does not name data, a response, a page or "
-                    f"anything a person sees, so nothing can be said about whether it is checked.")
-        return (f"This test asserts {is_asserted}, but none of its steps could be tied to a layer of "
-                f"the system, so nothing can be said about whether it is checked.")
+            return (f'The step reads "{clause}". Its words name no data, response, page or anything '
+                    f"a person sees, so nothing can be said about whether it is checked.")
+        return (f"{opening}. None of its steps could be tied to a layer of the system, so nothing "
+                f"can be said about whether it is checked.")
     # distinct
     if interaction in NEEDS_BROWSER:
-        return (f"This test asserts {is_asserted}. It drives a browser, which is what works that out, "
-                f"so the assertion is checked.")
-    return (f"This test asserts {is_asserted}. This test {_reads(instrument)}, which settles that, "
-            f"so the assertion is checked.")
+        return (f"{opening}. The run drives a browser, which is what decides it, so the assertion "
+                f"is checked.")
+    return f"{opening}. {_second(interaction, instrument)}"
 
 
 def _proposed_action(interaction: str, clause: str, verdict: str, why: str = "") -> str:

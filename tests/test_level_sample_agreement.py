@@ -100,8 +100,7 @@ def test_the_newly_classified_claims_keep_reader_readable_text():
         spoken = row["assertion"].lstrip()
         spoken = spoken[:1].lower() + spoken[1:]
         assert spoken in claim.detail["proposed_action"], claim.detail["proposed_action"]
-        assert "asserts that" in claim.statement or "This step says" in claim.statement, \
-            claim.statement
+        assert claim.statement.startswith(("The assertion", 'The step reads')), claim.statement
 
 
 def test_the_sample_analysis_is_deterministic():
@@ -123,4 +122,4 @@ def test_a_step_with_no_subject_still_reads_as_english():
                       "assertion": "says the approval no longer covers the text",
                       "binding_layer": "api", "baseline_verdict": "unplaced"})
     assert "asserts that says" not in claim.statement
-    assert 'asserts the step "says the approval no longer covers the text"' in claim.statement
+    assert 'The step reads "says the approval no longer covers the text"' in claim.statement

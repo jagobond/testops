@@ -15,14 +15,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from testops import rebuild  # noqa: E402
+from testops import queries, rebuild  # noqa: E402
 from testops.store import db  # noqa: E402
+
+CODE = re.compile(r"\b(I[1-4]|KP)\b")
 
 # TESTOPS-11's corpus-level criteria, asserted here rather than in a fixture because the point of
 # the ticket is what the analyser does to the real 94 claims. The meta claim is the one TESTOPS-10
@@ -34,9 +37,42 @@ MAX_UNPLACED = 3
 FINDINGS = {"gap": 1, "review": 2}
 
 
+def _passes(claims) -> tuple[dict[str, list], int]:
+    """Every scenario's labels, and how many scenarios carry more than one (TESTOPS-12, AC1)."""
+    by_scenario: dict[str, list[tuple[str, str]]] = {}
+    for claim in claims:
+        by_scenario.setdefault(claim.subject_ref, []).append(
+            (claim.detail.get("interaction_label"), claim.detail.get("interaction_code")))
+    return by_scenario, sum(1 for rows in by_scenario.values()
+                            if len({label for label, _ in rows if label}) > 1)
+
+
 def accept(claims) -> list[str]:
     """Return the corpus-level problems with this run, in the ticket's terms."""
     problems: list[str] = []
+    by_scenario, multi = _passes(claims)
+    for ref, rows in by_scenario.items():
+        labels = {label for label, _ in rows if label}
+        note = queries.pass_note_from_rows(rows)
+        if len(labels) > 1:
+            # Two labels in one pass are allowed only with a reason a reader can see on the page.
+            if not note:
+                problems.append(f"{ref} carries {len(labels)} labels and says nothing about why")
+                continue
+            unnamed = [label for label in labels if f'"{label}"' not in note]
+            if unnamed:
+                problems.append(f"{ref} explains its labels without naming {unnamed!r}")
+            if CODE.search(note):
+                problems.append(f"{ref}'s explanation carries a debugging code: {note!r}")
+        elif note:
+            problems.append(f"{ref} carries one label and still explains a second")
+
+    for claim in claims:
+        statement = claim.statement
+        if statement.startswith("This test"):
+            problems.append(f"a statement still opens \"This test\": {statement!r}")
+        if statement.count("This test") > 1:
+            problems.append(f"a statement repeats its own subject: {statement!r}")
     if len(claims) != CORPUS_CLAIMS:
         problems.append(f"the snapshot holds {len(claims)} claims, not {CORPUS_CLAIMS}; "
                         f"the numbers below are not the ticket's numbers")
@@ -107,10 +143,13 @@ def main(argv=None) -> int:
             if problems:
                 failed = 1
             else:
+                by_scenario, multi = _passes(claims)
                 print(f"acceptance: {len(claims)} claims, "
                       f"{counts.get('unplaced', 0)} unplaced (max {MAX_UNPLACED}), "
                       f"{counts.get('gap', 0)} gap / {counts.get('review', 0)} review, "
-                      f"{META_CLAIM!r} unplaced - PASS")
+                      f"{META_CLAIM!r} unplaced, "
+                      f"{len(by_scenario)} scenarios and {multi} of them explaining more than one "
+                      f"label - PASS")
 
         if args.baseline_run:
             before = {(row["subject_ref"], row["assertion_line"]):

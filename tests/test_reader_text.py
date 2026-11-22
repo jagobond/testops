@@ -43,7 +43,8 @@ def test_a_code_in_the_step_text_is_not_copied_into_the_statement():
         assert not CODE.search(text), f"{field} leaked a code from the step: {text!r}"
 
     gap = next(claim for claim in claims if claim.verdict == "gap")
-    assert "asserts that the claim is accessible in the browser" in gap.statement
+    assert "The assertion is about what only a browser works out" in gap.statement
+    assert "the claim is accessible in the browser" in gap.statement
     # The verbatim step still holds the code - it is evidence, not prose.
     assert gap.detail["assertion_text"] == "the I4 claim is accessible in the browser"
     assert gap.detail["interaction_code"] == "I4"

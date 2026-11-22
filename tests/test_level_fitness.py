@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import socket
 
+import level_fixtures as fixtures
 from testops.analysers import level_fitness
 from testops.analysers.base import Claim
 from testops.extract import gherkin, stepbindings
@@ -62,7 +63,7 @@ def test_browser_claim_asserted_over_http_is_a_gap():
     assert claim.verdict == "gap"
     assert claim.detail["uses_browser"] is False
     assert claim.detail["needs_browser"] is True
-    assert "Only a browser works that out" in claim.statement
+    assert "Nothing short of a browser can decide it" in claim.statement
     assert [evidence.uri for evidence in claim.evidence] == [
         f"github:fixture/fixture@deadbeef:{FEATURE_PATH}"]
 
@@ -152,6 +153,86 @@ def test_one_verification_pass_carries_one_label():
         assert level_fitness._reads("engine") in claim.statement, claim.statement
 
 
+# --- TESTOPS-12: restraint by meaning, compound claims, and prose that does not repeat itself -----
+
+def test_a_number_that_comes_out_right_is_a_judgement_with_no_comparison():
+    """AC3: the ticket's example. The verb changed; the claim still says nothing checkable."""
+    text = "that number comes out right"
+    claim = _scenario_claim("features/approval_queue.feature",
+                            "The audit counts what rests on a batch decision", text,
+                            layer="api")[text]
+    assert claim.verdict == "unplaced"
+    assert claim.detail["interaction_code"] == "U"
+    assert claim.detail["established_by"] == level_fitness.WHY_META
+
+
+def test_a_report_that_checks_out_is_a_judgement_with_no_comparison():
+    """The same meaning in another shape: a judgement verb and no comparison."""
+    for text in ("the report checks out", "it verifies the count", "the result looks accurate"):
+        claim = _scenario_claim("features/approval_queue.feature",
+                                "The audit counts what rests on a batch decision", text,
+                                layer="api")[text]
+        assert claim.verdict == "unplaced", (text, claim.statement)
+        assert claim.detail["interaction_code"] == "U", text
+
+
+def test_a_compound_assertion_is_not_unplaced_by_its_meta_half():
+    """AC2: "the stored hash is correct and the response returns 200" is placed by its checkable half."""
+    text = "the stored hash is correct and the response returns 200"
+    claim = _scenario_claim("features/approval_queue.feature",
+                            "The audit counts what rests on a batch decision", text,
+                            layer="api")[text]
+    assert claim.verdict == "distinct"
+    assert claim.detail["interaction_code"] == "I2"
+    assert "the sentence also judges something correct" in claim.detail["established_by"]
+
+
+def test_a_compound_assertion_with_nothing_checkable_stays_unplaced():
+    """Restraint is not defeated by the split: a compound of two judgements still says nothing."""
+    text = "that count is correct and the report looks right"
+    claim = _scenario_claim("features/approval_queue.feature",
+                            "The audit counts what rests on a batch decision", text,
+                            layer="api")[text]
+    assert claim.verdict == "unplaced"
+    assert claim.detail["interaction_code"] == "U"
+
+
+def test_no_statement_opens_with_this_test_or_repeats_its_subject():
+    """AC4: the opener follows what the assertion is about, and is used once per statement."""
+    claims = fixtures.analyse_fact_sheet()
+    assert claims
+    for claim in claims:
+        assert not claim.statement.startswith("This test"), claim.statement
+        assert claim.statement.count("This test") <= 1, claim.statement
+        first, _, second = claim.statement.partition(". ")
+        assert first and second, claim.statement
+        # The opening subject never leads the settling sentence as well ("The assertion ... The
+        # assertion ..." is the stutter this ticket removed).
+        subject = " ".join(first.split()[:2])
+        assert not second.startswith(subject + " "), claim.statement
+    openers = {claim.statement.split(":")[0] for claim in claims}
+    assert len(openers) > 1, "every claim in the fixture opened the same way"
+
+
+def test_statements_vary_their_opening_across_a_corpus_shaped_suite():
+    """AC4: three assertions about three different things must not open identically."""
+    claims = fixtures.analyse_fact_sheet()
+    openness = [claim.statement.split(":")[0] for claim in claims]
+    assert len(set(openness)) == len(openness), openness
+
+
+def test_one_verification_pass_carries_one_label_in_an_api_suite():
+    """AC1: an api suite answers in one way, so a store claim and a response claim share a label."""
+    claims = _scenario_claim("features/approval_record.feature",
+                             "The two rules do not satisfy each other",
+                             "the Tier 1 fact is refused for the missing approver",
+                             "the Tier 2 fact is admitted", layer="api")
+    labels = {claim.detail["interaction_label"] for claim in claims.values()}
+    assert labels == {"settled by the response the server sends"}, labels
+    codes = {claim.detail["interaction_code"] for claim in claims.values()}
+    assert codes == {"I1", "I2"}, "the codes still record what each assertion is about"
+
+
 def test_a_review_statement_names_the_instrument_that_settles_it():
     """AC6: a page claim read through a browser is settled by the page, not by the response."""
     text = "every rendered fact sits in an element carrying a data-fact-id"
@@ -159,5 +240,5 @@ def test_a_review_statement_names_the_instrument_that_settles_it():
                             "Every rendered fact is anchored", text, layer="ui")[text]
     assert claim.verdict == "review"
     assert claim.detail["interaction_label"] == "settled by the page the server sends"
-    assert "The page the server sends settles that" in claim.statement
-    assert "The response the server sends settles that" not in claim.statement
+    assert "The page the server sends settles it" in claim.statement
+    assert "The response the server sends settles it" not in claim.statement

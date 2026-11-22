@@ -122,7 +122,70 @@ def claim_read(conn, claim_id: int) -> dict | None:
     project = _project_of_run(conn, row["run_id"])
     claim = claim_view(row, repo=_repo_for_coordinates(conn, project, row["assertion_commit"],
                                                        row["assertion_path"]))
-    return _attach_sources(conn, _attach_evidence(conn, claim))
+    return _attach_sources(conn, _attach_pass(conn, _attach_evidence(conn, claim)))
+
+
+# What each interaction asks of the run, in the words a reader needs when one verification pass
+# shows more than one label. The label answers "what settles it"; where two labels appear in one
+# scenario, the difference is what the assertions *ask*, and the page has to say so or the pass
+# reads as two runs disagreeing (TESTOPS-12, AC1).
+_ASKS = {
+    "I1": "one is about a guarantee on the data as stored",
+    "I2": "one is about the response itself",
+    "KP": "one is about the page the response carries",
+    "I3": "one is about what a person sees while acting",
+    "I4": "one is about what only a browser works out",
+    "U": "one names nothing that could settle it",
+}
+
+
+def pass_note_from_rows(rows: list[tuple[str | None, str | None]]) -> str | None:
+    """Why one scenario carries more than one label, or ``None`` when it carries one.
+
+    Produced from the stored rows, so the page can explain the corpus it is reading rather than a
+    live source. Two labels are honest - a pass can hold a claim nothing settles beside a claim a
+    browser settles - but a reader who sees two answers and no reason can only conclude the run was
+    two runs. The note names the labels and says what each assertion asks.
+
+    The unit is the scenario, not the Gherkin ``Then``..``And`` pass: a claim row records its line
+    but not the keyword, so the store cannot tell where one pass ends and the next begins. Saying
+    "this scenario" is a fact the rows hold; saying "this pass" would be a guess about rows that
+    were never kept.
+    """
+    counts: dict[str, int] = {}
+    codes: dict[str, str] = {}
+    for label, code in rows:
+        if not label:
+            continue
+        counts[label] = counts.get(label, 0) + 1
+        codes.setdefault(label, code or "")
+    if len(counts) < 2:
+        return None
+    parts = [f'"{label}" for {_assertions(n)}' for label, n in counts.items()]
+    asks = "; ".join(_ASKS.get(codes[label], f"one is about {label}") for label in counts)
+    return (f"This scenario carries {len(counts)} answers to one run: "
+            + ", and ".join(parts)
+            + f". The run is one - {asks} - so the answers differ in what the assertions ask, not "
+              f"in which instrument read them.")
+
+
+def _assertions(n: int) -> str:
+    return f"{n} assertion" if n == 1 else f"{n} assertions"
+
+
+def _attach_pass(conn, claim: dict) -> dict:
+    """Attach the explanation for a pass whose claims do not share one label.
+
+    Read from the claim's own run and scenario: another run's claims say nothing about this pass,
+    and a live re-analysis at read time is exactly what the store exists to make unnecessary.
+    """
+    rows = conn.execute(
+        "SELECT interaction_label, interaction_code FROM claim"
+        " WHERE run_id = ? AND subject_ref = ? ORDER BY assertion_line, id",
+        (claim["run_id"], claim["subject"])).fetchall()
+    claim["pass_note"] = pass_note_from_rows(
+        [(row["interaction_label"], row["interaction_code"]) for row in rows])
+    return claim
 
 
 def _attach_evidence(conn, claim: dict) -> dict:
@@ -131,10 +194,30 @@ def _attach_evidence(conn, claim: dict) -> dict:
     The two are one read: ``[]`` evidence on a run that recorded nothing means "nobody was looking",
     and on a run that recorded plenty it means "we looked, none of it was here". A read model that
     carried only the list would let a page collapse those two into one sentence again.
+
+    ``artefacts_recorded`` travels with them because it is the one thing the store knows beyond the
+    count: whether anything was collected at all. It is reported as a count, never as a reason -
+    a zero observation count cannot prove *why* no observation exists (TESTOPS-12, AC-b).
     """
     claim["evidence"] = evidence_for_claim(conn, claim)
     claim["observations_recorded"] = observations_in_snapshot(conn, claim)
+    claim["artefacts_recorded"] = artefacts_in_snapshot(conn, claim)
     return claim
+
+
+def artefacts_in_snapshot(conn, claim: dict) -> int | None:
+    """How many artefact rows the claim's own snapshot holds, or ``None`` with no snapshot to count.
+
+    Two runs can both hold no observations and mean different things: one collected nothing, the
+    other collected files and extracted nothing from them. The count is the difference the store can
+    actually show.
+    """
+    run = conn.execute("SELECT snapshot_id FROM run WHERE id = ?", (claim["run_id"],)).fetchone()
+    if run is None:
+        return None
+    total = conn.execute("SELECT COUNT(*) FROM artefact WHERE snapshot_id = ?",
+                         (run["snapshot_id"],)).fetchone()[0]
+    return int(total)
 
 
 def observations_in_snapshot(conn, claim: dict) -> int | None:
@@ -275,7 +358,7 @@ def finding_rows(conn, case_id: str) -> list[dict]:
             detail = _json(inf["output"]) if inf else {}
             claim = claim_view(c, repo=_repo_for_coordinates(conn, project, c["assertion_commit"],
                                                              c["assertion_path"]))
-            claim = _attach_sources(conn, _attach_evidence(conn, claim))
+            claim = _attach_sources(conn, _attach_pass(conn, _attach_evidence(conn, claim)))
             claim.update({"used_model": bool(detail.get("model") and detail.get("model") != "none"),
                           "detail": detail})
             claims.append(claim)

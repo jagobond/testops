@@ -302,10 +302,23 @@ def section_does(c: dict) -> list[str]:
                        'of them could be read back from this store. That is a defect in the stored '
                        'evidence, not an absence of it.</p>')
         elif recorded == 0:
-            out.append('<p class="quiet">This run recorded no observations; it predates observation '
-                       'recording. Nobody was looking when this claim was made, so the source link '
-                       'above is the only evidence there is \u2014 and the emptiness here is not a '
-                       'sign the claim is clean.</p>')
+            # A zero count is a fact about this run, not about its history. "It predates observation
+            # recording" was an attribution the count cannot prove: a run that postdates recording
+            # and still wrote nothing would be described the same way (TESTOPS-12, AC-b). The page
+            # says what is known, then the one thing the store does show - whether anything was
+            # collected - as a count, never as a reason.
+            sentence = ('This run holds no observations, so the source link above is the only '
+                        'evidence there is \u2014 and the emptiness here is not a sign the claim is '
+                        'clean.')
+            collected = c.get("artefacts_recorded")
+            if isinstance(collected, int):
+                if collected:
+                    sentence += (f' Its snapshot holds {collected} '
+                                 f'artefact{"s" if collected != 1 else ""}, none of which '
+                                 f'produced an observation.')
+                else:
+                    sentence += ' Its snapshot holds no artefacts either, so nothing was collected.'
+            out.append(f'<p class="quiet">{sentence}</p>')
         elif isinstance(recorded, int):
             out.append(f'<p class="quiet">Nothing in this run bears on this claim, so the source '
                        f'link above is the only evidence there is. The run recorded {recorded} '
@@ -339,6 +352,10 @@ def section_why(c: dict) -> list[str]:
     """4. Why that does or does not establish it - statement, label and rule in the reader's words."""
     out = [f'<p>{esc(c["statement"])}</p>',
            f'<p><strong>What settles it.</strong> {esc(label_sentence(c["interaction_label"]))}</p>']
+    if c.get("pass_note"):
+        # One verification pass, more than one label: the page says why rather than leaving a reader
+        # to conclude the run told two stories (TESTOPS-12, AC1).
+        out.append(f'<p class="meta">{esc(c["pass_note"])}</p>')
     if c["established_by"]:
         rule = c["established_by"].strip().rstrip(".")
         rule = rule[0].lower() + rule[1:] if rule else rule
