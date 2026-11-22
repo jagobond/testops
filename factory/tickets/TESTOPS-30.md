@@ -2,7 +2,7 @@
 id: TESTOPS-30
 title: Two small defects the retention review found: --keep scope, and a stale case id
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-24
 ---
