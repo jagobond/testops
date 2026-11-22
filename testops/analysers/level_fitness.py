@@ -1,4 +1,21 @@
-"""Level fitness v0.8 - one claim per assertion, in words a reader can act on.
+"""Level fitness v0.9 - one claim per assertion, in words a reader can act on.
+
+v0.9 records what the claim could be checked against, and what the run could not see. Every claim
+carries, in ``detail["assessment"]``, the verdict the source registry reached for the capabilities
+this analyser needs: ``found`` (we looked, there was something), ``zero`` (we looked, there was
+nothing) or ``not_assessable`` (nobody could look, with the reason attached). The two the product
+turns on are the last two; a claim that needs a source nobody could consult is not a zero and must
+never be rendered as one.
+
+The analyser still never imports a collector. It declares ``NEEDS`` - the capabilities without
+which its verdict cannot stand - and ``CONSULTS`` - the capabilities it would like to check itself
+against but does not depend on. The caller asks the registry what is missing and whether the claim
+is assessable, and hands both back here to be copied onto every claim. Adding a source is therefore
+a change to the registry, never a change to this module.
+
+The level verdicts are untouched by v0.9. Recording a blind spot must not move a verdict: a claim
+can be ``distinct`` as a statement about the test and still be ``not_assessable`` as a statement
+about the sources behind it, and the two are reported separately.
 
 v0.8.1 records what each claim rests on. Every claim carries, in ``detail["support"]``, the ids of the
 step-binding observations its verdict was derived from: the binding of its own step first, then the
@@ -89,13 +106,21 @@ from __future__ import annotations
 
 import re
 
+from .. import sources
 from ..extract import stepbindings
 from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.8.1"
+version = "0.9.0"
 uses_model = False
+
+# What this analyser's verdict rests on, and what it would like to check itself against but does
+# not depend on. A source that cannot provide a needed capability makes every claim not_assessable;
+# a source that only serves the consulted set is a blind spot the claim records and still stands.
+# Adding a source never edits these - it changes the registry.
+NEEDS = frozenset({sources.TEST_CODE, sources.CODE})
+CONSULTS = frozenset({sources.REQUIREMENTS})
 
 BEHAVIOUR = re.compile(r"\b(click(s|ed)?|submit(s|ted)?|type(s|d)?|fills?|enters?|press(es)?|selects?|"
                        r"navigates?|visits?|opens? the page|interacts?|drags?|hovers?)\b", re.I)
@@ -408,7 +433,7 @@ def _proposed_action(interaction: str, clause: str, verdict: str, why: str = "")
 
 
 def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = None, *,
-            sources_missing=None, commit: str = "",
+            sources_missing=None, assessment=None, commit: str = "",
             support_index: dict[tuple[str, str, str], int] | None = None) -> list[Claim]:
     """One claim per asserting step, in deterministic order.
 
@@ -416,12 +441,18 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
     onto every claim, and a caller that passes nothing records an explicit empty list: a claim may
     say "nothing was missing", it may never imply it.
 
+    ``assessment`` is the registry's verdict for the capabilities this analyser needs (see
+    :data:`NEEDS`). It is copied onto every claim as a plain record, with the reason attached when a
+    source nobody could consult is involved. ``None`` means the caller did not record an assessment,
+    which is different from an assessment of "nothing was missing" and is stored as ``None``.
+
     ``support_index`` maps a binding's ``(path, verb, pattern)`` to the id of the observation row the
     caller recorded for it. It is how a claim learns *which rows* back it without this module ever
     touching the store. When it is omitted - or holds no row for a binding - the claim's support is
     an explicit empty list: nothing was recorded, which is the truth, not zero evidence.
     """
     missing = [] if sources_missing is None else list(sources_missing)
+    assessment_record = None if assessment is None else assessment.record()
     index = support_index or {}
     claims: list[Claim] = []
 
@@ -488,6 +519,7 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                     "instrument": instrument,
                     "established_by": why,
                     "sources_missing": list(missing),
+                    "assessment": assessment_record,
                     "proposed_action": _proposed_action(interaction, clause, verdict, why),
                     "support": support,
                     "evidence_key": evidence_key,
