@@ -88,7 +88,7 @@ def age_text(seconds: int | None) -> str:
 
 
 def _blob_files(blob_dir: Path | None = None) -> list[Path]:
-    root = Path(blob_dir or blobs.BLOB_DIR)
+    root = Path(blob_dir or blobs.blob_dir())
     if not root.exists():
         return []
     return [path for path in root.rglob("*") if path.is_file()]
@@ -187,7 +187,7 @@ def report_rows(conn, blob_dir: Path | None = None, at: dt.datetime | None = Non
     without reading the source.
     """
     sizes: dict[str, int] = {}
-    root = Path(blob_dir or blobs.BLOB_DIR)
+    root = Path(blob_dir or blobs.blob_dir())
     rows: list[dict] = []
     for row in conn.execute(_SQL):
         shas = [r[0] for r in conn.execute(
@@ -335,7 +335,7 @@ def plan(conn, keep: int, blob_dir: Path | None = None) -> dict:
         "SELECT DISTINCT blob_sha FROM artefact WHERE blob_sha IS NOT NULL"
         f" AND snapshot_id IN ({','.join('?' for _ in candidates) or 'NULL'})", tuple(candidates))}
 
-    root = Path(blob_dir or blobs.BLOB_DIR)
+    root = Path(blob_dir or blobs.blob_dir())
     removable = []
     for sha in sorted(orphan_shas - surviving_shas):
         path = root / sha[:2] / sha[2:]
@@ -403,7 +403,7 @@ def prune(conn, keep: int, yes: bool = False, blob_dir: Path | None = None) -> d
         raise
 
     removed = []
-    root = Path(blob_dir or blobs.BLOB_DIR)
+    root = Path(blob_dir or blobs.blob_dir())
     for item in decision["blobs"]:
         path = root / item["sha"][:2] / item["sha"][2:]
         try:

@@ -8,8 +8,8 @@ import argparse
 import json
 from pathlib import Path
 
-from . import analysers, cases, retention, scrub
-from .config import DB_PATH, KEYS_DIR, load_env, project
+from . import analysers, cases, retention, scrub, services
+from .config import DB_PATH, load_env
 from .store import db
 from .web.app import serve
 from .pipeline import run_duplication, run_level_fitness
@@ -17,9 +17,21 @@ from .score import level as level_score
 from .score.metrics import control_expectations, duplication_score
 
 
+def _resolved(conn, slug: str):
+    """A project slug resolved from the store, refusing an unknown one by name (AC8)."""
+    try:
+        return services.project_from_store(conn, slug)
+    except services.ConfigError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def cmd_duplicate(args) -> int:
     env = load_env()
-    p = project(args.project)
+    conn = db.connect()
+    try:
+        p = _resolved(conn, args.project)
+    finally:
+        conn.close()
     res = run_duplication(p, env["GITHUB_PAT"])
     print(f"run      {res.run_id}")
     print(f"snapshot {res.snapshot_id}")
@@ -38,7 +50,11 @@ def cmd_duplicate(args) -> int:
 
 def cmd_levels(args) -> int:
     env = load_env()
-    p = project(args.project)
+    conn = db.connect()
+    try:
+        p = _resolved(conn, args.project)
+    finally:
+        conn.close()
     res = run_level_fitness(p, env["GITHUB_PAT"])
     print(f"run      {res.run_id}")
     print(f"case     {res.case_id}")
@@ -59,6 +75,11 @@ def cmd_levels(args) -> int:
 
 def cmd_cases(args) -> int:
     conn = db.connect()
+    if args.project:
+        try:
+            services.require_project(conn, args.project)
+        except services.ConfigError as exc:
+            raise SystemExit(str(exc)) from exc
     rows = cases.list_cases(conn, args.project, args.limit)
     if not rows:
         print("no cases")
@@ -74,6 +95,11 @@ def cmd_runs(args) -> int:
 
     conn = db.connect()
     try:
+        if args.project:
+            try:
+                services.require_project(conn, args.project)
+            except services.ConfigError as exc:
+                raise SystemExit(str(exc)) from exc
         rows = queries.list_runs(conn, args.project, args.limit)
     finally:
         conn.close()

@@ -5,7 +5,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from ..config import DB_PATH
+from ..config import settings
 from . import migrate
 from .migrate import SchemaCorruptError, SchemaTooNewError  # re-exported: callers catch db.SchemaTooNewError
 
@@ -18,8 +18,11 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     ``schema.sql`` alone cannot do this: ``CREATE TABLE IF NOT EXISTS`` leaves an old ``claim`` table
     exactly as it found it, so a v1 database would keep opening while claiming to be current. The
     version check and the migration live in ``store/migrate.py`` and run before anything is read.
+
+    The default path comes from the deployment's :class:`testops.config.Settings`, read at call time
+    (AC6): a container mounts a volume and sets ``TESTOPS_DATA``, and no caller carries a host path.
     """
-    p = path or DB_PATH
+    p = path or settings().db_path
     p.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(p)
     conn.row_factory = sqlite3.Row

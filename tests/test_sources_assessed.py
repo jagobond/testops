@@ -280,7 +280,7 @@ def test_a_v2_store_migrates_to_an_honest_state_per_claim(tmp_path):
     finally:
         conn.close()
 
-    assert version == migrate.CURRENT_VERSION == 3
+    assert version == migrate.CURRENT_VERSION == 4
 
     # The run that recorded the registry was assessed, and its stored list is what it said.
     assert rows[v2_store.REGISTRY_CLAIM]["sources_assessed"] == 1

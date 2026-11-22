@@ -58,7 +58,7 @@ import re
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .. import cases, queries, sources
+from .. import cases, queries, services, sources
 from ..analysers import is_registered
 from ..extract.stepbindings import LAYER_ORDER
 from ..store import db
@@ -1216,6 +1216,45 @@ def counterpart_block(claim: dict) -> list[str]:
 def section_unchecked(c: dict) -> list[str]:
     """4. What could not be checked. Absence is a state, never a blank and never a zero.
 
+    TESTOPS-38 AC4 adds the per-service record: when the run's snapshot carries what each service
+    said about itself, those sentences follow the source sentences, naming the service and its
+    reason. A snapshot written before the model carries no such record, so its page is byte-for-byte
+    what it always was (AC2).
+    """
+    out = _section_unchecked_sources(c)
+    states = c.get("service_states")
+    if isinstance(states, list) and states:
+        out.extend(_service_state_lines(states))
+    return out
+
+
+def _service_state_lines(states: list[dict]) -> list[str]:
+    """One sentence per service the project could not fully consult, and one when all were."""
+    words = {
+        "available": "available",
+        "not_connected": "not connected",
+        "policy": "policy",
+        "absent": "absent",
+        "not_assessable": "cannot assess",
+    }
+    unconsulted = [state for state in states
+                   if isinstance(state, dict) and state.get("state") != "available"]
+    if not unconsulted:
+        return ['<p>Every service this project configures was available when this claim was '
+                'checked.</p>']
+    out = ['<p>Services this project configures, and what each could say:</p>']
+    for state in unconsulted:
+        name = state.get("name") or state.get("type") or "a service"
+        word = words.get(state.get("state") or "", state.get("state") or "unrecorded")
+        reason = (state.get("reason") or "").strip().rstrip(".")
+        out.append(f'<p>{esc(name)} \u2014 {esc(word)}: {esc(reason)}.</p>' if reason
+                   else f'<p>{esc(name)} \u2014 {esc(word)}.</p>')
+    return out
+
+
+def _section_unchecked_sources(c: dict) -> list[str]:
+    """The source-level answer: which sources were never consulted, and why.
+
     The sentence comes from the claim's recorded *state*, not from the length of a list. A claim
     whose sources were never assessed says exactly that: the empty list it may have been written
     with is a default, and a default must not render as a clean bill. A claim that was assessed and
@@ -1383,6 +1422,8 @@ def quiet_run_block(run: dict | None) -> list[str]:
         out.append(f'<p class="meta">{esc(run["assessment"]["sentence"])}</p>')
     out.append('<h2 class="section">What this run could not consult</h2>')
     out.extend(_blind_spot_lines(run))
+    if isinstance(run.get("service_states"), list):
+        out.extend(_service_state_lines(run["service_states"]))
     out.extend(could_not_read_lines(run))
     return out
 
@@ -1611,6 +1652,8 @@ def run_response(conn, run_id: str) -> tuple[bytes, int]:
                             'not a clean bill.</p>')
         body.append('<h2 class="section">What this run could not consult</h2>')
         body.extend(_blind_spot_lines(run))
+        if isinstance(run.get("service_states"), list):
+            body.extend(_service_state_lines(run["service_states"]))
         body.extend(could_not_read_lines(run))
     return page(f"TestOps · {run_id}", "".join(body)), 200
 
@@ -1855,6 +1898,136 @@ def case_page(conn, case_id: str) -> bytes:
     return case_response(conn, case_id)[0]
 
 
+# ---------------------------------------------------------------- configuration
+
+def _form(payload: dict, key: str, default: str = "") -> str:
+    return (payload.get(key) or [default])[0].strip()
+
+
+def _settings_from_form(kind: str, payload: dict) -> dict:
+    """The settings a service row may hold, from the fields a person actually typed.
+
+    Repositories, board keys, hosts and paths - never a credential. :func:`services.validate_settings`
+    is the guard, and it runs on the way in so a refused value never reaches the store.
+    """
+    if kind == "git_repo":
+        return {"repo": _form(payload, "repo")}
+    if kind == "jira_board":
+        settings = {"board": _form(payload, "board")}
+        host = _form(payload, "host")
+        if host:
+            settings["host"] = host
+        return settings
+    settings = {"org": _form(payload, "org"), "project": _form(payload, "ado_project")}
+    pipeline = _form(payload, "pipeline_id")
+    if pipeline:
+        if not pipeline.isdigit():
+            raise services.ConfigError("settings.pipeline_id must be a whole number")
+        settings["pipeline_id"] = int(pipeline)
+    return settings
+
+
+def _service_form(action: str, project: str, service: dict | None = None) -> list[str]:
+    """The add/edit form. One form for both, because they are the same configuration decision."""
+    s = service or {}
+    settings = s.get("settings") or {}
+    kind = s.get("type") or "git_repo"
+    options = "".join(
+        f'<option value="{value}"{" selected" if kind == value else ""}>{label}</option>'
+        for value, label in (("git_repo", "git repository"), ("jira_board", "Jira board"),
+                             ("ado_pipeline", "Azure DevOps pipeline")))
+    role = s.get("role") or "test"
+    roles = "".join(
+        f'<option value="{value}"{" selected" if role == value else ""}>{value}</option>'
+        for value in services.ROLES)
+    return [
+        f'<form method="post" action="{esc(action)}">',
+        f'<input type="hidden" name="project" value="{esc(project)}">',
+        f'<label>Type <select name="type">{options}</select></label> ',
+        f'<label>Role <select name="role"><option value=""{" selected" if not role else ""}>'
+        f'(none)</option>{roles}</select></label> ',
+        f'<label>Name <input name="name" value="{esc(s.get("name", ""))}" required></label><br>',
+        f'<label>Repository <input name="repo" placeholder="owner/name" '
+        f'value="{esc(settings.get("repo", ""))}"></label> ',
+        f'<label>Board key <input name="board" value="{esc(settings.get("board", ""))}"></label> ',
+        f'<label>Jira host <input name="host" value="{esc(settings.get("host", ""))}"></label><br>',
+        f'<label>ADO organisation <input name="org" value="{esc(settings.get("org", ""))}"></label> ',
+        f'<label>ADO project <input name="ado_project" '
+        f'value="{esc(settings.get("project", ""))}"></label> ',
+        f'<label>Pipeline id <input name="pipeline_id" '
+        f'value="{esc(settings.get("pipeline_id", ""))}"></label><br>',
+        '<p class="quiet">Hosts, repository coordinates, board keys and paths only. A token, '
+        'password or key is refused: secrets resolve from the environment when the connector '
+        'runs.</p>',
+        '<button type="submit">Save service</button></form>',
+    ]
+
+
+def config_error(exc: Exception) -> bytes:
+    body = ['<p class="meta"><a href="/config">\u2190 configuration</a></p>',
+            '<h1>That configuration was not saved</h1>',
+            f'<p>{esc(exc)}</p>']
+    return page("TestOps \u00b7 configuration refused", "".join(body))
+
+
+def config_page(conn) -> bytes:
+    """Projects and services, and the forms that change them (AC3).
+
+    Every change is a row written in this request and read by the next one: nothing is cached, so
+    adding a service or a whole project needs no code change and no restart. There is deliberately
+    no login - this is a local tool - but the secret refusal is here, because it protects a harm.
+    """
+    projects = services.list_projects(conn)
+    body = ['<p class="meta"><a href="/">\u2190 all cases</a> \u00b7 '
+            '<a href="/runs">all runs</a></p>',
+            '<h1>Projects and services</h1>',
+            '<p>A project is a grouping: a display name and a slug. Its services are the resources '
+            'an analysis can consult - git repositories, a Jira board, Azure DevOps pipelines. '
+            'Adding one here is configuration; runs and cases keep their project slug.</p>',
+            '<h2 class="section">Add a project</h2>',
+            '<form method="post" action="/config/projects">'
+            '<label>Slug <input name="slug" placeholder="cotw" required></label> '
+            '<label>Name <input name="name" placeholder="Children of the Old War"></label> '
+            '<button type="submit">Add project</button></form>']
+    if not projects:
+        body.append('<p class="quiet">No projects are configured in this store yet.</p>')
+    for project in projects:
+        slug = project["slug"]
+        rows = services.list_services(conn, slug)
+        body.append(f'<h2 class="section">{esc(project["name"])} '
+                    f'<span class="meta">{esc(slug)}</span></h2>')
+        if not rows:
+            body.append('<p class="quiet">This project has no services yet.</p>')
+        for service in rows:
+            state = service.last_state or "not yet consulted"
+            role = f" \u00b7 {service.role}" if service.role else ""
+            reason = f' \u2014 {esc(service.last_reason)}' if service.last_reason else ""
+            body.append('<details><summary>'
+                        f'<strong>{esc(service.name)}</strong> '
+                        f'<span class="meta">{esc(service.type)}{esc(role)} \u00b7 '
+                        f'last state: {esc(state)}{reason}</span></summary>')
+            body.extend(_service_form(f"/config/service/{service.id}", slug,
+                                      {"id": service.id, "type": service.type,
+                                       "role": service.role, "name": service.name,
+                                       "settings": service.settings}))
+            body.append(f'<form method="post" action="/config/service/{service.id}/delete">'
+                        f'<button type="submit">Remove this service</button></form></details>')
+        body.append('<h3>Add a service</h3>')
+        body.extend(_service_form("/config/services", slug))
+    return page("TestOps \u00b7 configuration", "".join(body))
+
+
+def _service_from_payload(conn, payload: dict, service_id: int | None = None):
+    kind = _form(payload, "type")
+    role = _form(payload, "role")
+    name = _form(payload, "name")
+    settings = _settings_from_form(kind, payload)
+    if service_id is None:
+        return services.add_service(conn, _form(payload, "project"), kind, role, name, settings)
+    return services.update_service(conn, service_id, kind=kind, role=role, name=name,
+                                   settings=settings)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "TestOps/0.1"
 
@@ -1884,6 +2057,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/runs":
                 self._send(runs_index(conn))
                 return
+            if path == "/config":
+                self._send(config_page(conn))
+                return
             m = re.fullmatch(r"/case/([^/]+)", path)
             if m:
                 body, code = case_response(conn, urllib.parse.unquote(m.group(1)))
@@ -1900,12 +2076,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path.rstrip("/")
+        length = int(self.headers.get("Content-Length") or 0)
+        payload = urllib.parse.parse_qs(self.rfile.read(length).decode("utf-8"))
+        if path == "/config/projects" or path == "/config/services" \
+                or re.fullmatch(r"/config/service/\d+", path) \
+                or re.fullmatch(r"/config/service/\d+/delete", path):
+            self._config_post(path, payload)
+            return
         m = re.fullmatch(r"/case/([^/]+)/state", path)
         if not m:
             self._not_found()
             return
-        length = int(self.headers.get("Content-Length") or 0)
-        payload = urllib.parse.parse_qs(self.rfile.read(length).decode("utf-8"))
         state = (payload.get("state") or [""])[0]
         note = (payload.get("note") or [""])[0]
         case_id = urllib.parse.unquote(m.group(1))
@@ -1919,6 +2100,27 @@ class Handler(BaseHTTPRequestHandler):
             conn.close()
         # Post/redirect/get: a refresh must not re-apply the decision.
         self._send(b"", 303, {"Location": f"/case/{urllib.parse.quote(case_id)}"})
+
+    def _config_post(self, path: str, payload: dict) -> None:
+        """Apply one configuration change and redirect. A refusal is a page, not a traceback."""
+        conn = db.connect()
+        try:
+            if path == "/config/projects":
+                services.add_project(conn, _form(payload, "slug"), _form(payload, "name"))
+            elif path == "/config/services":
+                _service_from_payload(conn, payload)
+            else:
+                service_id = int(re.fullmatch(r"/config/service/(\d+)(?:/delete)?", path).group(1))
+                if path.endswith("/delete"):
+                    services.remove_service(conn, service_id)
+                else:
+                    _service_from_payload(conn, payload, service_id)
+        except (services.ConfigError, ValueError, KeyError) as exc:
+            self._send(config_error(exc), 400)
+            return
+        finally:
+            conn.close()
+        self._send(b"", 303, {"Location": "/config"})
 
 
 def serve(port: int = 8787, host: str = "127.0.0.1") -> None:
