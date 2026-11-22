@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 
-from . import cases, sources
+from . import blobs, cases, sources
 from .extract import stepbindings
 from .links import GITHUB, blob_permalink, permalink, short_location
 
@@ -48,6 +49,34 @@ def _list_or_none(text: str | None, field: str):
     if not isinstance(value, list):
         raise ValueError(f"claim.{field} should hold a JSON list, found {value!r}")
     return value
+
+
+SUMMARY_CHARS = 400
+SNIPPET_CONTEXT = 2
+STEPDEF_LINES = 10
+
+
+def _first_sentence(text: str) -> str:
+    """The first sentence of ``text``, whole. A string with no sentence break is returned as is."""
+    return re.split(r"(?<=[.!?])\s+", text.strip(), maxsplit=1)[0]
+
+
+def summary_of(statement: str | None, proposed_action: str | None) -> dict:
+    """What a reader needs to decide in five seconds: the finding, and what to do about it.
+
+    Derived from ``claim.statement`` and ``claim.proposed_action`` and from nothing else, so the
+    summary cannot drift from section 4. ``action`` is ``None`` when no action was recorded - the
+    page must say that, not invent one. ``truncated`` says the summary carries the first sentence
+    and section 4 carries the rest.
+    """
+    text = (statement or "").strip()
+    truncated = False
+    if text and len(text) > SUMMARY_CHARS:
+        first = _first_sentence(text)
+        truncated = first != text
+        text = first
+    return {"statement": text, "action": (proposed_action or "").strip() or None,
+            "truncated": truncated}
 
 
 def claim_view(row, repo: str | None = None) -> dict:
@@ -91,6 +120,9 @@ def claim_view(row, repo: str | None = None) -> dict:
         "interaction_code": row["interaction_code"],
         "established_by": row["established_by"],
         "proposed_action": row["proposed_action"],
+        # The go/no-go block at the top of the page: the finding and the action, both verbatim
+        # from this row. A page that re-worded either would be a second source of truth.
+        "summary": summary_of(row["statement"], row["proposed_action"]),
     }
 
 
@@ -122,7 +154,13 @@ def claim_read(conn, claim_id: int) -> dict | None:
     project = _project_of_run(conn, row["run_id"])
     claim = claim_view(row, repo=_repo_for_coordinates(conn, project, row["assertion_commit"],
                                                        row["assertion_path"]))
-    return _attach_sources(conn, _attach_pass(conn, _attach_evidence(conn, claim)))
+    return _with_snippets(conn, claim)
+
+
+def _with_snippets(conn, claim: dict) -> dict:
+    """The one place evidence, sources and snippets are assembled, so no screen can omit them."""
+    claim = _attach_sources(conn, _attach_pass(conn, _attach_evidence(conn, claim)))
+    return _attach_snippets(conn, claim)
 
 
 # What each interaction asks of the run, in the words a reader needs when one verification pass
@@ -386,7 +424,7 @@ def finding_rows(conn, case_id: str) -> list[dict]:
             detail = _json(inf["output"]) if inf else {}
             claim = claim_view(c, repo=_repo_for_coordinates(conn, project, c["assertion_commit"],
                                                              c["assertion_path"]))
-            claim = _attach_sources(conn, _attach_pass(conn, _attach_evidence(conn, claim)))
+            claim = _with_snippets(conn, claim)
             claim.update({"used_model": bool(detail.get("model") and detail.get("model") != "none"),
                           "detail": detail})
             claims.append(claim)
@@ -615,6 +653,149 @@ def _shows(key: str, value: dict) -> str:
         # No line number here: the link beside this sentence already ends at the binding's line.
         return f"a {verb.capitalize()} step definition for \u201c{pattern}\u201d that {layer_words}"
     return f"an observation of {key}" + (f" at line {line}" if line else "")
+
+
+# ---------------------------------------------------------------- source snippets
+#
+# The Product Owner's second finding: a list of links is not evidence a reader can check without
+# leaving the tool. Both excerpts are read from the content-addressed blob store, so the page
+# renders from the store alone and the same bytes are shown today as on the day of the claim. A
+# snippet the store cannot produce says so; it never renders an empty box.
+
+# The states a snippet can be in. They are distinct because they are distinct facts: no coordinates
+# for a v1 claim, coordinates but no artefact row, an artefact whose blob was not kept, or a line the
+# stored file is too short to hold. Only one of them is "there is nothing to show".
+SNIPPET_NO_COORDINATES = "no_coordinates"
+SNIPPET_NOT_RECORDED = "not_recorded"
+SNIPPET_NOT_STORED = "not_stored"
+SNIPPET_PAST_END = "past_end"
+SNIPPET_NO_BINDING = "no_binding"
+SNIPPET_OK = "ok"
+
+
+def source_snippets(conn, claim: dict) -> dict:
+    """The two code excerpts a reader needs: the asserted step, and the body that runs it."""
+    return {"assertion": _assertion_snippet(conn, claim),
+            "step_definition": _step_definition_snippet(conn, claim)}
+
+
+def _claim_snapshot(conn, claim: dict) -> str | None:
+    row = conn.execute("SELECT snapshot_id FROM run WHERE id = ?", (claim["run_id"],)).fetchone()
+    return row["snapshot_id"] if row else None
+
+
+def _blob_lines(sha: str | None) -> list[str] | None:
+    """The stored file's lines, or ``None`` when this store does not hold the blob.
+
+    A missing blob is an absence of stored content, not an empty file: the caller renders the
+    recorded-but-not-stored sentence rather than an empty box.
+    """
+    if not sha:
+        return None
+    try:
+        return blobs.text(sha).splitlines()
+    except FileNotFoundError:
+        return None
+
+
+def _artefact_blob(conn, snapshot: str | None, uri: str) -> sqlite3.Row | None:
+    if not snapshot:
+        return None
+    return conn.execute(
+        "SELECT uri, kind, blob_sha FROM artefact WHERE snapshot_id = ? AND uri = ?",
+        (snapshot, uri)).fetchone()
+
+
+def _artefact_blob_at(conn, snapshot: str | None, commit: str | None,
+                      path: str | None) -> sqlite3.Row | None:
+    """The artefact whose commit and path are *equal* to the claim's - never a suffix match."""
+    if not (snapshot and commit and path):
+        return None
+    for row in conn.execute(
+            "SELECT uri, kind, blob_sha FROM artefact WHERE snapshot_id = ?", (snapshot,)):
+        m = GITHUB.match(row["uri"])
+        if m and m["sha"] == commit and m["path"] == path:
+            return row
+    return None
+
+
+def _assertion_snippet(conn, claim: dict) -> dict:
+    """The feature file's lines around the asserted step, with that line marked."""
+    prov = claim["provenance"]
+    path, line = prov["assertion_path"], prov["assertion_line"]
+    if claim["schema_version"] != 2 or not path or not isinstance(line, int):
+        return {"state": SNIPPET_NO_COORDINATES}
+    snapshot = _claim_snapshot(conn, claim)
+    artefact = _artefact_blob_at(conn, snapshot, prov["assertion_commit"], path)
+    if artefact is None:
+        return {"state": SNIPPET_NOT_RECORDED, "path": path, "line": line,
+                "link": claim.get("permalink")}
+    lines = _blob_lines(artefact["blob_sha"])
+    if lines is None:
+        return {"state": SNIPPET_NOT_STORED, "path": path, "line": line,
+                "link": claim.get("permalink")}
+    if line < 1 or line > len(lines):
+        return {"state": SNIPPET_PAST_END, "path": path, "line": line, "total": len(lines),
+                "link": claim.get("permalink")}
+    start = max(1, line - SNIPPET_CONTEXT)
+    end = min(len(lines), line + SNIPPET_CONTEXT)
+    return {"state": SNIPPET_OK, "path": path, "line": line, "start": start, "end": end,
+            "lines": [{"n": n, "text": lines[n - 1], "asserted": n == line}
+                      for n in range(start, end + 1)],
+            "link": claim.get("permalink")}
+
+
+def _asserted_binding(claim: dict) -> dict | None:
+    """The evidence row the analyser named as the step that is asserted, if it did."""
+    for item in claim.get("evidence") or []:
+        if item.get("asserted"):
+            return item
+    return None
+
+
+def _step_definition_snippet(conn, claim: dict) -> dict:
+    """The step definition that runs the assertion, as lines starting at its attribute."""
+    if claim["schema_version"] != 2:
+        return {"state": SNIPPET_NO_COORDINATES}
+    binding = _asserted_binding(claim)
+    if binding is None:
+        return {"state": SNIPPET_NO_BINDING}
+    uri, line = binding.get("uri"), binding.get("line")
+    m = GITHUB.match(uri or "")
+    path = m["path"] if m else (uri or "")
+    if not isinstance(line, int) or line < 1:
+        return {"state": SNIPPET_NOT_RECORDED, "path": path, "line": line,
+                "link": binding.get("link")}
+    snapshot = _claim_snapshot(conn, claim)
+    artefact = _artefact_blob(conn, snapshot, uri)
+    if artefact is None:
+        return {"state": SNIPPET_NOT_RECORDED, "path": path, "line": line,
+                "link": binding.get("link")}
+    lines = _blob_lines(artefact["blob_sha"])
+    if lines is None:
+        return {"state": SNIPPET_NOT_STORED, "path": path, "line": line,
+                "link": binding.get("link")}
+    if line > len(lines):
+        return {"state": SNIPPET_PAST_END, "path": path, "line": line, "total": len(lines),
+                "link": binding.get("link")}
+    end = min(len(lines), line + STEPDEF_LINES - 1)
+    window = lines[line - 1:end]
+    # A body ends at the blank line after it; the next attribute is the next step, not this one.
+    for offset, text in enumerate(window[1:], start=1):
+        if not text.strip():
+            window = window[:offset]
+            break
+    end = line + len(window) - 1
+    return {"state": SNIPPET_OK, "path": path, "line": line, "start": line, "end": end,
+            "lines": [{"n": n, "text": window[n - line], "asserted": n == line}
+                      for n in range(line, end + 1)],
+            "link": binding.get("link")}
+
+
+def _attach_snippets(conn, claim: dict) -> dict:
+    """Attach the source excerpts after the evidence, which names the asserting binding."""
+    claim["snippets"] = source_snippets(conn, claim)
+    return claim
 
 
 

@@ -100,6 +100,21 @@ form.decide input[type=text] { font:inherit; padding:.45rem .6rem; border:1px so
                                border-radius:5px; width:min(28rem,100%); }
 .warn { color:var(--bad); font-size:.9rem; }
 .quiet { color:var(--dim); }
+section.summary { border:1px solid var(--line); border-left:3px solid var(--accent); background:#fff;
+                  padding:.85rem 1rem; margin:1rem 0 .9rem; border-radius:6px; }
+.summary-label { margin:.15rem 0 .2rem; font-size:.78rem; letter-spacing:.06em;
+                 text-transform:uppercase; color:var(--dim); }
+.summary-finding { margin:0 0 .75rem; font-size:1.05rem; }
+.summary-action { margin:0; }
+figure.snippet { margin:.7rem 0 1rem; }
+figure.snippet figcaption { font-size:.86rem; color:var(--dim); margin-bottom:.3rem; }
+pre.snippet { margin:0; background:#f3f1ec; border:1px solid var(--line); border-radius:5px;
+              padding:.55rem .7rem; overflow-x:auto; font-size:.82rem; line-height:1.45; }
+pre.snippet code { font-family: ui-monospace, Consolas, monospace; }
+pre.snippet .sline { display:block; white-space:pre; }
+pre.snippet .ln { display:inline-block; width:2.6rem; color:var(--dim); user-select:none; }
+pre.snippet .sline.hit { background:#f6e7c8; }
+pre.snippet mark.hit { background:transparent; color:inherit; font-weight:600; }
 """
 
 
@@ -193,6 +208,96 @@ def label_sentence(label: str | None) -> str:
     return f"It {label}."
 
 
+# ---------------------------------------------------------------- the go/no-go summary
+
+def summary_block(c: dict) -> list[str]:
+    """The two sentences a reader scans to decide whether the case is worth their time.
+
+    Both are the stored row's own words, so the summary cannot drift from section 4. A claim with
+    no recorded action says exactly that: the page does not invent a next step, because an invented
+    one is a decision nobody made. This block carries no decision control.
+    """
+    summary = c.get("summary") or {}
+    out = ['<section class="summary" aria-label="Summary of this claim">',
+           '<p class="summary-label">What this is</p>']
+    if summary.get("statement"):
+        out.append(f'<p class="summary-finding">{esc(summary["statement"])}</p>')
+    else:
+        out.append('<p class="summary-finding quiet">This claim records no statement.</p>')
+    if summary.get("truncated"):
+        out.append('<p class="meta quiet">The rest of this statement is in section 4.</p>')
+    out.append('<p class="summary-label">What to do</p>')
+    if summary.get("action"):
+        out.append(f'<p class="summary-action">{esc(summary["action"])}</p>')
+    else:
+        out.append('<p class="summary-action quiet">No proposed action was recorded for this '
+                   'claim.</p>')
+    out.append("</section>")
+    return out
+
+
+# ---------------------------------------------------------------- inline source
+
+def _snippet_caption(snip: dict, label: str) -> str:
+    where = f'{esc(snip["path"])}:{snip["line"]}'
+    link = (f' \u2014 <a href="{esc(snip["link"])}">view in repository</a>'
+            if snip.get("link") else "")
+    return f'{label} <span class="code">{where}</span>{link}'
+
+
+def snippet_block(snip: dict | None, label: str) -> list[str]:
+    """One source excerpt, or the sentence that says why this store cannot show it.
+
+    The code is escaped line by line, so a feature file containing markup is text on this page and
+    never markup in it. A missing blob is an absence with a name, not an empty box.
+    """
+    if not snip:
+        return []
+    state = snip.get("state")
+    if state == queries.SNIPPET_NO_COORDINATES:
+        return []
+    if state in (queries.SNIPPET_NOT_STORED, queries.SNIPPET_NOT_RECORDED):
+        where = f'{snip["path"]}:{snip["line"]}'
+        return [f'<p class="quiet">The source was recorded but its content is not in this store: '
+                f'<span class="code">{esc(where)}</span>.</p>']
+    if state == queries.SNIPPET_PAST_END:
+        where = f'{snip["path"]}:{snip["line"]}'
+        return [f'<p class="quiet">The source was recorded at <span class="code">{esc(where)}'
+                f'</span>, but the stored file holds only {snip["total"]} lines, so there is '
+                f'nothing at that line to show.</p>']
+    if state == queries.SNIPPET_NO_BINDING:
+        return ['<p class="quiet">No step definition in this run binds the asserted step, so there '
+                'is no body to show.</p>']
+    if state != queries.SNIPPET_OK:
+        return []
+    rendered: list[str] = []
+    for ln in snip["lines"]:
+        # Built outside an f-string expression: a backslash there is a SyntaxError before 3.12,
+        # and 3.11 is an interpreter this product still serves (TESTOPS-13).
+        text = esc(ln["text"])
+        if ln["asserted"]:
+            rendered.append(f'<span class="sline hit"><span class="ln">{ln["n"]}</span>'
+                            f'<mark class="hit">{text}</mark></span>')
+        else:
+            rendered.append(f'<span class="sline"><span class="ln">{ln["n"]}</span>'
+                            f'{text}</span>')
+    code = "\n".join(rendered)
+    return [f'<figure class="snippet"><figcaption>{_snippet_caption(snip, label)}</figcaption>'
+            f'<pre class="snippet"><code>{code}</code></pre></figure>']
+
+
+def assertion_snippet(c: dict) -> list[str]:
+    """The feature file around the asserted step, above the permalink that gives it context."""
+    return snippet_block((c.get("snippets") or {}).get("assertion"),
+                         "Source, the asserted line is marked:")
+
+
+def step_definition_snippet(c: dict) -> list[str]:
+    """The step definition's body, labelled as the step that is asserted."""
+    return snippet_block((c.get("snippets") or {}).get("step_definition"),
+                         "The step definition that runs the assertion, the step that is asserted:")
+
+
 # ---------------------------------------------------------------- home screen
 
 def index(conn) -> bytes:
@@ -254,6 +359,7 @@ def section_asserted(c: dict) -> list[str]:
         tail = ("the commit this claim was read at. This run did not record which repository the "
                 "file lives in, so there is no link to open.")
     return [f'<blockquote class="assertion">\u201c{esc(assertion)}\u201d</blockquote>',
+            *assertion_snippet(c),
             f'<p class="meta">Test source: {source} at commit '
             f'<span class="code">{esc(commit)}</span> \u2014 {tail}</p>']
 
@@ -345,6 +451,9 @@ def section_does(c: dict) -> list[str]:
                 shows = f"the step that is asserted: {shows}"
             out.append(f'<li>{where} \u2014 {shows}.</li>')
         out.append("</ul>")
+    # The body that runs the asserted step, rendered from the stored blob. It belongs here: this
+    # section is "what the test actually does", and the definition is the doing.
+    out.extend(step_definition_snippet(c))
     return out
 
 
@@ -431,8 +540,11 @@ def section_action(c: dict) -> list[str]:
     return ['<p class="quiet">No proposed action was recorded for this claim.</p>']
 
 
-def claim_sections(c: dict) -> list[str]:
+def claim_sections(c: dict, *, include_summary: bool = True) -> list[str]:
     out: list[str] = []
+    if include_summary:
+        # The go/no-go block: two sentences before the argument, so a reader can stop here.
+        out.extend(summary_block(c))
     # The verdict in English before the argument: a reader deciding in one pass needs to know what
     # kind of shortfall this is before reading why. When the registry says the claim cannot be
     # assessed at all, that is the headline - a level verdict about a claim whose needed source
@@ -535,12 +647,18 @@ def case_page(conn, case_id: str) -> bytes | None:
     state_label = display_state(row["state"], len(findings))
 
     body = [f'<p class="meta"><a href="/">\u2190 all cases</a></p>',
-            f'<h1>{esc(row["project"])} \u00b7 {esc(analyser_text(row["analyser"]))}</h1>',
-            f'<p class="meta"><span class="badge'
-            f'{" hot" if STATE_LABEL.get(row["state"]) in ("Open", "Needs a fix") else ""}">'
-            f'{esc(state_label)}</span>'
-            f' \u00b7 Analysed {esc(age(row["created_at"]))}'
-            f'{" at " + esc(versions) if versions else ""}</p>']
+            f'<h1>{esc(row["project"])} \u00b7 {esc(analyser_text(row["analyser"]))}</h1>']
+    # The summary is the first content of the case: the finding and the action, before the state
+    # badge, before the verdict and before section 1. A reader can decide whether to read on before
+    # meeting any of the argument. The lead claim is the case's claim; further claims carry their
+    # own summary at the head of their own argument.
+    if claims:
+        body.extend(summary_block(claims[0]))
+    body.append(f'<p class="meta"><span class="badge'
+                f'{" hot" if STATE_LABEL.get(row["state"]) in ("Open", "Needs a fix") else ""}">'
+                f'{esc(state_label)}</span>'
+                f' \u00b7 Analysed {esc(age(row["created_at"]))}'
+                f'{" at " + esc(versions) if versions else ""}</p>')
 
     if not findings:
         superseded = conn.execute(
@@ -560,13 +678,17 @@ def case_page(conn, case_id: str) -> bytes | None:
                         'result, not an error \u2014 and not a claim that the code is clean, only '
                         'that nothing in this run fell short.</p>')
     else:
+        first = True
         for i, f in enumerate(findings, start=1):
             if len(findings) > 1:
                 body.append(f'<h2>Finding {i} of {len(findings)}</h2>')
             for j, c in enumerate(f["claims"], start=1):
                 if len(f["claims"]) > 1:
                     body.append(f'<h3>Claim {j} of {len(f["claims"])}</h3>')
-                body.extend(claim_sections(c))
+                # The page-level summary already carries the first claim; a second claim's summary
+                # belongs at the head of its own argument, not nowhere.
+                body.extend(claim_sections(c, include_summary=not first))
+                first = False
 
     body.extend(decision_form(conn, row, case_id, findings))
     body.extend(footnote(claims))
