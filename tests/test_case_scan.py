@@ -341,6 +341,63 @@ def test_plain_english_lint_over_every_claim_of_a_real_pipeline_run(tmp_path, mo
 
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
+def test_no_action_on_the_real_run_is_cut_into_a_stub():
+    """TESTOPS-27 AC4: no action is truncated below 40 characters unless the whole action was.
+
+    What is measured is the cut. The stored string is the corpus, and the cut is what the page does
+    to it, so the floor is on the part of the stored action the page keeps: a cut that leaves
+    "Move the step." or "Keep it." gives the reader half an instruction, and that is the failure
+    the ticket exists for. The 94-claim run keeps 53 to 175 characters in every case, and
+    never fewer than 40.
+
+    The page also refers to the step as "this step", because the step itself is quoted directly
+    above the action. That is a reference, not a truncation: the assertion below shows the line the
+    reader gets is the whole kept head with the step's own words swapped for the reference, so the
+    shortening is exactly the length of the step. That is why 90 of the 94 actions read "No change:
+    keep this step where it is." - 38 characters, all of them the stored head. Where the page did
+    not shorten by reference, the floor is applied to the reader's own text as well.
+
+    The run is the one the neighbouring test pins, so a re-run of the analyser cannot move it.
+    """
+    conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        run = conn.execute(
+            "SELECT run_id FROM claim WHERE analyser = 'level_fitness'"
+            " GROUP BY run_id ORDER BY COUNT(*) DESC, run_id DESC LIMIT 1").fetchone()["run_id"]
+        checked = 0
+        for row in conn.execute("SELECT id FROM claim WHERE run_id = ? ORDER BY id", (run,)):
+            claim = queries.claim_read(conn, row["id"]) or {}
+            whole = (claim.get("proposed_action") or "").strip()
+            if not whole:
+                continue
+            kept = whole.partition("; ")[0].strip()
+            visible = app.action_line(claim, app.quoted_assertion(claim))
+            where = f"{claim.get('assertion_text')!r} in run {run}"
+            assert len(whole) < 40 or len(kept) >= 40, (
+                f"the action was cut to {len(kept)} characters: kept {kept!r} out of {whole!r} "
+                f"({where})")
+            # Where the page shortened by reference, prove the reference is the only shortening:
+            # the reader's line is the whole kept head with the step's own words swapped out.
+            if "this step" in visible:
+                step = (claim.get("provenance") or {}).get("assertion_text") or ""
+                quoted = 'the step "%s"' % step
+                assert quoted in kept, (
+                    f"the page referred away a step the head does not quote: {kept!r}")
+                assert visible == kept.replace(quoted, "this step").rstrip(".") + ".", (
+                    f"the page shortened more than the step's own words: {visible!r} from {kept!r}")
+            # An action the page did not shorten by reference is held to the floor as the reader
+            # meets it, too.
+            else:
+                assert len(visible) >= 40, (
+                    f"the reader's action is {len(visible)} characters: {visible!r} ({where})")
+            checked += 1
+    finally:
+        conn.close()
+    assert checked >= 90, f"the corpus held only {checked} actions"
+
+
+@pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
 def test_the_stored_cotw_corpus_keeps_its_verdicts_and_passes_the_lint(tmp_path, monkeypatch):
     """The real 94-claim run: same verdict counts, every page through the same lint."""
     copy = tmp_path / "corpus.db"

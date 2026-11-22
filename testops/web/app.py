@@ -407,21 +407,84 @@ def _without_step(action: str, step: str | None) -> str:
     return action
 
 
-def action_line(claim: dict, step: str | None) -> str:
-    """The action as one line a reader can act on: the stored first clause, and nothing after it.
+# The rule that decides whether the clause after a semicolon is a second instruction, stated here
+# so the next person can disagree with it on evidence rather than guess (TESTOPS-27, AC1).
+#
+# A stored action is one string, and it may hold two halves: an instruction, then - after a
+# semicolon - something else. The page gives the reader the instruction. Whether the second half
+# is another instruction cannot be settled by trusting the analyser: today's tails are reasons,
+# but an action that says "Rewrite the step ... ; call the HTTP client first" carries an order
+# the cut would silently swallow, and the reader cannot detect a missing order.
+#
+#   1. A clause is a second instruction when it opens with an instruction verb - the imperative
+#      an analyser uses to tell someone to act on a step: "keep one", "move the step ...",
+#      "delete it". The reader can act on it alone, so it stays.
+#   2. A clause is a restatement - the reason for the clause before it - when it opens with a
+#      word that ties it back to that clause ("this level is the cheapest one that establishes
+#      it", "at this level nothing establishes what it asserts", "a judgement with no comparison
+#      in it cannot be checked") AND holds no instruction verb anywhere. Its subject is the
+#      sentence before it; on its own it names no one to act.
+#   3. Anything else is KEPT. The rule fails open on purpose. Dropping half an instruction is a
+#      loss a reader cannot see, and this product may not afford it; keeping an explanatory
+#      clause is untidy, and the reader can see it and skip it. The evidence to overrule the
+#      rule is a stored tail whose verb it does not recognise here.
+#
+# The two sets are closed and short because they are the analysers' own vocabulary. A new
+# instruction verb an analyser writes belongs in INSTRUCTION_VERBS when it is added there.
+INSTRUCTION_VERBS = frozenset("""
+    add bind call change check delete drop fix keep make merge move remove rename replace
+    restore rewrite run split stop swap undo update use write
+""".split())
+CONTINUATION_OPENERS = frozenset("""
+    a an the this that these those there it they them their its which who whom whose
+    at in on for with by from as because since so rather although though if when while
+    none nothing no
+""".split())
+_WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 
-    The store keeps one string with the action in its first clause and the argument's conclusion
-    in the clauses after a semicolon. The opening block already states the argument, so the tail
-    is dropped here instead of restating it (TESTOPS-26, AC3). "No change" is an action: a
-    distinct claim says plainly that nothing needs doing.
+
+def _words(text: str) -> list[str]:
+    return [w.lower() for w in _WORD.findall(text)]
+
+
+def second_half_is_instruction(tail: str) -> bool:
+    """Whether the clause after a semicolon tells the reader to do something (the rule above)."""
+    words = _words(tail)
+    if not words:
+        return False
+    if words[0] not in CONTINUATION_OPENERS:
+        return True
+    return any(word in INSTRUCTION_VERBS for word in words[1:])
+
+
+def _as_sentence(text: str) -> str:
+    """One clause with an initial capital and one full stop, so two clauses never run together."""
+    text = text.strip().strip(";").strip().rstrip(".").strip()
+    if not text:
+        return ""
+    return text[:1].upper() + text[1:] + "."
+
+
+def action_line(claim: dict, step: str | None) -> str:
+    """The action as the reader can act on it: one instruction, or two when both instruct.
+
+    The store keeps one string. The half after the first semicolon is restated only when
+    ``second_half_is_instruction`` proves it is a reason; when it is a second order it is kept,
+    rendered as its own sentence so the action never reads as a run-on (TESTOPS-27, AC1, AC3).
+    "No change" is an action: a distinct claim says plainly that nothing needs doing.
     """
     action = (claim.get("proposed_action") or "").strip()
     if not action:
         return "No proposed action was recorded for this claim."
     raw_step = (claim.get("provenance") or {}).get("assertion_text") or step
     action = _without_step(action, raw_step)
-    first = action.split("; ")[0].strip().rstrip(".")
-    return first + "."
+    head, sep, tail = action.partition("; ")
+    first = _as_sentence(head)
+    if sep and second_half_is_instruction(tail):
+        second = _as_sentence(tail)
+        if second:
+            return f"{first} {second}"
+    return first
 
 
 def wrong_sentence(claim: dict, quote: str | None) -> str:
@@ -435,7 +498,8 @@ def wrong_sentence(claim: dict, quote: str | None) -> str:
         sentence = assessment.get("sentence") or ("Nobody could look at the sources this claim "
                                                   "needs.")
         if quote:
-            return f"The test asserts {_step_quote(quote)}, but {rich_prose(_lower_first(sentence))}"
+            return (f"The test asserts the step {_step_quote(quote)}, but "
+                    f"{rich_prose(_lower_first(sentence))}")
         return rich_prose(sentence)
     if quote is None:
         recorded = (claim.get("statement") or "").strip()
@@ -450,17 +514,17 @@ def wrong_sentence(claim: dict, quote: str | None) -> str:
     does = _does_clause(claim)
     verdict = claim.get("verdict")
     if verdict == "distinct":
-        return f"The test asserts {q}, and {fact}."
+        return f"The test asserts the step {q}, and {fact}."
     if verdict == "duplicate":
-        return (f"The test asserts {q}, but another scenario in this run already asserts the same "
-                f"thing, so the project runs it twice.")
+        return (f"The test asserts the step {q}, but another scenario in this run already asserts "
+                f"the same thing, so the project runs it twice.")
     if verdict == "unplaced":
-        return f"The test asserts {q}, but {fact}."
+        return f"The test asserts the step {q}, but {fact}."
     if verdict == "review" and does is not None:
-        return f"The test asserts {q}, but {fact}, and {rich_prose(does)} to read it."
+        return f"The test asserts the step {q}, but {fact}, and {rich_prose(does)} to read it."
     if does is not None:
-        return f"The test asserts {q}, but {fact}, and {rich_prose(does)} instead."
-    return f"The test asserts {q}, but {fact}."
+        return f"The test asserts the step {q}, but {fact}, and {rich_prose(does)} instead."
+    return f"The test asserts the step {q}, but {fact}."
 
 
 def argument_block(claim: dict) -> list[str]:
