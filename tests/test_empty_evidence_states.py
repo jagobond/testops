@@ -1,7 +1,6 @@
 """TESTOPS-16: three empty-evidence states, and they must never share wording.
 
-(a) the run recorded no observations at all - nobody was looking, and the snapshot predates
-    observation recording;
+(a) the run recorded no observations at all - a count the page states, with no claim about why;
 (b) the run recorded observations, but none of them bears on this claim - we looked, nothing here;
 (c) a v1 claim, recorded before provenance was captured.
 
@@ -29,17 +28,19 @@ LINE = 17
 STATEMENT = ("This test asserts that the panel is served. Only a browser works that out, and this "
              "test only reads the responses the server sends instead, so nothing checks it.")
 
-NOTHING_RECORDED = "This run recorded no observations; it predates observation recording"
+NOTHING_RECORDED = "This run holds no observations"
 NOTHING_BEARS = "Nothing in this run bears on this claim"
 V1_WORDS = "recorded before provenance was captured"
+# TESTOPS-12 AC-b: a zero count cannot prove why the run recorded nothing, so the page must not say.
+NO_WHY = "predates observation recording"
 
 
-def _seed(tmp_path, *, schema_version=2, observations=()):
+def _seed(tmp_path, *, schema_version=2, observations=(), artefact=True):
     """A snapshot, a run, a case, one claim - and the observations the test chooses to record.
 
     ``observations`` is a list of ``(uri, key, value)``: the artefact is created for that uri, and
     the observation attached to it. An empty list writes no observation rows at all, which is the
-    'predates observation recording' store.
+    store whose run holds no observations.
     """
     conn = db.connect(tmp_path / f"empty-{schema_version}-{len(observations)}.db")
     db.upsert_snapshot(conn, SNAP, "fixture", TS, {"owner/test": COMMIT},
@@ -60,7 +61,8 @@ def _seed(tmp_path, *, schema_version=2, observations=()):
                             schema_version=schema_version, **fields)
     # The claim's own artefact exists even in the run that recorded no observations: a snapshot is
     # what was collected, and an observation is what was extracted from it.
-    db.add_artefact(conn, SNAP, f"github:owner/test@{COMMIT}:{PATH}", "feature", "0" * 40)
+    if artefact:
+        db.add_artefact(conn, SNAP, f"github:owner/test@{COMMIT}:{PATH}", "feature", "0" * 40)
     for uri, key, value in observations:
         artefact_id = db.add_artefact(conn, SNAP, uri, "feature", "0" * 40)
         db.add_observation(conn, artefact_id, "gherkin", "1.0.0", key, value)
@@ -109,6 +111,25 @@ def test_a_run_that_recorded_no_observations_says_so(tmp_path):
     assert NOTHING_RECORDED in text
     assert NOTHING_BEARS not in text
     assert V1_WORDS not in text
+    # AC-b: the count is stated; the reason for it is not invented.
+    assert NO_WHY not in text
+    assert "snapshot holds 1 artefact, none of which produced an observation" in text
+
+
+def test_a_run_that_collected_nothing_says_that_rather_than_guessing_why(tmp_path):
+    """Same zero, different store fact: nothing was collected at all. The page says so, and no more."""
+    conn, claim_id = _seed(tmp_path, artefact=False)
+    try:
+        claim = _claim(conn, claim_id)
+        text = _page(conn)
+    finally:
+        conn.close()
+
+    assert claim["observations_recorded"] == 0
+    assert claim["artefacts_recorded"] == 0
+    assert NOTHING_RECORDED in text
+    assert "snapshot holds no artefacts either, so nothing was collected" in text
+    assert NO_WHY not in text
 
 
 def test_a_run_with_artefacts_but_no_observation_rows_still_counts_as_nothing_recorded(tmp_path):
@@ -128,6 +149,7 @@ def test_a_run_with_artefacts_but_no_observation_rows_still_counts_as_nothing_re
     assert claim["observations_recorded"] == 0
     assert NOTHING_RECORDED in text
     assert NOTHING_BEARS not in text
+    assert NO_WHY not in text
 
 
 # --------------------------------------------------------------------------- (b) looked, none here
