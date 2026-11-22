@@ -154,3 +154,51 @@ thresholds and the credential-word list are byte-for-byte unchanged.
 The reported hole is closed and the floors are intact, but the fix trades it for two false positives
 on realistic values (`sk-utils/tools`, `github_pat_docs`), both traced to unqualified `sk-` and
 `github_pat_` prefix entries. A boundary/minimum-length condition on those two entries closes it.
+
+## Round 3 — reviewed 22 Nov 2026 (commit 660eee7, final round)
+
+Suite: `env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
+.venv/Scripts/python.exe -m pytest -q` → **509 passed** in 79.4s. All probes again through
+`POST /config/services` on a live server against a fresh scratch store; reasons quoted from the
+400 pages.
+
+### The two false positives are freed
+
+- `sk-utils/tools` as a `git_repo` (role `product`, field `repo`) → **200, accepted, stored**.
+- `github_pat_docs` as a `jira_board` `board`, plus `github_pat_docs.example.com` as `host` →
+  **200, accepted, stored**.
+
+### The shape conditions hold under attack
+
+| Probe | Should be | Is |
+| --- | --- | --- |
+| `sk-` + 48 alnum containing `_` | refused | 400, prefix `sk-` |
+| `sk-abcdefghij` (10-char body) | accepted | 200, stored |
+| `sk-` + 32 digits | refused | 400, prefix `sk-` |
+| `github_pat_` + 22 containing `-` | accepted | 200, stored |
+| `github_pat_ABCDEFGHIJKLMNOPQRSTUV` (exactly 22 base62) | refused | 400, prefix `github_pat_` |
+
+All five agree with the code: `_is_sk_key` demands a 32+ unbroken `[A-Za-z0-9_-]` body that is not a
+word chain (so 10 chars passes, 48 alnum/digits refuses); `_GITHUB_PAT` demands 22+ base62 with only
+the optional `_`-split suffix (so a hyphen fails the match and is accepted, exactly 22 base62
+refuses). Verdicts on all five are correct.
+
+### Every previously-refused secret is still refused
+
+Posted to a `jira_board` `board`, each → 400 naming its prefix, no value echoed in the page (checked
+programmatically): `sk-`+48 base62, `github_pat_`+22 base62, `AKIA`+16, `ASIA`+16, `ghp_`+36,
+`xoxb-`+12, `glpat-`+20, `sk-`+32, `eyJ`+20, `-----BEGIN RSA PRIVATE KEY-----`.
+
+### Round-1's eleven accepted values, one final time
+
+All **200, stored**: `owner/repo` (git_repo), `https://jira.example.com` (jira_board host+board),
+`https://dev.azure.com/org/project/_build?definitionId=2` (ado_pipeline), `C:/work/repos/cotw`
+(git_repo), `PROJ` (ado_pipeline, with `org`), `COTW-PROJ-KEY-0123456789-ABCDEFG`, the UUID, `main`,
+`refs/heads/feature/x`, `pipeline #2`, `thunderstorm`.
+
+### Verdict — PASS
+
+The round-2 false positives are freed by body-shape conditions that the attack probes could not
+break, every secret shape from rounds 1–2 is still refused with no value echoed, and the floors are
+untouched. The heuristic is now trustworthy: it errs on neither side across three rounds of attack,
+and free-text settings can keep it.
