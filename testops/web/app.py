@@ -76,6 +76,9 @@ STATE_LABEL = {"open": "Open", "needs_fix": "Needs a fix", "resolved": "Resolved
 # A run that raised nothing is a fact about the code, not a decision about it. It gets its own
 # label so no screen can borrow the word a person's decision owns (TESTOPS-22).
 NO_FINDINGS_LABEL = "No findings"
+# A run whose every case carries a recorded decision is a real case, closed - never a quiet run
+# (TESTOPS-34). The label says what is true of the run without borrowing a single case's state.
+ALL_DECIDED_LABEL = "All decided"
 
 # What each instrument does, as a verb phrase. ``ui`` and ``api`` are the ticket's own words.
 INSTRUMENT_WORD = {
@@ -923,15 +926,19 @@ def verdict_badge(row: dict) -> str:
 def index(conn) -> bytes:
     fr = queries.freshness(conn)
     rows, older = queries.latest_per_analyser(conn)
-    body = ["<h1>TestOps</h1>", freshness_line(fr)]
+    body = ["<h1>TestOps</h1>",
+            '<p class="meta"><a href="/runs">all runs</a></p>',
+            freshness_line(fr)]
     if not rows:
         if fr.get("ever_run"):
             versions = versions_text(fr.get("versions"))
+            run_link = (f' <a href="/run/{esc(fr["run"])}">Open the run</a>' if fr.get("run") else "")
             body.append(
                 f'<p>No cases are open. The newest analysis ran '
                 f'<strong>{esc(age(fr.get("finished_at")))}</strong>'
                 f'{" at " + esc(versions) if versions else ""} and raised nothing that needs a '
-                f'decision. That is what this run found, not a claim that the code is clean.</p>')
+                f'decision. That is what this run found, not a claim that the code is clean.'
+                f'{run_link}</p>')
         else:
             body.append('<p class="quiet">No cases yet. Nothing has been analysed, so this page '
                         'cannot say anything about the code.</p>')
@@ -1299,6 +1306,187 @@ def _blind_spot_lines(run: dict) -> list[str]:
     return lines
 
 
+# ---------------------------------------------------------------- the runs view
+#
+# TESTOPS-34. A case carries a decision about a finding; a run is the record that an analysis
+# happened, whether or not it raised anything. Before this, a run that raised nothing was reachable
+# only through a `case_` row it should never have had. The run now has its own page and its own
+# list, and the two facts stay distinct: a run that raised nothing says "No findings in this run",
+# while a run whose findings were all closed by decisions says so and links to the closed cases.
+
+def run_badge(run: dict) -> str:
+    """What the run did: raised nothing, raised findings, or raised findings all of them decided."""
+    findings = run.get("findings") or 0
+    if findings == 0:
+        return NO_FINDINGS_LABEL
+    total = run.get("case_count")
+    decided = run.get("decided_cases")
+    if total is None or decided is None:
+        raised = run.get("cases") or []
+        total = len(raised)
+        decided = sum(1 for case in raised if case["state"] in cases.TERMINAL)
+    if total and decided >= total:
+        return ALL_DECIDED_LABEL
+    return _count(findings, "finding")
+
+
+def run_sentence(run: dict) -> str:
+    """One line saying what the run raised, and in how many cases, as the store counts them."""
+    findings = run.get("findings") or 0
+    raised = run.get("case_count")
+    if raised is None:
+        raised = len(run.get("cases") or [])
+    if findings == 0:
+        return "Raised no finding, so it created no case. The run is the record."
+    return f"Raised {_count(findings, 'finding')} in {_count(raised, 'case')}."
+
+
+def _names(items: list[str]) -> str:
+    """One name, two names joined by ``and``, three or more with the commas a reader expects."""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return ", ".join(items[:-1]) + f", and {items[-1]}"
+
+
+def run_sources_sentence(run: dict) -> str:
+    """What the run could not consult, in one line - or which absence stops it being said."""
+    if not run.get("registry_recorded"):
+        return "Recorded no source registry, so what it could not consult is unknown."
+    if not run.get("assessment_recorded"):
+        return ("Recorded its sources but not what this analysis needed, so what it could not "
+                "consult is unknown.")
+    spots = run.get("blind_spots") or []
+    if not spots:
+        return "Its recorded registry names no source it could not consult."
+    names = [spot.get("title") or spot.get("source") or "a source" for spot in spots]
+    return f"Could not consult {_names(names)}."
+
+
+def runs_index(conn) -> bytes:
+    """Every run in the store, newest first - the view a run that raised nothing is reachable from."""
+    rows = queries.list_runs(conn)
+    body = ['<h1>TestOps runs</h1>', '<p class="meta"><a href="/">← all cases</a></p>']
+    if not rows:
+        body.append('<p class="quiet">No runs are recorded in this store, so nothing has been '
+                    'analysed.</p>')
+        return page("TestOps · runs", "".join(body))
+    body.append('<ul class="cases">')
+    for run in rows:
+        badge = run_badge(run)
+        hot = ' class="hot"' if badge not in (NO_FINDINGS_LABEL, ALL_DECIDED_LABEL) else ""
+        versions = versions_text(run.get("versions"))
+        body.append(
+            f'<li><a href="/run/{esc(run["id"])}">'
+            f'<div><span class="badge{hot}">{esc(badge)}</span> '
+            f'<span class="meta">{esc(run["project"])} · '
+            f'{esc(analyser_text(run.get("analyser")))} · '
+            f'{_count(run.get("claims") or 0, "claim")} · '
+            f'{esc(age(run.get("finished_at")))}'
+            f'{" at " + esc(versions) if versions else ""}</span></div>'
+            f'<p class="claimtext">{esc(run_sentence(run))}</p>'
+            f'<p class="meta">{esc(run_sources_sentence(run))} '
+            f'<span class="code">{esc(run["id"])}</span></p></a></li>')
+    body.append("</ul>")
+    return page("TestOps · runs", "".join(body))
+
+
+def _case_line(conn, case: dict) -> str:
+    """One case on the run page: what it asserts, its badge, and the way in."""
+    shown = display_state(case["state"], case["findings"])
+    hot = ' class="hot"' if shown in ("Open", "Needs a fix") else ""
+    text = (queries.case_assertion(conn, case["id"]) or queries.case_statement(conn, case["id"])
+            or "No claim recorded for this case.")
+    return (f'<li><a href="/case/{esc(case["id"])}">'
+            f'<div><span class="badge{hot}">{esc(shown)}</span> '
+            f'<span class="meta">{_count(case["findings"], "finding")} · '
+            f'{esc(age(case["created_at"]))} · '
+            f'<span class="code">{esc(case["id"])}</span></span></div>'
+            f'<p class="claimtext">{esc(text)}</p></a></li>')
+
+
+def run_response(conn, run_id: str) -> tuple[bytes, int]:
+    """The page for a run id, with the status it must be served under.
+
+    This is the page TESTOPS-22 built, addressed by the thing it describes. A run that raised
+    nothing renders the same honest block - what it examined, at which commit, and what it could
+    not consult - and says why there is no case to open. A run that raised findings lists its
+    cases, and a run whose cases were all decided says so: a closed finding is not a quiet run.
+    """
+    run = queries.run_read(conn, run_id)
+    if run is None:
+        return stale_run_page(run_id), 404
+    # A run naming an analyser this build cannot run is not evidence about the code (TESTOPS-35):
+    # its claims are not an argument anything here could make, so the page says which analyser it
+    # named rather than presenting its rows as a result.
+    if not is_registered(run.get("analyser")):
+        return stale_run_page(run_id, run.get("analyser")), 404
+
+    versions = versions_text(run.get("versions"))
+    badge = run_badge(run)
+    hot = ' class="hot"' if badge not in (NO_FINDINGS_LABEL, ALL_DECIDED_LABEL) else ""
+    body = ['<p class="meta"><a href="/">← all cases</a> · '
+            '<a href="/runs">all runs</a></p>',
+            f'<h1>{esc(run["project"])} · {esc(analyser_text(run.get("analyser")))}</h1>',
+            f'<p class="meta"><span class="badge{hot}">{esc(badge)}</span>'
+            f' · Ran {esc(age(run.get("finished_at")))}'
+            f'{" at " + esc(versions) if versions else ""}'
+            f' · <span class="code">{esc(run_id)}</span></p>']
+
+    if not (run.get("findings") or 0):
+        # The TESTOPS-22 page, unchanged: the run described as a run.
+        body.extend(quiet_run_block(run))
+        body.append('<p>A case carries a decision about a finding. This run raised none, so it '
+                    'created no case: the run itself is the record, and it stays in the store '
+                    'with the counts above.</p>')
+    else:
+        body.append(f'<h2>This run raised {_count(run["findings"], "finding")}</h2>')
+        body.append(f'<p>{esc(analysed_sentence(run))}</p>')
+        raised = run.get("cases") or []
+        if raised:
+            body.append('<ul class="cases">')
+            body.extend(_case_line(conn, case) for case in raised)
+            body.append("</ul>")
+            if all(case["state"] in cases.TERMINAL for case in raised):
+                body.append('<p>Every case this run raised has been decided, so its findings are '
+                            'closed. The run still recorded them: a closed finding is evidence, '
+                            'not a clean bill.</p>')
+        body.append('<h2 class="section">What this run could not consult</h2>')
+        body.extend(_blind_spot_lines(run))
+    return page(f"TestOps · {run_id}", "".join(body)), 200
+
+
+def run_page(conn, run_id: str) -> bytes:
+    """The run page as bytes. Always a page: an id the store does not hold has one too."""
+    return run_response(conn, run_id)[0]
+
+
+def stale_run_page(run_id: str, unregistered_analyser: str | None = None) -> bytes:
+    """A run id the store no longer holds, answered with the reason retention gives for cases."""
+    body = ['<p class="meta"><a href="/">← all cases</a> · <a href="/runs">all runs</a></p>',
+            '<h1>This run is no longer in the store</h1>',
+            f'<p>The run <span class="code">{esc(run_id)}</span> is not in the store any more.</p>']
+    if unregistered_analyser is not None:
+        body.extend([
+            f'<p>It was recorded under the analyser <span class="code">'
+            f'{esc(unregistered_analyser)}</span>, which is not one this build can run. A run is '
+            'evidence about the code only when an analyser here produced it, so a row naming an '
+            'analyser nobody has is not rendered. Nothing it said should be acted on.</p>',
+            '<p>If it is still in the store it was written by something other than this analysis '
+            '- a review harness or a hand-written row - and '
+            '<span class="code">testops scrub-fixtures</span> reports and removes it.</p>'])
+    else:
+        body.extend([
+            '<p>Its evidence was pruned by retention. A run lives with the snapshot its claims '
+            'were raised from, and retention deletes snapshots outside the keep window '
+            '(<span class="code">retention --prune --keep N</span>). The run, its claims and its '
+            'cases went together, so there is nothing left to render.</p>',
+            '<p>An id that was never in the store reads the same way: the store keeps no record '
+            'of what it has deleted, so it cannot tell a pruned id from one it never held.</p>'])
+    return page(f"TestOps · {run_id}", "".join(body))
+
+
 def decision_block(decision: dict | None) -> list[str]:
     """The decision a person recorded, with who made it, when, and their note.
 
@@ -1457,7 +1645,8 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
     run = queries.run_analysis(conn, case_id)
     state_label = case_badge(decision, len(findings))
 
-    body = [f'<p class="meta"><a href="/">\u2190 all cases</a></p>',
+    body = [f'<p class="meta"><a href="/">\u2190 all cases</a> \u00b7 '
+            f'<a href="/runs">all runs</a></p>',
             f'<h1>{esc(row["project"])} \u00b7 {esc(analyser_text(row["analyser"]))}</h1>']
     badge_class = badge_classes(state_label)
     body.append(f'<p class="meta"><span class="{badge_class}">'
@@ -1469,6 +1658,14 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
         # A run that raised nothing is described as a run: what it examined, and what it could not
         # consult. It is never called resolved - that word belongs to a person's recorded decision,
         # which is rendered beside it when one exists (TESTOPS-22).
+        #
+        # Since TESTOPS-34 this row is not a case: it carries no finding, so it is absent from every
+        # case list. The run is the record, and its page is the way in. The row stays where it is -
+        # the URL that was shared still explains what it was - and this line names where to go.
+        if row.get("run_id"):
+            body.append(f'<p class="meta">This row raised no finding, so it is not a case. '
+                        f'The run it recorded is <a href="/run/{esc(row["run_id"])}">'
+                        f'{esc(row["run_id"])}</a>.</p>')
         body.extend(quiet_run_block(run))
     if decision is not None:
         body.extend(decision_block(decision))
@@ -1526,9 +1723,17 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/":
                 self._send(index(conn))
                 return
+            if path == "/runs":
+                self._send(runs_index(conn))
+                return
             m = re.fullmatch(r"/case/([^/]+)", path)
             if m:
                 body, code = case_response(conn, urllib.parse.unquote(m.group(1)))
+                self._send(body, code)
+                return
+            m = re.fullmatch(r"/run/([^/]+)", path)
+            if m:
+                body, code = run_response(conn, urllib.parse.unquote(m.group(1)))
                 self._send(body, code)
                 return
             self._not_found()

@@ -94,6 +94,38 @@ Feature: fact sheet
     assert result.case_id == ""
 
 
+def test_a_run_that_raised_nothing_keeps_its_run_and_has_a_page(tmp_path, monkeypatch):
+    """TESTOPS-34 AC1: no case, but the run stays with its counts, commit and blind spots."""
+    from testops.web import app
+
+    only_distinct = """\
+Feature: fact sheet
+  Scenario: the fact sheet is served with anchors
+    Given the fact sheet endpoint returns a sheet
+    Then the response body carries stable fact anchors
+"""
+    result, conn = _run(tmp_path, monkeypatch, feature=only_distinct)
+    try:
+        stored = conn.execute("SELECT status, snapshot_id FROM run WHERE id = ?",
+                              (result.run_id,)).fetchone()
+        page, status = app.run_response(conn, result.run_id)
+    finally:
+        conn.close()
+
+    assert stored is not None, "the run row was not kept"
+    assert stored["snapshot_id"] == result.snapshot_id
+    assert status == 200
+    text = page.decode("utf-8")
+    assert "No findings in this run" in text
+    # The counts the store can prove, and the commit the run looked at. Two feature files because
+    # the stub collects the same repository for both arms; one scenario is analysed from the test arm.
+    assert "2 feature files and 1 scenario" in text
+    assert "tests@aaaaaaaa" in text
+    # What it could not consult, from the registry the run recorded.
+    assert "What this run could not consult" in text
+    assert "requirements" in text
+
+
 def test_the_written_claims_are_v2_with_their_coordinates(tmp_path, monkeypatch):
     _result, conn = _run(tmp_path, monkeypatch)
     try:

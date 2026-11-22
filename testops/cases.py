@@ -64,15 +64,30 @@ def suppressed(conn, fp: str) -> dict | None:
     return dict(row) if row else None
 
 
-def list_cases(conn, project: str | None = None, limit: int = 40) -> list[dict]:
+def list_cases(conn, project: str | None = None, limit: int = 40,
+               run_id: str | None = None) -> list[dict]:
+    """The cases in the store, newest first - and never a row that raised nothing.
+
+    A case exists to carry a decision about a finding (TESTOPS-34). An empty ``case_`` row is the
+    record that a run happened and raised nothing: evidence, not a case, and nothing a reader can
+    decide. The rule lives in this query rather than in a template so every caller - the dashboard,
+    the CLI, the run page - gets it without having to remember it.
+
+    The rows are not deleted. They keep their findings (none), their run and their snapshot, and a
+    reader reaches the run through :func:`testops.queries.run_read` and the run id in the URL.
+    """
     sql = """SELECT c.id, c.project, c.analyser, c.created_at,
                     (SELECT COUNT(*) FROM finding f WHERE f.case_id = c.id) AS findings,
                     (SELECT state FROM case_state s WHERE s.case_id = c.id ORDER BY s.id DESC LIMIT 1) AS state
-             FROM case_ c"""
+             FROM case_ c
+             WHERE EXISTS (SELECT 1 FROM finding f WHERE f.case_id = c.id)"""
     args: tuple = ()
     if project:
-        sql += " WHERE c.project = ?"
-        args = (project,)
+        sql += " AND c.project = ?"
+        args += (project,)
+    if run_id:
+        sql += " AND c.run_id = ?"
+        args += (run_id,)
     sql += " ORDER BY c.created_at DESC, c.id DESC LIMIT ?"
     rows = conn.execute(sql, args + (limit,)).fetchall()
     return [{"id": r["id"], "project": r["project"], "analyser": r["analyser"], "created_at": r["created_at"],
