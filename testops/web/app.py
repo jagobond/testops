@@ -76,6 +76,12 @@ VERDICT_LABEL = {
 }
 STATE_LABEL = {"open": "Open", "needs_fix": "Needs a fix", "resolved": "Resolved",
                "false_positive": "Not a real finding"}
+# What a decision covers, in one sentence the case page shows beside the decision (TESTOPS-40). It
+# names the four things the identity is built from and the edits that ask again, including the one
+# the identity deliberately does not carry: the commit. Straight quotes would fail the page lint.
+COVER_SENTENCE = ("A decision covers one assertion in one scenario: the same interaction and the "
+                  "same words, in any commit and with any test data; renaming or moving the "
+                  "scenario, or adding or removing an identical assertion in it, asks you again.")
 # A run that raised nothing is a fact about the code, not a decision about it. It gets its own
 # label so no screen can borrow the word a person's decision owns (TESTOPS-22).
 NO_FINDINGS_LABEL = "No findings"
@@ -1782,6 +1788,10 @@ def decision_form(conn, row: dict, case_id: str, findings: list[dict]) -> list[s
                    '<p><button name="state" value="open">Reopen this case</button></p>'
                    '<p class="quiet">Reopening deletes the suppression, so the next run reports it '
                    'again.</p></form>')
+    if n:
+        # One sentence, on both faces of the decision: what it covers and what asks again
+        # (TESTOPS-40). A reader must not need the ticket to understand a re-ask.
+        out.append(f'<p class="quiet">{esc(COVER_SENTENCE)}</p>')
     return out
 
 
