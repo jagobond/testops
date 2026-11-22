@@ -64,8 +64,8 @@ public sealed class PanelSteps
 """
 
 ACTION = 'Call the HTTP client for the step "the panel is served" instead of the browser.'
-NO_CHANGE = ('No change: keep the step "the panel is served" where it is; this level is the '
-             'cheapest one that establishes it.')
+NO_CHANGE = ('No change: keep the step "the panel is served" at the cheapest level that '
+             'establishes it.')
 
 VERDICTS = {
     "distinct": ("settled by the response the server sends", "I1", ["api"], "Checked"),

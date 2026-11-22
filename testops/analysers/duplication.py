@@ -6,6 +6,14 @@ claim — and it costs maintenance forever.
 
 No model is involved. This runs in CI and can fail a build.
 
+v2.1.0 (TESTOPS-29) — the action states the change, and the statement states the finding.
+
+The action used to restate the statement before saying what to do: "this copy calls the HTTP
+client to establish what … settles in-process; keep one." Once the page kept the whole action
+instead of cutting at the semicolon (TESTOPS-28), the reader met the same finding twice and the
+second copy arrived as an instruction. The action is now the change only — "Raise this with the
+team: keep one." — and the statement keeps the finding, which is where a reader looks for it.
+
 v2.0 (TESTOPS-21) — a duplication claim is a v2 claim about one scenario's assertion.
 
 v1 stated the relation and nothing else ("asserts the same claim as 1 cheaper copy(ies) at controller; this
@@ -38,7 +46,7 @@ from ..extract import gherkin, stepbindings
 from .base import Claim, Evidence
 
 name = "duplication"
-version = "2.0.0"
+version = "2.1.0"
 uses_model = False
 
 # Duplication is a question about test code, so test code is what its verdict rests on. Requirements
@@ -180,14 +188,15 @@ def _claim(member: _Member, other: _Member, *, cheapest: str, same_level: bool, 
         statement = (f'The scenario "{scenario.name}" at {_where(feature, scenario)} asserts '
                      f"{_assertion_phrase(scenario)}, which {other_where} already asserts "
                      f"{_level_phrase(member.layer)}.")
-        proposed = (f"Raise this with the team: this copy and {other_where} assert the same thing "
-                    f"{_level_phrase(member.layer)}; keep one.")
     else:
         statement = (f'The scenario "{scenario.name}" at {_where(feature, scenario)} '
                      f"{_LAYER_READS[member.layer]} to assert {_assertion_phrase(scenario)}, "
                      f"which {other_where} already establishes {_SETTLED[cheapest]}.")
-        proposed = (f"Raise this with the team: this copy {_LAYER_READS[member.layer]} to establish "
-                    f"what {other_where} settles {_SETTLED[cheapest]}; keep one.")
+    # What to do, and nothing else (TESTOPS-29). The clause that used to sit here - "this copy
+    # calls the HTTP client to establish what <where> settles in-process" - was the statement
+    # restated, so the reader met the same finding twice, the second time in the field they act on.
+    # The statement above names the copy; the action names the change.
+    proposed = "Raise this with the team: keep one."
 
     label = _LABEL[member.layer if same_level else cheapest]
     detail = {
