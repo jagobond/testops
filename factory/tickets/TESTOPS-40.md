@@ -2,7 +2,7 @@
 id: TESTOPS-40
 title: Say what a decision covers, and stop a shifted twin from silencing one
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-37
 ---
