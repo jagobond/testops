@@ -1,0 +1,38 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-39.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-39-second-specimen`, tree clean.
+Ticket:     factory/tickets/TESTOPS-39.md
+Assessment under review: factory/reports/2026-11-22/TESTOPS-39-assessment.md
+Diff:       git diff main..HEAD
+
+The assessment says the tool does NOT generalise: on a JavaScript/Cypress suite against a Java product it read 0 of
+44 cucumber-js bindings, recorded 43 claims all `unplaced`, raised 0 cases (so no page shows anything), never fetched
+142 Java product files because `.java` is not in the collector's kind list, and renders a source sentence claiming
+`code` was consulted. If that is true, it is the most important finding of the project so far and it must be right.
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Verify, do not read.** Independently confirm each headline: (a) `git grep -c "Then("` style count of cucumber-js
+  bindings in the fetched corpus vs `bindings: 0`; (b) the `.java` omission in `collectors/github.py`; (c) the 43
+  claims are really all `unplaced`; (d) the source sentence a page *would* render for these claims, quoted; (e) that
+  no analyser, extractor or collector file changed in this diff (`git diff --stat main..HEAD` - only config.py and
+  tests/report should move).
+- **Look for something that DID generalise**, so the assessment is not one-sided: find at least one claim from this
+  corpus that is correct, or say plainly that there is none and why.
+- **Check the licence question.** Both upstream repos are public; confirm nothing from either was copied into this
+  repository (only `Project` coordinates were added) and say whether the analysis itself is acceptable.
+- **Judge the sample honesty.** Six feature files, 33 scenarios. Is the assessment's language appropriately
+  hedged, or does it overclaim from a small corpus in either direction?
+- **Say what you would do next**, as one sentence: fix the extractor, declare the ecosystem unsupported, or
+  something else.
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-39-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## Claims verified — each of (a)-(e), what you ran, what you found.
+  ## What generalised — at least one correct claim, or none and why.
+  ## Licence and provenance.
+  ## What I would do next.
+
+Then reply with the verdict and a summary under 350 words.

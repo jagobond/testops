@@ -75,6 +75,14 @@ PROJECTS: dict[str, Project] = {
         test=Repo("reqnroll", "Sample-ReqOverflow"),
         jira_key="",
     ),
+    # TESTOPS-39 second specimen: a different ecosystem and separate repositories. JavaScript
+    # Cypress + Cucumber tests against a Java multi-service product, both public.
+    "restfulbooker": Project(
+        key="restfulbooker",
+        product=Repo("mwinteringham", "restful-booker-platform"),
+        test=Repo("m-pujic-levi9-com", "cypress-cucumber-e2e-tests"),
+        jira_key="",
+    ),
 }
 
 
