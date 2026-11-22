@@ -173,19 +173,32 @@ def test_each_case_page_shows_only_its_own_claim(tmp_path, monkeypatch):
 
     result, conn = _run(tmp_path, monkeypatch)
     try:
-        pages = []
+        html_pages = []
         for case_id in result.case_ids:
             body = app.case_page(conn, case_id)
             assert body is not None
-            pages.append(_text(body))
+            html_pages.append(body.decode("utf-8"))
+        pages = [_text(body.encode("utf-8")) for body in html_pages]
         statements = [row["statement"] for row in conn.execute(
             "SELECT statement FROM claim ORDER BY id")]
+        assertions = [row["assertion_text"] for row in conn.execute(
+            "SELECT assertion_text FROM claim ORDER BY id")]
     finally:
         conn.close()
 
     assert len(pages) == 18
-    for page, statement in zip(pages, statements):
-        assert statement in page
+    assert len(assertions) == 18
+    for page, html, assertion in zip(pages, html_pages, assertions):
+        # TESTOPS-23: the page quotes its own claim's step, with the keyword the file gives it.
+        assert assertion
+        assert assertion in page, assertion
+        argument = re.search(r'<p class="argument">(.*?)</p>', html, re.S)
+        assert argument is not None
+        assert assertion in htmllib.unescape(argument.group(1))
+    # The analyser's essay is no longer reader-facing prose on any page.
+    for page in pages:
+        for statement in statements:
+            assert statement not in page
 
 
 # --------------------------------------------------------------------------- AC4

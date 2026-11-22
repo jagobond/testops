@@ -62,12 +62,12 @@ def _first_sentence(text: str) -> str:
 
 
 def summary_of(statement: str | None, proposed_action: str | None) -> dict:
-    """What a reader needs to decide in five seconds: the finding, and what to do about it.
+    """The stored statement and action as one record, for callers that want them together.
 
-    Derived from ``claim.statement`` and ``claim.proposed_action`` and from nothing else, so the
-    summary cannot drift from section 4. ``action`` is ``None`` when no action was recorded - the
-    page must say that, not invent one. ``truncated`` says the summary carries the first sentence
-    and section 4 carries the rest.
+    Since TESTOPS-23 the case page does not render this block: the argument quotes the asserted step
+    once, so a summary that repeated the analyser's statement was the repetition the Product Owner
+    was reading. The read model keeps the pair because it is a faithful copy of two stored fields.
+    ``action`` is ``None`` when no action was recorded - a page must say that, not invent one.
     """
     text = (statement or "").strip()
     truncated = False
@@ -120,8 +120,9 @@ def claim_view(row, repo: str | None = None) -> dict:
         "interaction_code": row["interaction_code"],
         "established_by": row["established_by"],
         "proposed_action": row["proposed_action"],
-        # The go/no-go block at the top of the page: the finding and the action, both verbatim
-        # from this row. A page that re-worded either would be a second source of truth.
+        # The stored statement, as the row recorded it. The case page no longer renders it: since
+        # TESTOPS-23 the page argues from the quoted step, and the index shows that step too. The
+        # field survives because the statement is evidence of what the analyser concluded.
         "summary": summary_of(row["statement"], row["proposed_action"]),
     }
 
@@ -251,6 +252,14 @@ def _attach_pass(conn, claim: dict) -> dict:
         (claim["run_id"], claim["subject"])).fetchall()
     claim["pass_note"] = pass_note_from_rows(
         [(row["interaction_label"], row["interaction_code"]) for row in rows])
+    # The same rows, as counts by label, so a page can say what the scenario needs in its own words
+    # rather than serving the analyser's sentence (TESTOPS-23). One label is silence: a scenario
+    # whose assertions all need the same thing has nothing to explain.
+    counts: dict[str, int] = {}
+    for label, _code in rows:
+        if label:
+            counts[label] = counts.get(label, 0) + 1
+    claim["pass_labels"] = counts if len(counts) > 1 else None
     return claim
 
 
@@ -744,9 +753,12 @@ def _observations_by_id(conn, ids: list[int], snapshot_id: str) -> list[dict]:
 
 def _evidence_item(key: str, value: dict, uri: str, kind: str, observation_id: int) -> dict:
     line = value.get("line")
+    # ``layer`` is carried as a value, not only baked into ``shows``: a page that groups the steps
+    # around a claim needs to say "each of them uses a browser" once, rather than ending every line
+    # with the same clause (TESTOPS-23, AC6).
     return {"id": observation_id, "uri": uri, "kind": kind, "key": key, "line": line,
-            "link": permalink(uri, line), "where": short_location(uri, line),
-            "shows": _shows(key, value), "asserted": False}
+            "layer": value.get("layer"), "link": permalink(uri, line),
+            "where": short_location(uri, line), "shows": _shows(key, value), "asserted": False}
 
 
 # What a step definition's layer means, as the sentence a reader gets next to the link. The same
@@ -969,8 +981,23 @@ def latest_per_analyser(conn, project: str | None = None) -> tuple[list[dict], i
             continue
         seen.add(key)
         r["statement"] = case_statement(conn, r["id"])
+        # TESTOPS-23: the list says what the claim asserts, in the test's own words, rather than
+        # the analyser's essay about it. A v1 claim has no recorded assertion, so its statement is
+        # all there is.
+        r["assertion"] = case_assertion(conn, r["id"])
         latest.append(r)
     return latest, older
+
+
+def case_assertion(conn, case_id: str) -> str | None:
+    """The first claim's asserted step, in the test's words, or None when none was recorded."""
+    row = conn.execute("SELECT claim_ids FROM finding WHERE case_id = ? ORDER BY id LIMIT 1",
+                       (case_id,)).fetchone()
+    for cid in (_json(row["claim_ids"], []) if row else []):
+        claim = conn.execute("SELECT assertion_text FROM claim WHERE id = ?", (cid,)).fetchone()
+        if claim and claim["assertion_text"]:
+            return claim["assertion_text"]
+    return None
 
 
 def case_statement(conn, case_id: str) -> str | None:

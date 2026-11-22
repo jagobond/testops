@@ -249,10 +249,10 @@ def test_the_case_page_shows_the_observations_a_claim_rests_on(tmp_path, monkeyp
         conn.close()
 
     assert "no observations at these coordinates" not in body
-    assert "The observations this claim rests on, recorded in this run:" in body
+    assert "These are the other steps in the same scenario" in body
     assert "step definition for" in body
     assert "drives the HTTP API" in body
-    # Every rendered evidence item is a link with a statement of what it shows.
+    # Every rendered context item is a link with a statement of what it shows.
     items = re.findall(r"<li>(.*?)</li>", body, re.S)
     assert items
     for item in items:
@@ -370,7 +370,8 @@ def test_a_claim_shows_no_observation_from_another_scenario_in_its_file(tmp_path
             f"the page links to another scenario's line {line}"
 
 
-def test_the_asserting_step_is_listed_first_and_named_as_such(tmp_path, monkeypatch):
+def test_the_asserting_step_is_named_in_its_own_section_and_not_listed_as_context(tmp_path, monkeypatch):
+    """TESTOPS-23 AC6: the claim's own step is evidence; the rest of the scenario is context."""
     result, conn, _ = _run(tmp_path, monkeypatch, feature=MULTI_SCENARIO_FEATURE)
     try:
         _clear_support(conn, result.run_id, 59)
@@ -379,13 +380,15 @@ def test_the_asserting_step_is_listed_first_and_named_as_such(tmp_path, monkeypa
         conn.close()
 
     assert page is not None
+    assert "The step definition that runs it:" in page
+    # The definition of the asserting step is in section 2, before the context group in section 3.
+    assert page.index("2. The step that is asserted") < page.index("The step definition that runs it:")
+    assert page.index("The step definition that runs it:") < page.index(
+        "3. The other steps in this scenario, for context")
     items = re.findall(r"<li>(.*?)</li>", page, re.S)
-    assert items, "the claim rendered no evidence"
-    assert "the step that is asserted" in items[0], items[0]
-    assert "each fact&#x27;s citation sits inside an element an assistive technology can name" in items[0]
-    # The named asserting step comes before the scenario that contains it.
-    assert page.index("the step that is asserted") < page.index(
-        "the scenario \u201cThe character page")
+    assert items, "the claim rendered no context"
+    assert not any("each fact&#x27;s citation sits inside an element an assistive technology can "
+                   "name" in item for item in items), items
 
 
 def test_one_relevant_observation_renders_one_row(tmp_path, monkeypatch):
@@ -398,9 +401,9 @@ def test_one_relevant_observation_renders_one_row(tmp_path, monkeypatch):
 
     assert row["support"] == "[]"
     assert claim is not None
-    # One scenario contains the assertion and nothing binds the step: one row, not a quota.
+    # One scenario contains the assertion and nothing binds the step: one context row, not a quota.
     assert [e["key"] for e in claim["evidence"]] == ["scenario:nothing here is bound"]
-    rendered = app.section_does(claim)
+    rendered = app.context_block(claim)
     items = re.findall(r"<li>(.*?)</li>", "".join(rendered), re.S)
     assert len(items) == 1, items
 

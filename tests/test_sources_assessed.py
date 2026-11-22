@@ -256,8 +256,8 @@ def test_a_not_assessed_claim_renders_a_sentence_not_a_blank_not_an_exception(tm
         conn.close()
 
     assert body is not None
-    section = body.decode("utf-8").split("5. What could not be checked")[1]
-    section = section.split("6. Proposed action")[0]
+    section = body.decode("utf-8").split("4. What could not be checked")[1]
+    section = section.split("5. Decision")[0]
     assert "Nothing was checked against any source for this claim" in section
     assert "source needed" not in section.lower()
 

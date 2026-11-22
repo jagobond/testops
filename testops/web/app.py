@@ -2,21 +2,35 @@
 
 Two screens. Server-rendered HTML, one form, no JavaScript, nothing behind a disclosure.
 
-The case page is an argument in six sections, in this order, because that is the order a person
-needs them to decide:
+The case page is one argument, said once, in the order a reader needs it (TESTOPS-23). The page used
+to be six sections that narrated the analysis: the claim restated three times, a numbered section on
+where a scenario's name came from, sentences about "the words" a rule had read, and fragment
+headings such as "What settles it." A reader had to rebuild the argument from the tool's own
+vocabulary, which is what the Product Owner meant by "the verbiage is still not right".
 
-  1. what is asserted - the step, verbatim, with a permalink at the commit it was read at
-  2. where the name came from - the test's own scenario title, labelled as such, never a requirement
-  3. what the test actually does - the layers it reaches and the instrument, in words
-  4. why that does or does not establish it - the statement and the rule that placed it
-  5. what could not be checked - the sources that were never connected
-  6. what to do about it - the action, then the decision form
+What the page says now:
+
+  1. what is asserted, and what settles it - the step quoted with its Gherkin keyword, the fact that
+     settles it, what the test does about that, and the stored action, in one paragraph
+  2. the step that is asserted - the feature file around it and the definition that runs it
+  3. the other steps in this scenario, for context - never presented as evidence
+  4. what could not be checked - the sources that were never connected
+  5. the decision
+
+Every sentence above is built from the stored row by a rule (``argument_middle`` and the label
+functions below), not written for one claim, so any claim gets the same shape. No reader-facing
+sentence mentions the analyser, its rules or its vocabulary; where a rule matters, the page states
+the fact it found.
 
 Design decisions that matter, from ui-design-v2 and the Product Owner's reading of the old page:
 
-  - a heading that does not say where it came from is not a heading, it is a riddle; section 2
-    exists because the old page showed a scenario title and let the reader guess it was a requirement
-  - a list of links is not evidence; every link says what it shows
+  - the provenance of the quote is a labelled footnote under it, never a numbered step in the
+    argument; a heading that does not say where it came from is a riddle, and a section spent on the
+    riddle is in the way
+  - the verdict states what is true of the claim, not what is absent: "Checked, but over-tested"
+    rather than "Browser not needed", which left the reader to invert it into a cost
+  - a list of links is not evidence; every link says what it shows, and the steps that are only
+    context sit in their own group, introduced together
   - ``I1``..``I4`` and ``KP`` are debugging shorthand and appear only in a footnote below the decision
   - decisions belong to the CASE, and the panel says how many findings ride on them
   - suppression is reversible, and reopening actually deletes the suppression
@@ -34,12 +48,16 @@ from .. import cases, queries, sources
 from ..extract.stepbindings import LAYER_ORDER
 from ..store import db
 
-LABEL = {
-    "gap": "Never actually proved",
-    "review": "Browser not needed",
-    "duplicate": "Already covered",
-    "unplaced": "Could not be judged",
-    "distinct": "Established",
+# What is true of each verdict, as a reader meets it (TESTOPS-23, AC7). The old vocabulary named an
+# absence - "Browser not needed", "Never actually proved" - and left the reader to invert it into a
+# cost. These name the state of the claim; a gap's label names the one instrument the assertion needs
+# and the test does not run, because that is what makes it a gap rather than a shortfall.
+VERDICT_LABEL = {
+    "distinct": "Checked",
+    "review": "Checked, but over-tested for what it asserts",
+    "gap": "Not proved \u2014 nothing runs a browser",
+    "duplicate": "Checked, but this repeats another test",
+    "unplaced": "Cannot tell",
 }
 STATE_LABEL = {"open": "Open", "needs_fix": "Needs a fix", "resolved": "Resolved",
                "false_positive": "Not a real finding"}
@@ -101,14 +119,15 @@ form.decide button { font:inherit; padding:.5rem .9rem; border-radius:5px; borde
 form.decide button.term { border-color:var(--bad); color:var(--bad); }
 form.decide input[type=text] { font:inherit; padding:.45rem .6rem; border:1px solid var(--line);
                                border-radius:5px; width:min(28rem,100%); }
-.warn { color:var(--bad); font-size:.9rem; }
+.warn { color: var(--bad); font-size:.9rem; }
 .quiet { color:var(--dim); }
-section.summary { border:1px solid var(--line); border-left:3px solid var(--accent); background:#fff;
-                  padding:.85rem 1rem; margin:1rem 0 .9rem; border-radius:6px; }
-.summary-label { margin:.15rem 0 .2rem; font-size:.78rem; letter-spacing:.06em;
-                 text-transform:uppercase; color:var(--dim); }
-.summary-finding { margin:0 0 .75rem; font-size:1.05rem; }
-.summary-action { margin:0; }
+p.argument { margin:1rem 0 .55rem; font-size:1.06rem; line-height:1.6; }
+strong.verdict { font-weight:700; }
+strong.verdict.hot { color:var(--bad); }
+p.provenance { margin:0 0 1rem; }
+p.provenance .fn { font-weight:600; color:var(--ink); }
+ul.context { margin:.35rem 0 0; padding-left:1.1rem; color:var(--dim); }
+ul.context li { margin:.2rem 0; }
 figure.snippet { margin:.7rem 0 1rem; }
 figure.snippet figcaption { font-size:.86rem; color:var(--dim); margin-bottom:.3rem; }
 pre.snippet { margin:0; background:#f3f1ec; border:1px solid var(--line); border-radius:5px;
@@ -214,41 +233,264 @@ def layer_words(layers) -> str:
     return " and ".join([", ".join(words[:-1]), words[-1]])
 
 
-def label_sentence(label: str | None) -> str:
-    """The interaction label as a sentence a reader meets, not as a code."""
-    if not label:
-        return "What settles this claim was not recorded."
-    if label.startswith("settled by ") or label.startswith("unclear "):
-        return f"It is {label}."
-    return f"It {label}."
+# ---------------------------------------------------------------- one claim, one argument
+#
+# TESTOPS-23. Every sentence a reader meets is built here from the stored row, by a rule, so that
+# any claim gets the same shape and no sentence is written for one case. The shape is the reader's
+# order: the assertion quoted once, the fact that settles it, what the test does about that, and
+# what should happen - then evidence, caveats and the decision.
+
+# A Gherkin assertion line, as the test file holds it. The keyword is part of the sentence the test
+# author wrote, so the quote carries it (AC4): "Then each fact's data-fact-id ...".
+GHERKIN = re.compile(r"^(Given|When|Then|And|But)\s+(.*)$")
+SETTLED_BY = "settled by "
+NEEDS_BROWSER = "needs a browser"
+UNCLEAR = "unclear what would settle it"
 
 
-# ---------------------------------------------------------------- the go/no-go summary
+def verdict_label(claim: dict) -> str:
+    """What is true of this claim, in words that state the fact rather than an absence (AC7).
 
-def summary_block(c: dict) -> list[str]:
-    """The two sentences a reader scans to decide whether the case is worth their time.
-
-    Both are the stored row's own words, so the summary cannot drift from section 4. A claim with
-    no recorded action says exactly that: the page does not invent a next step, because an invented
-    one is a decision nobody made. This block carries no decision control.
+    ``review`` used to read "Browser not needed", which asked the reader to invert a negation and
+    infer the cost; ``gap`` read "Never actually proved", which said what was missing but not what
+    the assertion needed. Each label here says the state of the claim, and a gap's says which
+    instrument the assertion needs and the test does not run.
     """
-    summary = c.get("summary") or {}
-    out = ['<section class="summary" aria-label="Summary of this claim">',
-           '<p class="summary-label">What this is</p>']
-    if summary.get("statement"):
-        out.append(f'<p class="summary-finding">{esc(summary["statement"])}</p>')
+    verdict = claim.get("verdict")
+    if verdict == "gap" and claim.get("interaction_label") != NEEDS_BROWSER:
+        return "Not proved \u2014 nothing reaches what would settle it"
+    return VERDICT_LABEL.get(verdict) or (verdict or "Unjudged").replace("_", " ").capitalize()
+
+
+def _asserted_line(claim: dict) -> str | None:
+    """The asserted line of the feature file, as the store kept it, or ``None`` without a blob."""
+    snippet = (claim.get("snippets") or {}).get("assertion") or {}
+    if snippet.get("state") != queries.SNIPPET_OK:
+        return None
+    for line in snippet.get("lines") or []:
+        if line.get("asserted"):
+            return str(line.get("text") or "").strip()
+    return None
+
+
+def quoted_assertion(claim: dict) -> str | None:
+    """The assertion as a sentence, keyword included, or ``None`` when there is no step recorded.
+
+    The quote comes from the test file, not from the claim's stored fragment: a reader sees the line
+    the author wrote, not the analyser's lower-case subject. An assertion written with ``And`` or
+    ``But`` is quoted as ``Then``: out of context those words continue a sentence the reader cannot
+    see, which is the bare fragment this criterion exists to remove, and the assertion is what the
+    line is. The excerpt below still shows the line exactly as the file holds it.
+    """
+    text = (claim.get("provenance") or {}).get("assertion_text") or ""
+    if not text.strip():
+        return None
+    line = _asserted_line(claim)
+    match = GHERKIN.match(line or "")
+    if match and match.group(2).strip() == text.strip():
+        keyword = match.group(1)
+        if keyword in ("And", "But"):
+            keyword = "Then"
+        return f"{keyword} {match.group(2).strip()}"
+    return "Then " + text.strip()
+
+
+def _settles_clause(label: str | None) -> str:
+    """What settles this claim, as a clause - the fact the rule found, never the rule.
+
+    The label is the stored phrase for what decides the claim ("settled by the page the server
+    sends", "needs a browser"). It is used as the predicate it is: "That is settled by ...". It is
+    never quoted back at the reader and never dropped into a sentence as a placeholder.
+    """
+    if label and label.startswith(SETTLED_BY):
+        return f"That is settled by {label[len(SETTLED_BY):]}"
+    if label == NEEDS_BROWSER:
+        return "Nothing but a browser settles it"
+    if label and label.startswith(UNCLEAR):
+        return ("Nothing in that assertion says what it is compared with, so nothing settles it")
+    return "What would settle it was not recorded"
+
+
+def _does_clause(claim: dict) -> str | None:
+    """What the test does, as a lower-case clause, or ``None`` when the run could not say."""
+    span = claim.get("span")
+    if span is None:
+        return None
+    if not span:
+        return None
+    used = instrument(span)
+    if used == "unknown":
+        return None
+    return f"the test {INSTRUMENT_WORD[used]}"
+
+
+def _does_sentence(claim: dict) -> str:
+    """What the test does, as its own sentence, for the cases the clause form cannot carry."""
+    span = claim.get("span")
+    if span is None:
+        return "What this test reaches was not recorded."
+    if not span:
+        return "This run recorded no layer that this test reaches."
+    if instrument(span) == "unknown":
+        return "No instrument could be identified for this test."
+    return f"The test {INSTRUMENT_WORD[instrument(span)]}."
+
+
+def argument_middle(claim: dict) -> str:
+    """The sentence between the quote and the action: what settles it, and what the test does.
+
+    One sentence per verdict, from the stored fields:
+      * distinct  - the claim is settled, and the test is the instrument that reaches it
+      * review    - settled by a cheaper answer, which the test reaches the dearer way; the cost is
+                    stated, never implied by a negation
+      * gap       - nothing but the dearer instrument settles it, and the test uses the cheaper one
+      * duplicate - settled, and another scenario already asserts the same thing
+      * unplaced  - the assertion names nothing to compare against, so nothing settles it
+    """
+    verdict = claim.get("verdict")
+    settles = _settles_clause(claim.get("interaction_label"))
+    does = _does_clause(claim)
+    if verdict == "unplaced":
+        return f"{settles}. {_does_sentence(claim)}"
+    if verdict == "duplicate":
+        return (f"{settles}, and another scenario in this run already asserts the same thing, "
+                f"so the project runs it twice.")
+    if verdict == "review":
+        if does is None:
+            return f"{settles}. {_does_sentence(claim)}"
+        return f"{settles}, and {does}, which is a dearer way to reach it."
+    if does is None:
+        return f"{settles}. {_does_sentence(claim)}"
+    return f"{settles}, and {does}."
+
+
+def action_sentence(claim: dict) -> str:
+    """The stored action, once, as the paragraph's last sentence - never invented when absent.
+
+    The store keeps one string; a reader needs sentences. A clause after a semicolon is already a
+    sentence a writer separated with the lighter mark, so the page renders each as its own (and
+    starts it with a capital), which is also how a stored action stays inside the page's sentence
+    budget without a word being changed.
+    """
+    action = (claim.get("proposed_action") or "").strip()
+    if not action:
+        return "No proposed action was recorded for this claim."
+    parts = [part.strip() for part in action.split("; ") if part.strip()]
+    rendered = [parts[0]]
+    for part in parts[1:]:
+        rendered.append(part[0].upper() + part[1:])
+    text = ". ".join(part.rstrip(".") for part in rendered)
+    return text + "."
+
+
+def argument_block(claim: dict) -> list[str]:
+    """The page's first paragraph, and the only place the claim is stated.
+
+    It answers, in order, whether the claim is checked (the label), what is wrong with it (the
+    middle sentence) and what should happen (the action). A claim the run could not assess is not
+    given a level verdict: the headline says so and the recorded sentence says why, because a
+    verdict about a claim whose needed source nobody could consult is a conclusion the run was not
+    entitled to draw. A v1 claim has no quoted step: the page says so and shows the claim as it was
+    recorded, rather than pretending a quote exists.
+    """
+    assessment = claim.get("assessment") or {}
+    not_assessable = assessment.get("state") == sources.NOT_ASSESSABLE
+    label = "Cannot assess" if not_assessable else verdict_label(claim)
+    hot = " hot" if not_assessable or claim.get("verdict") in ("gap", "review", "duplicate") else ""
+    quote = quoted_assertion(claim)
+    if quote is None:
+        sentence = ("This claim was recorded before provenance was captured, so there is no quoted "
+                    "step, no line and no commit to check it against.")
+        recorded = (claim.get("statement") or "").strip()
+        if recorded:
+            sentence += f' The claim as recorded was: \u201c{esc(recorded)}\u201d.'
+        body = [sentence, esc(action_sentence(claim))]
+    elif not_assessable:
+        body = [esc(assessment.get("sentence") or ""),
+                f"The test asserts the step \u201c{esc(quote)}\u201d.",
+                esc(action_sentence(claim))]
     else:
-        out.append('<p class="summary-finding quiet">This claim records no statement.</p>')
-    if summary.get("truncated"):
-        out.append('<p class="meta quiet">The rest of this statement is in section 4.</p>')
-    out.append('<p class="summary-label">What to do</p>')
-    if summary.get("action"):
-        out.append(f'<p class="summary-action">{esc(summary["action"])}</p>')
+        body = [f"The test asserts the step \u201c{esc(quote)}\u201d.",
+                argument_middle(claim),
+                esc(action_sentence(claim))]
+    return ['<p class="argument">',
+            f'<strong class="verdict{hot}">{esc(label)}.</strong> ',
+            " ".join(body),
+            "</p>"]
+
+
+def assessment_note(claim: dict) -> list[str]:
+    """What the run's sources returned, when that is a fact the argument does not already carry.
+
+    Distinct from the headline: a zero or an unrecorded answer is a fact about the sources, not a
+    reason to withhold the verdict, so it is said once, plainly, under the argument.
+    """
+    assessment = claim.get("assessment") or {}
+    if assessment.get("state") in (sources.ZERO, sources.NOT_RECORDED) and assessment.get("sentence"):
+        return [f'<p class="meta">{esc(assessment["sentence"])}</p>']
+    return []
+
+
+def provenance_line(claim: dict) -> list[str]:
+    """The quote's provenance, as a labelled footnote under it - never a numbered step (AC3).
+
+    Scenario title, file:line and commit, read from the claim's own row. The scenario title is
+    labelled as the test author's name for the scenario, because a title that is not labelled is a
+    riddle and a reader will take it for a requirement.
+    """
+    prov = claim.get("provenance") or {}
+    if claim.get("schema_version") != 2 or not prov.get("assertion_text"):
+        return []
+    where = f'{prov.get("assertion_path")}:{prov.get("assertion_line")}'
+    commit = (prov.get("assertion_commit") or "")[:8]
+    if claim.get("permalink"):
+        source = f'<a href="{esc(claim["permalink"])}">{esc(where)}</a>'
+        tail = ""
     else:
-        out.append('<p class="summary-action quiet">No proposed action was recorded for this '
-                   'claim.</p>')
-    out.append("</section>")
-    return out
+        source = f'<span class="code">{esc(where)}</span>'
+        tail = (" This run did not record which repository the file lives in, so there is no link "
+                "to open.")
+    scenario = claim.get("scenario")
+    if scenario:
+        title = (f', in the scenario \u201c{esc(scenario)}\u201d \u2014 the test author\u2019s own '
+                 f'name for the scenario, not a requirement; nothing here was checked against one.')
+    else:
+        title = ". The scenario this assertion belongs to was not recorded."
+    return [f'<p class="meta provenance"><span class="fn">Where this comes from:</span> {source} '
+            f'at commit <span class="code">{esc(commit)}</span>{title}{tail}</p>']
+
+
+_NUMBER = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+
+
+def _needs(label: str, n: int) -> str:
+    """One label as a clause a reader meets: "two are settled by the response the server sends"."""
+    if label.startswith(SETTLED_BY):
+        verb = "is" if n == 1 else "are"
+        return f"{verb} {label}"
+    if label == NEEDS_BROWSER:
+        return label
+    if label.startswith(UNCLEAR):
+        return "says nothing about what would settle it"
+    return label
+
+
+def pass_aside(claim: dict) -> list[str]:
+    """Why this scenario's other assertions are judged differently, when they are.
+
+    One scenario can hold claims that need different things to settle them. A reader who sees two
+    answers inside one scenario can only conclude the tool disagreed with itself, so the page says
+    what is true of the scenario - in the reader's words, from the stored labels, once.
+    """
+    counts = claim.get("pass_labels") or {}
+    if len(counts) < 2:
+        return []
+    ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    parts = [f"{_NUMBER.get(n, str(n))} {_needs(label, n)}" for label, n in ordered]
+    listed = (parts[0] + " and " + parts[1]) if len(parts) == 2 else \
+        ", ".join(parts[:-1]) + ", and " + parts[-1]
+    return [f'<p class="meta">This scenario holds other assertions that need something different '
+            f'to settle them: {esc(listed)}.</p>']
 
 
 # ---------------------------------------------------------------- inline source
@@ -304,13 +546,13 @@ def snippet_block(snip: dict | None, label: str) -> list[str]:
 def assertion_snippet(c: dict) -> list[str]:
     """The feature file around the asserted step, above the permalink that gives it context."""
     return snippet_block((c.get("snippets") or {}).get("assertion"),
-                         "Source, the asserted line is marked:")
+                         "The feature file, with the asserted line marked:")
 
 
 def step_definition_snippet(c: dict) -> list[str]:
     """The step definition's body, labelled as the step that is asserted."""
     return snippet_block((c.get("snippets") or {}).get("step_definition"),
-                         "The step definition that runs the assertion, the step that is asserted:")
+                         "The step definition that runs it:")
 
 
 # ---------------------------------------------------------------- home screen
@@ -337,8 +579,11 @@ def index(conn) -> bytes:
             shown = display_state(r["state"], n)
             hot = ' class="hot"' if shown in ("Open", "Needs a fix") else ""
             # The claim's own words, never finding.title: a title cut to 160 characters ends
-            # mid-sentence and leaves the reader to guess what is alleged.
-            statement = r.get("statement") or "No claim: this run raised no finding."
+            # mid-sentence and leaves the reader to guess what is alleged. The asserted step is
+            # what the claim is; the stored statement is the analyser's essay about it, and only a
+            # v1 claim (which recorded no step) falls back to it (TESTOPS-23).
+            statement = (r.get("assertion") or r.get("statement")
+                         or "No claim: this run raised no finding.")
             body.append(
                 f'<li><a href="/case/{esc(r["id"])}">'
                 f'<div><span class="badge{hot}">{esc(shown)}</span> '
@@ -352,145 +597,126 @@ def index(conn) -> bytes:
     return page("TestOps", "".join(body))
 
 
-# ---------------------------------------------------------------- one claim, six sections
+# ---------------------------------------------------------------- the claim's evidence
 
-def section_asserted(c: dict) -> list[str]:
-    """1. What is asserted - verbatim, with a permalink at the claim's own commit."""
-    prov = c["provenance"]
-    assertion = prov["assertion_text"]
-    if c["schema_version"] != 2 or not assertion:
-        return ['<p class="quiet">What this claim asserts was recorded before provenance was '
-                'captured: there is no exact step and no line to point at. The claim as it was '
-                'originally worded is in section 4.</p>']
+def _evidence_parts(claim: dict) -> tuple[dict | None, list[dict]]:
+    """The row the claim rests on, and the rows that only say what the scenario contains.
 
-    path, line = prov["assertion_path"], prov["assertion_line"]
-    where = f"{path}:{line}"
-    commit = (prov["assertion_commit"] or "")[:8]
-    if c.get("permalink"):
-        source = f'<a href="{esc(c["permalink"])}">{esc(where)}</a>'
-        tail = "the commit this claim was read at."
-    else:
-        source = f'<span class="code">{esc(where)}</span>'
-        tail = ("the commit this claim was read at. This run did not record which repository the "
-                "file lives in, so there is no link to open.")
-    return [f'<blockquote class="assertion">\u201c{esc(assertion)}\u201d</blockquote>',
-            *assertion_snippet(c),
-            f'<p class="meta">Test source: {source} at commit '
-            f'<span class="code">{esc(commit)}</span> \u2014 {tail}</p>']
+    The analyser marks the binding of the asserting step ``asserted``. Everything else it kept -
+    the other steps' definitions, the scenario row that says where the claim sits - is context: it
+    tells a reader what the test does around the claim, and it never proves the claim. The page
+    renders the two in different places so they cannot be read as equal support (AC6).
+    """
+    evidence = claim.get("evidence") or []
+    asserted = next((item for item in evidence if item.get("asserted")), None)
+    context = [item for item in evidence if item is not asserted]
+    return asserted, context
 
 
-def section_name(c: dict) -> list[str]:
-    """2. Where the name came from - the test's own title, never a requirement."""
-    if not c["scenario"]:
-        return ['<p class="quiet">The scenario this assertion belongs to was not recorded.</p>']
-    return [f'<p>This name comes from the test\u2019s own scenario title: '
-            f'<em>\u201c{esc(c["scenario"])}\u201d</em>. It is the test author\u2019s name for the '
-            f'scenario, not a requirement: nothing here was checked against one.</p>']
+def _where(item: dict) -> str:
+    """An evidence location, linked when the store recorded enough to link it."""
+    where = item.get("where") or item.get("uri") or ""
+    if item.get("link"):
+        return f'<a href="{esc(item["link"])}">{esc(where)}</a>'
+    return f'<span class="code">{esc(where)}</span>'
 
 
-def section_does(c: dict) -> list[str]:
-    """3. What the test actually does - the layers and the instrument, in words, plus evidence."""
-    out: list[str] = []
-    span = c["span"]
-    if span is None:
-        out.append('<p class="quiet">What this test reaches was not recorded for this claim.</p>')
-    elif not span:
-        out.append('<p class="quiet">This run recorded no layer that this test reaches.</p>')
-    else:
-        used = instrument(span)
-        if used == "unknown":
-            out.append('<p>No instrument could be identified for this test.</p>')
-        elif len([l for l in span if l in LAYER_ORDER]) <= 1:
-            out.append(f'<p>It {INSTRUMENT_WORD[used]}.</p>')
-        else:
-            out.append(f'<p>It {INSTRUMENT_WORD[used]}. It reaches {layer_words(span)}.</p>')
-
-    evidence = c.get("evidence")
-    support = c.get("support") or []
+def _evidence_absence(claim: dict) -> list[str]:
+    """What the page says when there is no evidence list at all - never a silent gap."""
+    evidence = claim.get("evidence")
     if evidence is None:
-        # v1 claims carry no coordinates at all: there is no run to count observations in, and
-        # saying "this run recorded none" would invent a run that never existed.
-        if c.get("schema_version") != 2:
-            out.append('<p class="quiet">Evidence for this claim was not recorded: it was recorded '
-                       'before provenance was captured, so there is no run to look in and no '
-                       'coordinates to look at.</p>')
-        else:
-            out.append('<p class="quiet">Evidence for this claim was not recorded.</p>')
-    elif not evidence:
-        recorded = c.get("observations_recorded")
-        if support:
-            out.append('<p class="quiet">This claim records the observations it rests on, but none '
-                       'of them could be read back from this store. That is a defect in the stored '
-                       'evidence, not an absence of it.</p>')
-        elif recorded == 0:
-            # A zero count is a fact about this run, not about its history. "It predates observation
-            # recording" was an attribution the count cannot prove: a run that postdates recording
-            # and still wrote nothing would be described the same way (TESTOPS-12, AC-b). The page
-            # says what is known, then the one thing the store does show - whether anything was
-            # collected - as a count, never as a reason.
-            sentence = ('This run holds no observations, so the source link above is the only '
-                        'evidence there is \u2014 and the emptiness here is not a sign the claim is '
-                        'clean.')
-            collected = c.get("artefacts_recorded")
-            if isinstance(collected, int):
-                if collected:
-                    sentence += (f' Its snapshot holds {collected} '
-                                 f'artefact{"s" if collected != 1 else ""}, none of which '
-                                 f'produced an observation.')
-                else:
-                    sentence += ' Its snapshot holds no artefacts either, so nothing was collected.'
-            out.append(f'<p class="quiet">{sentence}</p>')
-        elif isinstance(recorded, int):
-            out.append(f'<p class="quiet">Nothing in this run bears on this claim, so the source '
-                       f'link above is the only evidence there is. The run recorded {recorded} '
-                       f'observation{"s" if recorded != 1 else ""} in total; none of them is at '
-                       f'these coordinates.</p>')
-        else:
-            out.append('<p class="quiet">Nothing in this run bears on this claim, so the source '
-                       'link above is the only evidence there is. How many observations the run '
-                       'recorded was not recorded.</p>')
-    else:
-        if support:
-            out.append('<p>The observations this claim rests on, recorded in this run:</p>')
-        else:
-            out.append('<p>The observations that bear on this claim, recorded in this run:</p>')
-        out.append('<ul class="ev">')
-        for e in evidence:
-            where = esc(e.get("where") or e.get("uri"))
-            if e.get("link"):
-                where = f'<a href="{esc(e["link"])}">{where}</a>'
+        if claim.get("schema_version") != 2:
+            return ['<p class="quiet">Evidence for this claim was not recorded: it was recorded '
+                    'before provenance was captured, so there is no run to look in and no '
+                    'coordinates to look at.</p>']
+        return ['<p class="quiet">Evidence for this claim was not recorded.</p>']
+    if evidence:
+        return []
+    recorded = claim.get("observations_recorded")
+    if claim.get("support"):
+        return ['<p class="quiet">This claim records the observations it rests on, but none of '
+                'them could be read back from this store. That is a defect in the stored evidence, '
+                'not an absence of it.</p>']
+    if recorded == 0:
+        sentence = ('This run holds no observations, so the source above is the only evidence '
+                    'there is \u2014 and the emptiness here is not a sign the claim is clean.')
+        collected = claim.get("artefacts_recorded")
+        if isinstance(collected, int):
+            if collected:
+                sentence += (f' Its snapshot holds {collected} '
+                             f'artefact{"s" if collected != 1 else ""}, none of which produced an '
+                             f'observation.')
             else:
-                where = f'<span class="code">{where}</span>'
-            shows = esc(e.get("shows"))
-            if e.get("asserted"):
-                shows = f"the step that is asserted: {shows}"
-            out.append(f'<li>{where} \u2014 {shows}.</li>')
-        out.append("</ul>")
-    # The body that runs the asserted step, rendered from the stored blob. It belongs here: this
-    # section is "what the test actually does", and the definition is the doing.
-    out.extend(step_definition_snippet(c))
+                sentence += ' Its snapshot holds no artefacts either, so nothing was collected.'
+        return [f'<p class="quiet">{esc(sentence)}</p>']
+    if isinstance(recorded, int):
+        return [f'<p class="quiet">Nothing in this run bears on this claim, so the source above is '
+                f'the only evidence there is. The run recorded {recorded} '
+                f'observation{"s" if recorded != 1 else ""} in total; none of them is at these '
+                f'coordinates.</p>']
+    return ['<p class="quiet">Nothing in this run bears on this claim, so the source above is the '
+            'only evidence there is. How many observations the run recorded was not recorded.</p>']
+
+
+def evidence_block(claim: dict) -> list[str]:
+    """2. The step that is asserted: its file around it, and the definition that runs it.
+
+    The feature excerpt comes first because it is the step a reader checks; the definition follows
+    because it says what is actually done with it. Nothing here is a list of equal-weight links: the
+    excerpt marks the one line the claim is about, and the definition is read from that same row.
+    """
+    out = assertion_snippet(claim)
+    out.extend(_evidence_absence(claim))
+    out.extend(step_definition_snippet(claim))
     return out
 
 
-def section_why(c: dict) -> list[str]:
-    """4. Why that does or does not establish it - statement, label and rule in the reader's words."""
-    out = [f'<p>{esc(c["statement"])}</p>',
-           f'<p><strong>What settles it.</strong> {esc(label_sentence(c["interaction_label"]))}</p>']
-    if c.get("pass_note"):
-        # One verification pass, more than one label: the page says why rather than leaving a reader
-        # to conclude the run told two stories (TESTOPS-12, AC1).
-        out.append(f'<p class="meta">{esc(c["pass_note"])}</p>')
-    if c["established_by"]:
-        rule = c["established_by"].strip().rstrip(".")
-        rule = rule[0].lower() + rule[1:] if rule else rule
-        out.append(f'<p><strong>Why it was classified this way:</strong> {esc(rule)}.</p>')
-    else:
-        out.append('<p class="quiet">The rule that classified this claim was not recorded.</p>')
+def _context_layers(context: list[dict]) -> set[str]:
+    return {item.get("layer") for item in context
+            if (item.get("key") or "").startswith("binding:") and item.get("layer") in LAYER_ORDER}
+
+
+def _context_line(item: dict, *, hoisted: str | None) -> str:
+    """One context row as the reader's sentence, with the shared instrument said once by the intro."""
+    key = item.get("key") or ""
+    if key.startswith("binding:"):
+        _, verb, pattern = key.split(":", 2)
+        line = f'a {verb.capitalize()} step definition for \u201c{esc(pattern)}\u201d'
+        if hoisted is None:
+            word = INSTRUMENT_WORD.get(item.get("layer") or "", INSTRUMENT_WORD["unknown"])
+            line += f" that {word}"
+        return f"<li>{_where(item)} \u2014 {line}.</li>"
+    return f'<li>{_where(item)} \u2014 {esc(item.get("shows"))}.</li>'
+
+
+def context_block(claim: dict) -> list[str]:
+    """3. The other steps in this scenario - introduced together, and separated from evidence (AC6).
+
+    These rows are the scenario's other bindings and the scenario row itself. They are what the test
+    does around the claim, not what proves it, so they get their own heading and a sentence that
+    says so. When every one of them uses the same instrument, the intro says it once instead of
+    ending every line with the same clause.
+    """
+    _asserted, context = _evidence_parts(claim)
+    if claim.get("evidence") is None:
+        return ['<p class="quiet">The steps of this scenario were not recorded for this claim.</p>']
+    if not context:
+        return ['<p class="quiet">This run recorded no other step in this scenario.</p>']
+    layers = _context_layers(context)
+    hoisted = next(iter(layers)) if len(layers) == 1 else None
+    intro = "These are the other steps in the same scenario"
+    if hoisted:
+        intro += f", and each of them uses {LAYER_WORD[hoisted]}"
+    intro += (". They are not evidence for this claim; they are here so you can see what the test "
+              "does around it.")
+    out = [f"<p>{intro}</p>", '<ul class="ev context">']
+    out.extend(_context_line(item, hoisted=hoisted) for item in context)
+    out.append("</ul>")
     return out
 
 
 def section_unchecked(c: dict) -> list[str]:
-    """5. What could not be checked. Absence is a state, never a blank and never a zero.
+    """4. What could not be checked. Absence is a state, never a blank and never a zero.
 
     The sentence comes from the claim's recorded *state*, not from the length of a list. A claim
     whose sources were never assessed says exactly that: the empty list it may have been written
@@ -546,6 +772,31 @@ def _blind_spot_sentence(note: dict) -> str:
     if state == sources.ABSENT:
         return f"{title} \u2014 absent: {reason}." if reason else f"{title} \u2014 absent."
     return f"{title} \u2014 {state}: {reason}." if state and reason else f"{title}."
+
+
+def claim_sections(c: dict) -> list[str]:
+    """One claim, one argument: five sections, and the claim stated once (TESTOPS-23, AC3).
+
+    1. what is asserted, and what settles it - one paragraph, the quote with its keyword, the fact
+       that settles it, what the test does, the action; the provenance footnote sits under the
+       quote, never as a section of its own
+    2. the step that is asserted - the file around it and the definition that runs it
+    3. the other steps in this scenario, for context - separated from evidence, introduced together
+    4. what could not be checked
+    5. the decision (rendered once per case, by ``case_page``)
+    """
+    out = ['<h2 class="section">1. What is asserted, and what settles it</h2>']
+    out.extend(argument_block(c))
+    out.extend(provenance_line(c))
+    out.extend(assessment_note(c))
+    out.extend(pass_aside(c))
+    out.extend(['<h2 class="section">2. The step that is asserted</h2>'])
+    out.extend(evidence_block(c))
+    out.extend(['<h2 class="section">3. The other steps in this scenario, for context</h2>'])
+    out.extend(context_block(c))
+    out.extend(['<h2 class="section">4. What could not be checked</h2>'])
+    out.extend(section_unchecked(c))
+    return out
 
 
 # ---------------------------------------------------------------- a run, or a decision
@@ -664,50 +915,8 @@ def decision_block(decision: dict | None) -> list[str]:
     return [f'<h2>{esc(label)}</h2>', f'<p>{esc(sentence)}</p>']
 
 
-def section_action(c: dict) -> list[str]:
-    """6. The action, in one sentence naming the step to change."""
-    if c["proposed_action"]:
-        return [f'<p>{esc(c["proposed_action"])}</p>']
-    return ['<p class="quiet">No proposed action was recorded for this claim.</p>']
-
-
-def claim_sections(c: dict, *, include_summary: bool = True) -> list[str]:
-    out: list[str] = []
-    if include_summary:
-        # The go/no-go block: two sentences before the argument, so a reader can stop here.
-        out.extend(summary_block(c))
-    # The verdict in English before the argument: a reader deciding in one pass needs to know what
-    # kind of shortfall this is before reading why. When the registry says the claim cannot be
-    # assessed at all, that is the headline - a level verdict about a claim whose needed source
-    # nobody could consult would be a conclusion the run was not entitled to draw.
-    assessment = c.get("assessment")
-    assessment_state = (assessment or {}).get("state")
-    if assessment_state == sources.NOT_ASSESSABLE:
-        out.append('<p><span class="badge hot">Cannot assess</span></p>')
-        out.append(f'<p>{esc((assessment or {}).get("sentence") or "")}</p>')
-    else:
-        verdict_label = LABEL.get(c["verdict"])
-        if verdict_label:
-            hot = " hot" if c["verdict"] in ("gap", "review", "duplicate") else ""
-            out.append(f'<p><span class="badge{hot}">{esc(verdict_label)}</span></p>')
-        # A zero and an unrecorded count are facts about the sources, not about the test: say them
-        # once, plainly. "Found" is already evident from the evidence list and would be noise.
-        if assessment_state in (sources.ZERO, sources.NOT_RECORDED):
-            out.append(f'<p>{esc((assessment or {}).get("sentence") or "")}</p>')
-    for heading, parts in (
-            ("1. What is asserted", section_asserted(c)),
-            ("2. Where the name came from", section_name(c)),
-            ("3. What the test actually does", section_does(c)),
-            ("4. Why that does or does not establish it", section_why(c)),
-            ("5. What could not be checked", section_unchecked(c)),
-            ("6. Proposed action and decision", section_action(c))):
-        out.append(f'<h2 class="section">{esc(heading)}</h2>')
-        out.extend(parts)
-    return out
-
-
 def decision_form(conn, row: dict, case_id: str, findings: list[dict]) -> list[str]:
-    """The decision, after section 6's action. One case, one decision, and it says what it hides."""
+    """The decision, at the end of the argument. One case, one decision, and it says what it hides."""
     n = len(findings)
     suppressed_here = conn.execute(
         """SELECT s.state, s.actor, s.at, s.note FROM suppression s
@@ -781,12 +990,6 @@ def case_page(conn, case_id: str) -> bytes | None:
 
     body = [f'<p class="meta"><a href="/">\u2190 all cases</a></p>',
             f'<h1>{esc(row["project"])} \u00b7 {esc(analyser_text(row["analyser"]))}</h1>']
-    # The summary is the first content of the case: the finding and the action, before the state
-    # badge, before the verdict and before section 1. A reader can decide whether to read on before
-    # meeting any of the argument. The lead claim is the case's claim; further claims carry their
-    # own summary at the head of their own argument.
-    if claims:
-        body.extend(summary_block(claims[0]))
     hot = ' class="hot"' if state_label in ("Open", "Needs a fix") else ""
     body.append(f'<p class="meta"><span class="badge{hot}">'
                 f'{esc(state_label)}</span>'
@@ -801,19 +1004,21 @@ def case_page(conn, case_id: str) -> bytes | None:
     if decision is not None:
         body.extend(decision_block(decision))
     if findings:
-        first = True
+        # Each claim gets one argument, and its first paragraph is the only place the claim is
+        # stated (TESTOPS-23). There is no summary block above sections: it restated the claim a
+        # second time, which is the repetition the Product Owner was reading.
         for i, f in enumerate(findings, start=1):
             if len(findings) > 1:
                 body.append(f'<h2>Finding {i} of {len(findings)}</h2>')
             for j, c in enumerate(f["claims"], start=1):
                 if len(f["claims"]) > 1:
                     body.append(f'<h3>Claim {j} of {len(f["claims"])}</h3>')
-                # The page-level summary already carries the first claim; a second claim's summary
-                # belongs at the head of its own argument, not nowhere.
-                body.extend(claim_sections(c, include_summary=not first))
-                first = False
+                body.extend(claim_sections(c))
 
-    body.extend(decision_form(conn, row, case_id, findings))
+    form = decision_form(conn, row, case_id, findings)
+    if form:
+        body.append('<h2 class="section">5. Decision</h2>' if findings else "<h2>Decision</h2>")
+        body.extend(form)
     body.extend(footnote(claims))
     return page(f"TestOps \u00b7 {case_id}", "".join(body))
 
