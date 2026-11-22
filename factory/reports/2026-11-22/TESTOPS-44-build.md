@@ -114,3 +114,67 @@ unchanged" provable on a Windows checkout rather than accidentally true elsewher
 - The configuration page's refusal message is long and correct, but a person who typed a legitimate
   value and got it back will still be tempted to work around the guard. Nothing in the page explains
   what the guard accepts; the pinned list in `tests/test_secret_guard.py` is the only such document.
+
+## Fix round — 22 Nov 2026 (review: NEEDS-FIX, one finding)
+
+The reviewer found exactly one thing the brief listed and the build missed: an `AKIA` + 16-character
+AWS key ID (20 characters) was **accepted and stored**, because every rule in the guard sat behind
+`_BLOB_MIN = 32` and a prefix is a shape, not a length. The review's second note — a degenerate
+`ghp_` token (5 distinct characters) also stored — had the same root cause.
+
+### The change
+
+`testops/services.py`: a new `_TOKEN_PREFIXES` tuple and a check that runs on the stripped value at
+**any** length, immediately after the credential-word check and **before** the entropy floors:
+
+    AKIA, ASIA, ghp_, gho_, ghu_, ghs_, github_pat_, xoxb-, xoxp-, glpat-, sk-, eyJ, "-----BEGIN "
+
+Matching is `str.startswith` and case-sensitive. Case-sensitive because these prefixes are
+case-sensitive in the formats themselves, and because the lower-case lookalikes are real
+configuration: `skipton-branch` starts with `ski`, `masking/x` with `ma`, `task-akia-review` with
+`ta`. Matching the prefix rather than a substring is what keeps `task-akia-review` and
+`risk/sk-learn-docs` accepted. The refusal names the prefix only — never the value — so the new rule
+is not a second way to print a secret.
+
+**Nothing else moved.** `_BLOB_MIN`, `_BASE64_ENTROPY`, the base64 branch, the separator split and
+both entropy floors are byte-identical; the prefix loop is inserted above them, so every value the
+old rules accepted but no prefix matches behaves exactly as before.
+
+### Tests — `tests/test_secret_guard.py`, 15 → 36 (+21)
+
+- `test_a_known_token_prefix_is_refused_at_any_length` — 13 parameters, one per prefix, each at its
+  shortest realistic value (`AKIA2E0A8F3B244C9986`, 20; `ASIAY34FZKBOKMUTVV7A`, 20; `ghp_…` and the
+  other GitHub/Slack/GitLab/`sk-`/`eyJ` forms; `-----BEGIN RSA PRIVATE KEY-----`, 31). Every probe
+  asserts `len(token) < _BLOB_MIN`, so the test fails if it is ever rewritten into a value the
+  entropy floors would have caught anyway.
+- `test_a_value_merely_containing_the_letters_is_accepted` — 5 parameters: `skipton-branch`,
+  `task-akia-review`, `masking/x`, `risk/sk-learn-docs`, `COTW-akia-review-board`.
+- `test_a_low_entropy_github_token_is_refused` — `ghp_aaaaaaaaa`, the review's degenerate probe.
+- `test_the_short_aws_key_id_is_not_stored` — HTTP 400, body and log name the field and `AKIA`, the
+  value appears in neither, and no service row is written.
+- `test_the_configuration_page_still_accepts_a_branch_named_like_a_prefix` — `skipton-branch` posted
+  through `/config/services` and stored.
+
+### Verification
+
+- `env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q`
+  → **480 passed** in 78.60s (459 before; 21 new, 0 changed or removed).
+- All twelve pinned real-configuration probes re-checked individually: `owner/repo`,
+  `https://jira.example.com`, `https://dev.azure.com/org/project/_build?definitionId=2`,
+  `C:/work/repos/cotw`, `PROJ`, `COTW-PROJ-KEY-0123456789-ABCDEFG`, the UUID, `main`,
+  `refs/heads/feature/x`, `pipeline #2`, `thunderstorm`, `Q29udGludWl0eUdhbWU=` — all `None` (accepted).
+- Mutation check: `for prefix in _TOKEN_PREFIXES:` replaced with `for prefix in ():` → **15 failed,
+  21 passed** (all 13 prefix parameters, the low-entropy `ghp_` test, the AKIA end-to-end test);
+  restored and re-run → 36 passed. Diff stat restored to `25` added, `1` moved in `services.py`.
+
+### What the new rule costs, stated plainly
+
+- A legitimate value that *begins* with one of these prefixes is refused. `sk-learn/docs` as a
+  repository coordinate is the realistic casualty; a board key that genuinely starts `AKIA` (as
+  opposed to containing it) is another. Both are rarer than the credential shapes they buy, and the
+  alternative — exempting short prefixes — reopens the finding.
+- `sk-` is the broadest entry. It is two characters plus a hyphen, so it will occasionally fire on a
+  value a person meant innocently. If that proves noisy in use, the fix is a per-field rule (host vs
+  key vs path), which is still the ticket this build flagged and did not take.
+- The rule is a false-negative fix, not a proof. A credential with none of these prefixes and fewer
+  than 32 characters still passes; the entropy floors remain the backstop they always were.

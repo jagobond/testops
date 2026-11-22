@@ -55,6 +55,25 @@ _BLOB_MIN = 32
 _BASE64 = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
 _BASE64_ENTROPY = 4.3
 
+# TESTOPS-44 fix round. The entropy floors below only judge values of 32+ characters, so the shortest
+# AWS credential - an `AKIA` key ID at 20 characters - passed by being short. A known token prefix is
+# a shape, not a length, so this rule runs at *any* length and before the floors. Each entry is the
+# literal start of a published credential format; matching is case-sensitive, because these prefixes
+# are case-sensitive in the formats themselves and lower-case lookalikes (`skipton-branch`,
+# `masking/x`, `task-akia-review`) are real configuration. Only the prefix is matched, and only the
+# prefix is named in the refusal - never the value.
+_TOKEN_PREFIXES = (
+    "AKIA",             # AWS access key ID
+    "ASIA",             # AWS temporary access key ID
+    "ghp_", "gho_", "ghu_", "ghs_",   # GitHub personal / OAuth / user / server tokens
+    "github_pat_",      # GitHub fine-grained personal access token
+    "xoxb-", "xoxp-",   # Slack bot / user tokens
+    "glpat-",           # GitLab personal access token
+    "sk-",              # OpenAI-style secret key
+    "eyJ",              # base64-encoded '{"' - the header of every JWT
+    "-----BEGIN ",      # PEM private key (and any other PEM block)
+)
+
 # What divides a structured key into readable parts. `COTW-PROJ-KEY-0123456789-ABCDEFG` and a UUID
 # are configuration written as short parts; a token is one long unbroken run. Judging the longest run
 # rather than the whole value is what lets a hyphenated key through while a `ghp_...` token stays out.
@@ -93,9 +112,14 @@ def _looks_like_secret(value: str) -> str | None:
     for word in _CREDENTIAL_WORDS:
         if word in lower:
             return f"it contains {word!r}"
+    plain = value.strip()
+    # A known credential prefix is refused at any length, before the floors: the shortest realistic
+    # AWS key ID is 20 characters and would otherwise sit below `_BLOB_MIN`.
+    for prefix in _TOKEN_PREFIXES:
+        if plain.startswith(prefix):
+            return f"it begins with {prefix!r}, the prefix of a known credential format"
     # A long blob of one alphabet is a token shape, not a host, a path or a repository. URLs and
     # paths are exempt: they are what settings are for.
-    plain = value.strip()
     if len(plain) >= _BLOB_MIN and not any(ch.isspace() for ch in plain) \
             and not plain.startswith(("http://", "https://")):
         # AC1: before the separator exemption, because base64 always contains '/' and often '+' or

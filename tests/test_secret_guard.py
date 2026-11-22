@@ -100,6 +100,117 @@ def test_the_reviewers_aws_key_is_no_longer_stored(tmp_path):
         conn.close()
 
 
+# --------------------------------------------------------------------------- AC1, fix round
+
+# The reviewer's second finding: an `AKIA` key ID is 20 characters, and the guard only judged values
+# of 32+. Each prefix is exercised at the shortest length a real credential of that kind is written,
+# and each probe here is deliberately under 32 characters, so a pass proves the prefix rule is doing
+# the work rather than the entropy floors behind it.
+PREFIXED_TOKENS = {
+    "AKIA2E0A8F3B244C9986": "AKIA",                         # AWS key ID, 20 chars
+    "ASIAY34FZKBOKMUTVV7A": "ASIA",                         # AWS temporary key ID, 20 chars
+    "ghp_0123456789": "ghp_",                                # GitHub personal token
+    "gho_0123456789": "gho_",                                # GitHub OAuth token
+    "ghu_0123456789": "ghu_",                                # GitHub user-to-server token
+    "ghs_0123456789": "ghs_",                                # GitHub server-to-server token
+    "github_pat_11ABCDEFG0123": "github_pat_",               # GitHub fine-grained PAT
+    "xoxb-0123456789-0123456789": "xoxb-",                   # Slack bot token
+    "xoxp-0123456789-0123456789": "xoxp-",                   # Slack user token
+    "glpat-0123456789abcd": "glpat-",                        # GitLab PAT
+    "sk-0123456789abcdef": "sk-",                            # OpenAI-style key
+    "eyJhbGciOiJIUzI1NiJ9": "eyJ",                            # JWT header
+    "-----BEGIN RSA PRIVATE KEY-----": "-----BEGIN ",         # PEM private key
+}
+
+# Values that merely *contain* a credential's letters mid-word: real configuration, must be stored.
+NOT_A_TOKEN = {
+    "branch": "skipton-branch",
+    "label": "task-akia-review",
+    "repo": "masking/x",
+    "repo_alt": "risk/sk-learn-docs",
+    "board": "COTW-akia-review-board",
+}
+
+
+@pytest.mark.parametrize("token,prefix", sorted(PREFIXED_TOKENS.items()),
+                         ids=[f"{token[:12]}-shortest" for token, _ in
+                              sorted(PREFIXED_TOKENS.items())])
+def test_a_known_token_prefix_is_refused_at_any_length(token, prefix):
+    """The fix: a credential *shape* is refused even when it is too short for the entropy floors."""
+    assert len(token) < services._BLOB_MIN, \
+        "this probe must sit under the floors, or it proves nothing about the prefix rule"
+    assert token.startswith(prefix), "the probe must start with the prefix it claims"
+
+    with pytest.raises(services.ConfigError) as refused:
+        services.validate_settings({"board": token})
+
+    message = str(refused.value)
+    assert prefix in message, "the refusal should name the prefix it matched"
+    assert token not in message, "refusing a secret must not print the secret"
+
+
+@pytest.mark.parametrize("field,value", sorted(NOT_A_TOKEN.items()))
+def test_a_value_merely_containing_the_letters_is_accepted(field, value):
+    """The other direction: the rule matches a prefix, not a substring anywhere in a word."""
+    assert services._looks_like_secret(value) is None, f"{field} was read as a secret"
+    assert services.validate_settings({field: value}) == {field: value}
+
+
+def test_a_low_entropy_github_token_is_refused():
+    """The review's second probe: a degenerate `ghp_` token (entropy 0.62) was stored."""
+    assert services._looks_like_secret("ghp_aaaaaaaaa") is not None
+
+
+def test_the_short_aws_key_id_is_not_stored(tmp_path, monkeypatch, caplog):
+    """End to end: the 20-character key ID the review stored now leaves no row behind."""
+    path = tmp_path / "akia.db"
+    httpd, base = _server(monkeypatch, path)
+    try:
+        _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
+        with caplog.at_level(logging.WARNING, logger="testops.services"):
+            status, body = _post(f"{base}/config/services",
+                                 {"project": "team", "type": "jira_board", "role": "",
+                                  "name": "board", "board": "AKIA2E0A8F3B244C9986"})
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    assert status == 400, "a 20-character AWS key ID was accepted"
+    assert "board" in body and "AKIA" in body
+    assert "AKIA2E0A8F3B244C9986" not in body, "the refusal page printed the secret"
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert "board" in logged and "AKIA" in logged
+    assert "AKIA2E0A8F3B244C9986" not in logged, "the log printed the secret"
+
+    conn = db.connect(path)
+    try:
+        assert services.list_services(conn, "team") == []
+    finally:
+        conn.close()
+
+
+def test_the_configuration_page_still_accepts_a_branch_named_like_a_prefix(tmp_path, monkeypatch):
+    """`skipton-branch` posted as a board: the prefix rule must not reach inside a word."""
+    path = tmp_path / "skipton.db"
+    httpd, base = _server(monkeypatch, path)
+    try:
+        _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
+        status, page = _post(f"{base}/config/services",
+                             {"project": "team", "type": "jira_board", "role": "",
+                              "name": "board", "board": "skipton-branch"})
+        assert status == 200, page
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    conn = db.connect(path)
+    try:
+        assert [s.settings["board"] for s in services.list_services(conn, "team")] \
+            == ["skipton-branch"]
+    finally:
+        conn.close()
+
+
 # --------------------------------------------------------------------------- AC2
 
 @pytest.mark.parametrize("field,value", sorted(CONFIGURATION.items()))
