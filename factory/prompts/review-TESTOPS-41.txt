@@ -1,0 +1,35 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-41.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-41-skipped-is-not-consulted`, tree clean.
+Ticket:     factory/tickets/TESTOPS-41.md
+Build report: factory/reports/2026-11-22/TESTOPS-41-build.md
+
+The change is that a file nothing read must never be counted as consulted. Before: 142 `.java` files were never
+fetched and the page said "code and test code were consulted and returned 48 items". After: "Cannot assess this
+claim: code was not read: 142 .java files in the product repository were skipped ... test code was consulted and
+returned 48 items".
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Hunt for the old lie in a new place.** Construct a store where a capability produced zero files legitimately and
+  another where it produced zero because of a skip, and check the two sentences differ. Then try: a repository whose
+  every file is an unsupported kind; a size-cap sweep that drops everything; a skip of one kind out of five; a record
+  written before this change (backwards compatibility). For each, quote the sentence the page renders.
+- **Check the arithmetic.** Counts must come from fetched files only. Verify with a direct query that the number in
+  the sentence equals the count of artefacts actually read for that capability, not the tree size.
+- **Check nothing else moved.** CotW must be 94/90/1/1/2 with its sentence unchanged; ReqOverflow 17/17. The build
+  claims 228 pages were byte-identical before and after; spot-check at least six pages yourself, including a case
+  page and a run page, and say how you compared.
+- **Judge the "mislabelling" limitation it confesses** (product front-end `.js` counted as test code). Is the page
+  honest to a reader about that, or does the count still imply something false?
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-41-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## Sentences rendered — the four scenarios, quoted.
+  ## Arithmetic — what you counted and how it matched.
+  ## Nothing else moved — pages spot-checked and method.
+  ## Three sharpest concerns.
+
+Then reply with the verdict and a summary under 300 words.
