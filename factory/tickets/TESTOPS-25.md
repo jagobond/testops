@@ -2,7 +2,7 @@
 id: TESTOPS-25
 title: The fixture is somebody else's MIT code, and we are not carrying its licence
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-21
 ---

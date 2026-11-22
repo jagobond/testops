@@ -33,7 +33,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-21 | The duplication analyser still writes v1 claims, so its cases say nothing | F1 | done | 220 tests; 18 cases, 1 finding each, 18 distinct statements; PR #17 merged after a PASS review |
 | TESTOPS-22 | A quiet run is not a resolved case | F1 | done | 228 tests; counts traced to stored rows; PR #18 merged after a PASS review |
 | TESTOPS-24 | Retention: keep every run explainable without keeping every byte four times | F1 | ready | Product Owner approved dedupe-by-hash; growth to be measured, not estimated |
-| TESTOPS-25 | The fixture is somebody else's MIT code, and we are not carrying its licence | F1 | ready | Found by the T21 reviewer: the corpus is a copy of Reqnroll's MIT sample with no notice |
+| TESTOPS-25 | The fixture is somebody else's MIT code, and we are not carrying its licence | F1 | done | 108 files verified against upstream blobs; PR #20 merged after a PASS review |
 | TESTOPS-26 | The summary is there, but the reader has to dig it out of a paragraph | F1 | done | Three-part scan block; plain-English lint proven to bite; reviewed with T23 |
 | TESTOPS-27 | The action line drops anything after a semicolon, and trusts that it was redundant | F1 | ready | Reviewer finding on T23/26: a truncated action is the one thing a reader cannot detect |
 
