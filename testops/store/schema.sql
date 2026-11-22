@@ -18,7 +18,26 @@
 -- retroactive CHECK would either reject them or require rewriting evidence to satisfy it. The
 -- triggers read the vocabulary table below, so the allowed set has one definition; retired names
 -- are recorded there with the ticket that retired them (TESTOPS-9), kept readable and never
--- writable again.
+-- rewritten.
+--
+-- schema_version 6 (TESTOPS-46): the guard answers two different questions, at two levels, and
+-- they must not be collapsed again.
+--
+--   * At the DATABASE, on INSERT, a verdict must be a name this product has EVER emitted - current
+--     or retired. That is what a restore is: `INSERT INTO claim SELECT ...` carrying `optimal` out
+--     of an older store is the store keeping its own past, not a new claim being invented. The
+--     v5 trigger asked for a name current today and therefore refused exactly the historical rows
+--     a restore exists to preserve; a store could no longer be rebuilt from its own history.
+--   * In the CODE, an analyser may emit only a name that is current today. `db.add_claim` calls
+--     `store/verdicts.validate_verdict` against the current set, so no live run can write a
+--     retired name even though the database would accept it from a restore. A code guard is
+--     skippable by the next connector, which is why the database guard exists too - but they are
+--     not the same rule and do not belong in the same query.
+--
+-- `claim_verdict_update` deliberately stays current-only. Changing an existing row's verdict to a
+-- retired name is a rewrite of evidence, not a restore; the 128 historical rows are read, never
+-- rewritten. Restore is INSERT, so widening INSERT is enough and leaves UPDATE's original
+-- protection intact.
 
 CREATE TABLE IF NOT EXISTS schema_meta (
   key TEXT PRIMARY KEY,
@@ -141,19 +160,23 @@ CREATE TABLE IF NOT EXISTS claim (
   )
 );
 
--- TESTOPS-45. The store's verdict guard. A trigger, not a CHECK, because the 128 historical rows
--- under retired names must stay readable and unrewritten (AC3); a CHECK would have to reject them.
--- Two triggers, because INSERT and UPDATE are different events: a row's other columns may change
--- freely, but its verdict may not become a name no analyser emits. Both read the vocabulary table,
--- so the allowed set has one definition. RAISE() takes a literal message only, so the message names
--- the allowed set while the offending value is named by `verdicts.validate_verdict` for callers,
--- by this refusal's row context, and by `testops check-store` for a legacy store.
+-- TESTOPS-45, widened by TESTOPS-46. The store's verdict guard. A trigger, not a CHECK, because
+-- the 128 historical rows under retired names must stay readable and unrewritten (AC3); a CHECK
+-- would have to reject them.
+--
+-- The INSERT trigger asks "has this product ever emitted this name?", so restore from an older
+-- store's history is accepted; it reads the whole vocabulary table, current and retired. The code
+-- path is stricter: db.add_claim refuses a retired name through verdicts.validate_verdict, and
+-- nothing but a restore or a migration writes by SQL. The UPDATE trigger keeps asking the v5
+-- question, because rewriting a stored verdict to a retired name is not a restore.
+-- RAISE() takes a literal message only, so the messages name both sets while the offending value
+-- is named by `verdicts.validate_verdict` for callers and by `testops check-store` for a store.
 CREATE TRIGGER IF NOT EXISTS claim_verdict_insert
 BEFORE INSERT ON claim
-WHEN NEW.verdict NOT IN (SELECT name FROM verdict_vocabulary WHERE status = 'current')
+WHEN NEW.verdict NOT IN (SELECT name FROM verdict_vocabulary)
 BEGIN
   SELECT RAISE(ABORT,
-    'claim.verdict is not one of distinct|gap|review|unplaced|duplicate: the store refuses an unknown verdict');
+    'claim.verdict is not a verdict this product has ever emitted: current are distinct|gap|review|unplaced|duplicate; retired are necessary|optimal|overbuilt, accepted only from a restore');
 END;
 
 CREATE TRIGGER IF NOT EXISTS claim_verdict_update
@@ -161,7 +184,7 @@ BEFORE UPDATE OF verdict ON claim
 WHEN NEW.verdict NOT IN (SELECT name FROM verdict_vocabulary WHERE status = 'current')
 BEGIN
   SELECT RAISE(ABORT,
-    'claim.verdict is not one of distinct|gap|review|unplaced|duplicate: the store refuses an unknown verdict');
+    'claim.verdict is not one of distinct|gap|review|unplaced|duplicate: a stored verdict may not be rewritten to an unknown or retired name');
 END;
 
 CREATE TABLE IF NOT EXISTS inference (
