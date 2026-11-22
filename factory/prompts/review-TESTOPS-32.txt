@@ -1,0 +1,40 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-32.
+
+Repository: C:/Users/Chester/Projects/testops-t32 (a git worktree), branch `factory/testops-32-counterpart`.
+Ticket:     C:/Users/Chester/Projects/testops/factory/tickets/TESTOPS-32.md
+Diff:       git diff factory/testops-31-tables..HEAD
+
+IMPORTANT: no .venv in this worktree. Use `cd C:/Users/Chester/Projects/testops-t32 && env -u PYTHONPATH -u
+VIRTUAL_ENV PYTHONNOUSERSITE=1 PYTHONPATH=. C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest
+-q`. Seven tests skip here because data/ is absent; say whether that is justified. Then confirm
+`testops.__file__` points into this worktree.
+
+The defect being fixed: a duplicate claim named a counterpart at `file:line` and the page never showed it, offering
+"other steps in this scenario, for context" instead. The build now renders a section with the counterpart's
+scenario, steps, tables and its step definition.
+
+HARD RULES
+- **Verify the counterpart is really the one named.** Take the rendered file:line, open that blob, and confirm the
+  steps shown belong to that scenario — not a neighbouring one, not the claim's own. A page that shows the wrong
+  scenario confidently is worse than one that shows none.
+- **Check the marking is truthful.** The page marks a line with `<- marked`. Confirm the marked line in the
+  counterpart is the step that does the asserting, and that the marked line in the step definition is the
+  attribute binding that step - not merely the nearest line.
+- **Try to make it lie.** Delete the counterpart's blob from a COPY of the store and confirm the "recorded but not
+  stored" sentence appears instead of a blank or a crash. Then point the claim's coordinates at a file that exists
+  but whose line does not, and report what renders.
+- **Check ordering and non-duplicate cases.** The counterpart must come before the context list; a distinct-verdict
+  case must gain no such section, byte for byte.
+- Confirm duplication counts unchanged (17 claims / 17 cases for ReqOverflow after TESTOPS-31) and level fitness
+  94/90/1/1/2.
+- Do not edit product code, tests or the ticket. Write exactly one file in THIS worktree:
+  factory/reports/2026-11-22/TESTOPS-32-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## Criteria — AC1..AC6 HOLDS / WEAK / NOT MET.
+  ## Is it the right scenario — how you checked, what you found.
+  ## Lies attempted — the three probes and what rendered.
+  ## Three sharpest concerns.
+
+Then reply with the verdict and a summary under 300 words.
