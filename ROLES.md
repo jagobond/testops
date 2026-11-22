@@ -48,6 +48,12 @@ Implements one ticket in an isolated git worktree. Commits before review runs, s
 sees a real diff rather than an uncommitted tree. Reports unrounded numbers and what it could
 not satisfy.
 
+**A build is not done without its report.** Any ticket whose diff touches more than three modules
+must contain its build report, `factory/reports/<date>/<TICKET>-build.md`, before the builder
+reports; a builder that says "done" with no report has not finished the ticket, whatever the diff
+contains. TESTOPS-38 was the largest change in the repository at the time and was reviewed with no
+report at all - the review was the first document about it.
+
 ## Reviewer
 Judges the diff against the ticket's acceptance criteria. Appends a `## Demo` section with: the
 problem, what changed, how we know it works, what it does not solve, where to look. A PASS is an

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 from pathlib import Path
 
 from ..config import settings
@@ -19,6 +20,12 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     exactly as it found it, so a v1 database would keep opening while claiming to be current. The
     version check and the migration live in ``store/migrate.py`` and run before anything is read.
 
+    TESTOPS-44 AC4: an upgrade writes one line to stderr naming the change
+    (``migrated store v3 -> v4``) and nothing else - stderr, because stdout is the CLI's data channel
+    and a notice must not land in a pipe. A store opened for reading prints nothing, so a line in the
+    output is proof that this open changed the file, not a decoration every open repeats. A store
+    newer than this build raises before the line and before a single row is written.
+
     The default path comes from the deployment's :class:`testops.config.Settings`, read at call time
     (AC6): a container mounts a volume and sets ``TESTOPS_DATA``, and no caller carries a host path.
     """
@@ -27,7 +34,10 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(p)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    migrate.prepare(conn, SCHEMA.read_text(encoding="utf-8"))
+    before = migrate.starting_version(conn)
+    version = migrate.prepare(conn, SCHEMA.read_text(encoding="utf-8"))
+    if before is not None and before < version:
+        print(f"migrated store v{before} -> v{version}", file=sys.stderr, flush=True)
     return conn
 
 

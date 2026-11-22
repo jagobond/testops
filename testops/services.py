@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import math
 import re
 from dataclasses import dataclass, field
@@ -42,6 +43,24 @@ CREATE_AT = "%Y-%m-%dT%H:%M:%S+00:00"
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _CREDENTIAL_WORDS = ("token", "password", "secret", "bearer")
+
+# TESTOPS-44. Base64 is the most common way a credential is written down, and its alphabet contains
+# `/` - the very character the separator exemption below used to read as proof of configuration. So
+# the charset is checked first: a long blob of the base64 alphabet is refused whatever punctuation it
+# contains. The entropy floor separates an encoded secret from a path or a coordinate made of words:
+# word-shaped settings measured here sit below 4.1 bits per character
+# (`SomeOrg/SomeVeryLongRepositoryName2` is 4.023), base64 of arbitrary bytes above 4.4. The floor is
+# a threshold, not a proof, and is set to keep every plausible configuration in AC2 accepted.
+_BLOB_MIN = 32
+_BASE64 = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
+_BASE64_ENTROPY = 4.3
+
+# What divides a structured key into readable parts. `COTW-PROJ-KEY-0123456789-ABCDEFG` and a UUID
+# are configuration written as short parts; a token is one long unbroken run. Judging the longest run
+# rather than the whole value is what lets a hyphenated key through while a `ghp_...` token stays out.
+_SEPARATORS = re.compile(r"[/\\\-._:]")
+
+_LOG = logging.getLogger(__name__)
 
 
 class ConfigError(ValueError):
@@ -74,13 +93,23 @@ def _looks_like_secret(value: str) -> str | None:
     for word in _CREDENTIAL_WORDS:
         if word in lower:
             return f"it contains {word!r}"
-    # A long blob of one alphabet with no separator is a token shape, not a host, a path or a
-    # repository. URLs and paths are exempt: they are what settings are for.
+    # A long blob of one alphabet is a token shape, not a host, a path or a repository. URLs and
+    # paths are exempt: they are what settings are for.
     plain = value.strip()
-    if len(plain) >= 32 and not any(ch.isspace() for ch in plain) \
-            and not plain.startswith(("http://", "https://")) and "/" not in plain \
-            and "\\" not in plain:
-        if re.fullmatch(r"[A-Fa-f0-9]+", plain) or (_entropy(plain) >= 3.5 and len(set(plain)) >= 12):
+    if len(plain) >= _BLOB_MIN and not any(ch.isspace() for ch in plain) \
+            and not plain.startswith(("http://", "https://")):
+        # AC1: before the separator exemption, because base64 always contains '/' and often '+' or
+        # '='. A blob that is entirely the base64 alphabet and carries encoded-secret entropy is
+        # refused even though it looks like a path.
+        if _BASE64.fullmatch(plain) and _entropy(plain) >= _BASE64_ENTROPY:
+            return (f"it looks like a base64-encoded secret ({len(plain)} characters of the "
+                    f"base64 alphabet)")
+        # AC2: a structured key is written in short parts; a token is one long unbroken run. Only
+        # the longest run is judged, so a UUID or COTW-PROJ-KEY-... is configuration and ghp_... is
+        # still a token.
+        longest = max(len(part) for part in _SEPARATORS.split(plain))
+        if longest >= 32 and (re.fullmatch(r"[A-Fa-f0-9]+", plain)
+                              or (_entropy(plain) >= 3.5 and len(set(plain)) >= 12)):
             return "it looks like a high-entropy secret (32+ characters, no separators)"
     return None
 
@@ -99,6 +128,9 @@ def validate_settings(settings: dict) -> dict:
         if not isinstance(key, str) or not key.strip():
             raise ConfigError("every settings field needs a name")
         if any(word in key.lower() for word in _CREDENTIAL_WORDS):
+            # AC3: the field name and the reason are logged; the value never is. A refusal that
+            # printed the secret would be a second way to leak it.
+            _LOG.warning("settings field %r refused: the field name reads as a credential", key)
             raise ConfigError(
                 f"settings field {key!r} is named like a credential. Settings hold hosts, "
                 f"repository coordinates, board keys and paths only; a secret resolves from the "
@@ -108,6 +140,7 @@ def validate_settings(settings: dict) -> dict:
                               f"{type(value).__name__}")
         reason = _looks_like_secret(str(value))
         if reason:
+            _LOG.warning("settings field %r refused: %s", key, reason)
             raise ConfigError(
                 f"settings field {key!r} was refused: {reason}. Settings hold hosts, repository "
                 f"coordinates, board keys and paths only - never a token, password or key. A "

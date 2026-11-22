@@ -72,6 +72,19 @@ def stored_version(conn: sqlite3.Connection) -> int | None:
         ) from exc
 
 
+def starting_version(conn: sqlite3.Connection) -> int | None:
+    """The version an open starts from, for the notice :func:`testops.store.db.connect` prints.
+
+    A store that predates the version record is v1 by construction: ``schema_meta`` arrived with v2,
+    so a store that holds a ``claim`` table and no recorded version was written by a v1 build. A file
+    with neither is a new store - nothing is being migrated, and saying so would be a small lie.
+    """
+    version = stored_version(conn)
+    if version is None and _table_exists(conn, "claim"):
+        return 1
+    return version
+
+
 def prepare(conn: sqlite3.Connection, schema_text: str) -> int:
     """Bring the store up to CURRENT_VERSION, or raise. Returns the version now in force."""
     version = stored_version(conn)
