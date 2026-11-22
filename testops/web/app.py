@@ -1077,10 +1077,38 @@ def footnote(claims: list[dict]) -> list[str]:
             f'{esc("; ".join(parts))}.</p>']
 
 
-def case_page(conn, case_id: str) -> bytes | None:
+def stale_case_page(case_id: str) -> bytes:
+    """A case id the store no longer holds.
+
+    Retention deletes a snapshot together with the cases that rest on it (TESTOPS-24), so a
+    bookmark or a link in an old report outlives the evidence. Answering that request with a
+    page that names the id and says why the evidence is gone is the whole job here; a caller
+    rendering this must never get an exception or an empty page (TESTOPS-30).
+    """
+    body = [f'<p class="meta"><a href="/">\u2190 all cases</a></p>',
+            '<h1>This case is no longer in the store</h1>',
+            f'<p>The case <span class="code">{esc(case_id)}</span> is not in the store any '
+            'more.</p>',
+            '<p>Its evidence was pruned by retention. A case lives with the snapshot its '
+            'findings were raised from, and retention deletes snapshots outside the keep window '
+            '(<span class="code">retention --prune --keep N</span>). The case, its '
+            'findings and the run that raised it went together, so there is nothing left to '
+            'render.</p>',
+            '<p>An id that was never in the store reads the same way: the store keeps no record '
+            'of what it has deleted, so it cannot tell a pruned id from one it never '
+            'held.</p>']
+    return page(f"TestOps \u00b7 {case_id}", "".join(body))
+
+
+def case_response(conn, case_id: str) -> tuple[bytes, int]:
+    """The page for a case id, with the status it must be served under.
+
+    A pruned case answers 404 with an explanatory page rather than ``None``: the web layer had
+    to invent a status for ``None``, and every other caller crashed on it (TESTOPS-30).
+    """
     row = queries.case_row(conn, case_id)
     if not row:
-        return None
+        return stale_case_page(case_id), 404
     findings = queries.finding_rows(conn, case_id)
     claims = [c for f in findings for c in f["claims"]]
     versions = versions_text(row["versions"])
@@ -1120,7 +1148,12 @@ def case_page(conn, case_id: str) -> bytes | None:
         body.append('<h2 class="section">5. Decision</h2>' if findings else "<h2>Decision</h2>")
         body.extend(form)
     body.extend(footnote(claims))
-    return page(f"TestOps \u00b7 {case_id}", "".join(body))
+    return page(f"TestOps \u00b7 {case_id}", "".join(body)), 200
+
+
+def case_page(conn, case_id: str) -> bytes:
+    """The case page as bytes. Always a page: a pruned id has one too, served with 404."""
+    return case_response(conn, case_id)[0]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1151,8 +1184,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             m = re.fullmatch(r"/case/([^/]+)", path)
             if m:
-                body = case_page(conn, urllib.parse.unquote(m.group(1)))
-                self._send(body) if body else self._not_found()
+                body, code = case_response(conn, urllib.parse.unquote(m.group(1)))
+                self._send(body, code)
                 return
             self._not_found()
         finally:
