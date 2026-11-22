@@ -2,7 +2,7 @@
 id: TESTOPS-45
 title: The store will accept any verdict string, and 128 rows still carry retired names
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-9
 ---

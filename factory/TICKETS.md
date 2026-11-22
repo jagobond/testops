@@ -55,7 +55,8 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-42 | The tool reads one ecosystem, and says nothing when it does not | F2 | blocked | **From TESTOPS-39** — 0 of 44 cucumber-js bindings read, 43/43 claims unplaced, and a page telling the team its steps are unbound. Needs the Product Owner's decision: declare support, or make the binding layer pluggable |
 | TESTOPS-43 | A sentence that hides its own partial reads | F1 | ready | From the TESTOPS-41 review: aggregate totals hide a per-capability zero, a harmless skip renders nowhere, partial reads say "consulted" |
 | TESTOPS-44 | The secret guard errs in both directions, and the store upgrades without saying so | F2 | ready | From the TESTOPS-38 review: base64 key accepted because the guard exempts `/`, a real 32-char key refused, migration silent on open |
-| TESTOPS-45 | The store will accept any verdict string, and 128 rows still carry retired names | F2 | ready | From the TESTOPS-9 review: no verdict constraint exists — SQLite accepted `total_nonsense`; a trigger validates new writes without rewriting history |
+| TESTOPS-45 | The store will accept any verdict string, and 128 rows still carry retired names | F2 | done | Schema v5 vocabulary + triggers, `check-store`; 534 tests; PR #38 |
+| TESTOPS-46 | A store can no longer be restored from its own history | F2 | ready | From the TESTOPS-45 review: row-level copy of retired names is refused, so restore breaks. Database guard = ever emitted, code guard = current |
 
 |----|-------|---------|--------|------|
 
