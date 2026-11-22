@@ -135,6 +135,7 @@ def run_duplication(project: Project, token: str,
     # and could not consult without probing anything. No "arms" here: a duplication snapshot is not
     # a level-fitness rebuild, and recording arms would invite one to be attempted.
     db.upsert_snapshot(conn, snapshot_id, project.key, _now(), versions,
+                       schema_version=2,
                        meta={"sources_missing": missing_sources,
                              "sources": declared.record(),
                              "analysers": _analyser_record(duplication)})
@@ -161,6 +162,9 @@ def run_duplication(project: Project, token: str,
 
     driver_map = stepbindings.build_driver_map(texts)
     features, bindings, dormant = [], [], []
+    # (binding path, verb, pattern) -> observation id. The analyser never sees the store; it is given
+    # the row ids by key so a duplication claim can carry the evidence its reader needs inline.
+    support_index: dict[tuple[str, str, str], int] = {}
     for path, text in sorted(texts.items()):
         kind = test_repo.files[path][1]
         if kind == "feature":
@@ -174,7 +178,16 @@ def run_duplication(project: Project, token: str,
                     db.add_observation(conn, artefact_ids[path], "gherkin", "1.0.0", f"scenario:{sc.name}",
                                        {"line": sc.line, "steps": len(sc.steps), "signature": sc.signature})
         elif kind == "stepdef":
-            bindings.extend(stepbindings.parse_file(path, text, driver_map))
+            parsed = stepbindings.parse_file(path, text, driver_map)
+            bindings.extend(parsed)
+            for binding in parsed:
+                observation = db.add_observation(
+                    conn, artefact_ids[path], "stepbinding", "1.0.0",
+                    f"binding:{binding.verb.lower()}:{binding.pattern}",
+                    {"verb": binding.verb, "pattern": binding.pattern, "class": binding.cls,
+                     "layer": binding.layer, "suite": binding.suite, "line": binding.line})
+                support_index.setdefault((binding.path, binding.verb, binding.pattern),
+                                         observation)
 
     # 3. optional requirements. Jira is declared blocked wherever a project names it, so in the
     # Quilter deployment this branch is never taken and jira_count stays None - "not consulted",
@@ -197,37 +210,68 @@ def run_duplication(project: Project, token: str,
         return f"github:{project.test.slug}@{test_repo.commit}:{path}"
 
     claims = duplication.analyse(features, bindings, uri_for_path,
-                                 sources_missing=missing_sources, assessment=assessment)
+                                 sources_missing=missing_sources, assessment=assessment,
+                                 commit=test_repo.commit, support_index=support_index)
 
     # 5. persist
     run_id = f"{project.key}-dup-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%S}"
     db.start_run(conn, run_id, project.key, snapshot_id, duplication.name, _now())
-    case_id = f"case-{run_id}"
-    # The case row must exist before its findings: findings carry a foreign key to it.
-    conn.execute(
-        "INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at, summary) VALUES (?,?,?,?,?,?,?)",
-        (case_id, run_id, project.key, duplication.name, snapshot_id, _now(),
-         db.j({"claims": len(claims), "features": len(features),
-               "scenarios": sum(len(f.scenarios) for f in features),
-               "dormant_features": len(dormant), "jira_issues": jira_count})),
-    )
-    emitted = 0
+
+    # Every duplication claim is written with the coordinates its reader needs to check it. The store
+    # refuses a v2 row without them, so this loop cannot quietly fall back to a subject-only claim -
+    # which is exactly how the eighteen reqoverflow findings came to say nothing (TESTOPS-21).
     for c in claims:
         cid = db.add_claim(conn, run_id, duplication.name, duplication.version, c.subject_ref,
-                           c.statement, c.verdict, c.confidence, [],
+                           c.statement, c.verdict, c.confidence, c.detail.get("support", []),
+                           schema_version=2,
+                           assertion_text=c.detail["assertion_text"],
+                           assertion_path=c.detail["assertion_path"],
+                           assertion_line=c.detail["assertion_line"],
+                           assertion_commit=c.detail["assertion_commit"],
+                           interaction_label=c.detail["interaction_label"],
+                           span=c.detail["span"],
+                           established_by=c.detail["established_by"],
                            sources_assessed=c.detail["sources_assessed"],
-                           sources_missing=c.detail["sources_missing"])
+                           sources_missing=c.detail["sources_missing"],
+                           proposed_action=c.detail["proposed_action"])
         c.claim_id = cid
-        emitted += _emit(conn, case_id, duplication.name, c)
+
+    # One case per claim, one finding each. A single case for the whole run meant one decision would
+    # silence every duplicate in it, which is the defect TESTOPS-4 fixed for level fitness and this
+    # analyser never received. A claim a human has already ruled on raises nothing at all.
+    actionable = [c for c in claims if c.verdict in RAISES]
+    case_ids: list[str] = []
+    for number, c in enumerate(actionable, start=1):
+        fp = _fingerprint(duplication.name, c)
+        if cases.suppressed(conn, fp):
+            continue
+        case_id = f"case-{run_id}-{number:02d}"
+        conn.execute(
+            "INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at, summary)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (case_id, run_id, project.key, duplication.name, snapshot_id, _now(),
+             db.j({"verdict": c.verdict, "assertion_line": c.detail.get("assertion_line"),
+                   "claims": len(claims), "actionable": len(actionable),
+                   "features": len(features),
+                   "scenarios": sum(len(f.scenarios) for f in features),
+                   "dormant_features": len(dormant), "jira_issues": jira_count})),
+        )
+        if _emit(conn, case_id, duplication.name, c):
+            case_ids.append(case_id)
+        else:
+            conn.execute("DELETE FROM case_ WHERE id = ?", (case_id,))
     db.finish_run(conn, run_id, "ok", _now(), budget={"model_calls": 0})
     conn.commit()
     conn.close()
 
-    return RunResult(run_id=run_id, snapshot_id=snapshot_id, case_id=case_id, claims=claims,
+    return RunResult(run_id=run_id, snapshot_id=snapshot_id,
+                     case_id=(case_ids[0] if case_ids else ""), claims=claims,
+                     case_ids=case_ids,
                      stats={"features": len(features), "bindings": len(bindings),
                             "scenarios": sum(len(f.scenarios) for f in features),
                             "dormant_features": len(dormant), "jira_issues": jira_count,
-                            "excludes": excludes})
+                            "excludes": excludes, "claims": len(claims),
+                            "cases": len(case_ids)})
 
 
 def run_level_fitness(project: Project, token: str,

@@ -23,7 +23,7 @@ def cmd_duplicate(args) -> int:
     res = run_duplication(p, env["GITHUB_PAT"])
     print(f"run      {res.run_id}")
     print(f"snapshot {res.snapshot_id}")
-    print(f"case     {res.case_id}")
+    print(f"cases    {len(res.case_ids)} ({res.case_id or 'none'})")
     print(f"stats    {json.dumps(res.stats)}")
     print(f"claims   {len(res.claims)}")
     by = {}
