@@ -18,7 +18,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-4 | Level-fitness analyser emits one claim per assertion, with plain-language statement and proposed action | F1 | done | 84 tests; PR #3 merged as 595894e after a PASS review |
 | TESTOPS-5 | Sources are declared, not assumed: the capability registry | F1 | done | 162 tests; crux held end to end; PR #13 merged after a PASS review |
 | TESTOPS-6 | Case page rebuilt around the six sections; provenance labels; codes to footnote | F1 | done | 111 tests; PR #6 merged as fecfb6e after a PASS review |
-| TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | After T5. The suite a real team would keep |
+| TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | Unblocked by T5/T17; waits on F2 direction. The suite a real team would keep |
 | TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | blocked | Reviewer concern 3 on TESTOPS-2: `test_packaging` imports via sys.path, so a broken `package-data` stays green |
 | TESTOPS-9 | Stale claim vocabulary: `schema.sql`, the `Claim` docstring and `analysers/base.py` describe verdicts (`optimal`/`overbuilt`/`necessary`) the analyser abandoned | F1 | blocked | Found by the TESTOPS-2 builder; schema comments that lie mislead every reader |
 | TESTOPS-10 | Classification coverage: 51% of the real corpus is `unplaced` | F1 | done | 48 → 0 unplaced, gaps unchanged; PR #4 merged after a PASS review |
@@ -28,7 +28,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-14 | Evidence depth: a level run records only the product arm and its claims carry no observations | F1 | done | 195 observations, 0 claims empty; verdicts unmoved; PR #8 merged as 28894a5 after a PASS review |
 | TESTOPS-15 | Make the floor real: the suite runs on 3.11 in CI, not just on a machine where someone remembers | F1 | done | Proven fail-capable (run 44962212770): 3.11 leg red, 3.12 green; PR #10 merged |
 | TESTOPS-16 | Say which kind of nothing it is: "not recorded" vs "nothing bears on it" | F1 | done | 140 tests; PR #12 merged after a PASS review |
-| TESTOPS-17 | A clean bill requires having looked: no registry, no verdict | F1 | ready | TESTOPS-5 review: a default `sources_missing = []` renders "Every source needed was available" |
+| TESTOPS-17 | A clean bill requires having looked: no registry, no verdict | F1 | done | schema v3, 1005 old claims demoted to not-assessed; PR #14 merged after a PASS review |
 
 Feature F1 = "a claim a developer can act on". F0 is scaffolding and carries no product outcome.
 
