@@ -215,7 +215,8 @@ def run_duplication(project: Project, token: str,
     for c in claims:
         cid = db.add_claim(conn, run_id, duplication.name, duplication.version, c.subject_ref,
                            c.statement, c.verdict, c.confidence, [],
-                           sources_missing=c.detail.get("sources_missing"))
+                           sources_assessed=c.detail["sources_assessed"],
+                           sources_missing=c.detail["sources_missing"])
         c.claim_id = cid
         emitted += _emit(conn, case_id, duplication.name, c)
     db.finish_run(conn, run_id, "ok", _now(), budget={"model_calls": 0})
@@ -342,6 +343,7 @@ def run_level_fitness(project: Project, token: str,
                            interaction_code=c.detail["interaction_code"],
                            span=c.detail["span"],
                            established_by=c.detail["established_by"],
+                           sources_assessed=c.detail["sources_assessed"],
                            sources_missing=c.detail["sources_missing"],
                            proposed_action=c.detail["proposed_action"])
         c.claim_id = cid

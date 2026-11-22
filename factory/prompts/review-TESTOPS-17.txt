@@ -1,0 +1,30 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-17 against its acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-17-no-registry-no-verdict`.
+Ticket:     factory/tickets/TESTOPS-17.md
+Diff:       git diff feature/f1..HEAD
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Try to produce a clean bill without looking.** Bypass the pipeline exactly as you did for TESTOPS-5:
+  write a claim with the writer's defaults, with a missing list but no assessment, with `sources_assessed`
+  inconsistent with the list. Push each at the database directly and report which the CHECK catches and
+  which it does not. The sentence "Every source needed for this claim was available" must be unreachable
+  from a claim that recorded no assessment — prove it by trying.
+- Check the migration on a real pre-v3 store: old claims must read "not assessed", never an invented
+  assessment. Report the counts you see.
+- Check the three sentences are distinguishable to a reader and that none of them overclaims.
+- Confirm verdicts are still 94/90/1/1/2.
+- Do not edit product code, tests or the ticket. You may write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-17-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC8 HOLDS / WEAK / NOT MET.
+  ## Trying to lie — every attempt, and what stopped it.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 350 words.
+
+ANTI-REPETITION: never repeat a sentence verbatim. Stop when the points are made.

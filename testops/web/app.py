@@ -351,19 +351,30 @@ def section_why(c: dict) -> list[str]:
 def section_unchecked(c: dict) -> list[str]:
     """5. What could not be checked. Absence is a state, never a blank and never a zero.
 
-    The recorded registry is the source of truth here, not the claim's list alone: the list names
-    the source, and the registry says why it was not consulted and who decided. A snapshot that
-    predates the registry keeps the older sentence, which names the source and says plainly that it
-    was never consulted - it just cannot give a reason it never recorded.
-    """
-    missing = c["sources_missing"]
-    if missing is None:
-        return ['<p class="quiet">Whether any source needed for this claim was missing was not '
-                'recorded.</p>']
+    The sentence comes from the claim's recorded *state*, not from the length of a list. A claim
+    whose sources were never assessed says exactly that: the empty list it may have been written
+    with is a default, and a default must not render as a clean bill. A claim that was assessed and
+    found nothing missing gets its own sentence, distinguishable at a glance from the unassessed one.
 
+    The recorded registry is the source of truth for *which* sources were missing and why, not the
+    claim's list alone: the list names the source, and the registry says why it was not consulted and
+    who decided. A name the registry record cannot explain keeps the older sentence, which names the
+    source and says plainly that it was never consulted - it just cannot give a reason it never
+    recorded.
+    """
+    state = c.get("sources_state")
+    if state == queries.SOURCES_NOT_ASSESSED:
+        # AC2. Not a blank, not an exception, and above all not "every source was available": the
+        # claim is silent about its sources because nobody looked, and the page says so.
+        return ['<p class="quiet">Nothing was checked against any source for this claim, so nothing '
+                'here says its sources were clean.</p>']
+
+    missing = c["sources_missing"]
     notes = c.get("source_notes") or []
     recorded = [note for note in notes if note.get("recorded")]
-    if not missing and not recorded:
+    if state == queries.SOURCES_NONE_MISSING and not recorded:
+        # AC3. Assessed, and the assessment found nothing missing. This is the only sentence that
+        # is allowed to be a clean bill, and it is reachable only through a recorded assessment.
         return ['<p>Every source needed for this claim was available.</p>']
 
     if recorded:

@@ -1,7 +1,9 @@
-"""AC6: every claim records which sources were never connected.
+"""AC6: every claim records which sources were never connected - or that nobody looked.
 
 A missing source is never a zero. The caller supplies the list; the analyser copies it onto every
-claim; a caller that supplies nothing still produces an explicit empty list, never NULL.
+claim. A caller that supplies nothing produces no list at all, and the claim records the state that
+describes: not assessed. It must not produce an explicit empty list, because an empty list reads as
+"we looked and nothing was missing" - the guarantee TESTOPS-17 exists to stop a default producing.
 """
 from __future__ import annotations
 
@@ -13,15 +15,17 @@ import level_fixtures as fixtures
 def test_the_callers_missing_sources_are_recorded_on_every_claim():
     claims = fixtures.analyse_fact_sheet(sources_missing=["jira", "ado"])
     assert claims
-    assert all(claim.detail["sources_missing"] == ["jira", "ado"] for claim in claims)
+    for claim in claims:
+        assert claim.detail["sources_assessed"] is True
+        assert claim.detail["sources_missing"] == ["jira", "ado"]
 
 
-def test_a_caller_that_passes_nothing_yields_an_explicit_empty_list():
+def test_a_caller_that_passes_nothing_records_not_assessed_never_an_empty_list():
     claims = fixtures.analyse_fact_sheet()
     assert claims
     for claim in claims:
-        assert claim.detail["sources_missing"] == []
-        assert claim.detail["sources_missing"] is not None
+        assert claim.detail["sources_assessed"] is False
+        assert claim.detail["sources_missing"] is None
 
 
 def test_the_pipeline_names_the_requirement_sources_it_did_not_consult(tmp_path, monkeypatch):

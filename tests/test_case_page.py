@@ -320,7 +320,9 @@ def test_a_v1_claim_says_provenance_was_not_captured_instead_of_failing(tmp_path
     assert "recorded before provenance was captured" in text
     assert "What settles it was not recorded" not in text  # the sentence is grammatical
     assert "What settles this claim was not recorded." in text
-    assert "Whether any source needed for this claim was missing was not recorded" in text
+    assert "Whether any source needed for this claim was missing was not recorded" not in text
+    assert ("Nothing was checked against any source for this claim, so nothing here says its "
+            "sources were clean." in text)
     assert "No proposed action was recorded for this claim." in text
 
 

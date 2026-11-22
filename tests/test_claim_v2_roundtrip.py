@@ -7,6 +7,8 @@ whole design rests on.
 """
 from __future__ import annotations
 
+from typing import Any
+
 from testops import queries
 from testops.store import db
 
@@ -18,7 +20,7 @@ LINE = 314
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
 MISSING = ["jira", "ado"]
 
-FIELDS = dict(
+FIELDS: dict[str, Any] = dict(
     assertion_text=ASSERTION_TEXT,
     assertion_path=PATH,
     assertion_line=LINE,
@@ -27,6 +29,7 @@ FIELDS = dict(
     interaction_code="I4",
     span=["api", "browser"],
     established_by="level_fitness:ACCESSIBILITY/carrier",
+    sources_assessed=True,
     sources_missing=MISSING,
     proposed_action="Assert the rendered panel in the browser suite",
 )

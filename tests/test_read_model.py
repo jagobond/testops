@@ -28,7 +28,7 @@ def _seed_case(conn, run_id: str) -> tuple[int, str]:
 def _store_with_finding(tmp_path):
     conn = db.connect(tmp_path / "read-model.db")
     run_id = seed_run(conn)
-    claim_id = add_v2_claim(conn, run_id, sources_missing=["jira", "ado"])
+    claim_id = add_v2_claim(conn, run_id, sources_assessed=True, sources_missing=["jira", "ado"])
     conn.execute("INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at, summary)"
                  " VALUES (?,?,?,?,?,?,?)",
                  (CASE, run_id, "fixture", "level_fitness", "snap-schema",
@@ -47,7 +47,7 @@ def test_finding_rows_returns_statement_provenance_and_blind_spots_together(tmp_
         conn.close()
 
     claim = findings[0]["claims"][0]
-    assert {"statement", "provenance", "sources_missing"} <= set(claim)
+    assert {"statement", "provenance", "sources_missing", "sources_state"} <= set(claim)
     assert claim["statement"].startswith("The panel is asserted")
     assert claim["sources_missing"] == ["jira", "ado"]
 

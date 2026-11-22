@@ -8,25 +8,32 @@ Three rules, in order of importance:
    no ``--force``: the answer to "too new" is to use the newer build.
 2. **v1 rows are never rewritten.** They keep ``schema_version = 1`` and NULL provenance. The store
    upgrades its *structure*; it does not upgrade anyone's past statements and does not invent
-   coordinates for a claim that was made before coordinates existed.
-3. **The upgrade ends at the same shape as a fresh database.** The v2 ``claim`` table is rebuilt by
+   coordinates for a claim that was made before coordinates existed. The same rule governs the
+   source assessment added in v3: a claim is marked assessed only when its own snapshot recorded the
+   registry the assessment was derived from. A run whose snapshot has no registry record migrates to
+   "not assessed" - the missing-source list it happened to carry was a default, and keeping it as an
+   assessment would have invented the look it never recorded.
+3. **The upgrade ends at the same shape as a fresh database.** The ``claim`` table is rebuilt by
    copying the canonical DDL out of ``schema.sql`` itself, so a migrated store and a new store
-   cannot drift apart while both claim to be version 2.
+   cannot drift apart while both claim to be the current version.
 
 SQLite cannot add a table-level CHECK to an existing table, and AC4's refusal has to live in the
-database - a Python guard in ``add_claim`` would be skippable by the next caller. So the v1 ``claim``
+database - a Python guard in ``add_claim`` would be skippable by the next caller. So the ``claim``
 table is rebuilt: same rows, same ids, same values, new columns defaulted to "not recorded", and the
-constraint present. The rebuild runs inside one transaction with foreign keys off (dropping a table
+constraints present. The rebuild runs inside one transaction with foreign keys off (dropping a table
 others reference is otherwise refused); ``PRAGMA foreign_key_check`` runs before the transaction is
 accepted.
 """
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 
+from ..sources import assessment_for
+
 # The schema this build writes and reads. A store above this is refused.
-CURRENT_VERSION = 2
+CURRENT_VERSION = 3
 
 # The oldest store this build can still open. v1 is readable: its claims are evidence.
 MIN_SUPPORTED_VERSION = 1
@@ -82,6 +89,9 @@ def prepare(conn: sqlite3.Connection, schema_text: str) -> int:
     if _table_exists(conn, "claim") and not _has_column(conn, "claim", "assertion_path"):
         _upgrade_claim_to_v2(conn, schema_text)
 
+    if _table_exists(conn, "claim") and not _has_column(conn, "claim", "sources_assessed"):
+        _upgrade_claim_sources_to_v3(conn, schema_text)
+
     if _table_exists(conn, "snapshot") and not _has_column(conn, "snapshot", "schema_version"):
         # ADD COLUMN with a non-NULL default is safe here: every existing snapshot was taken under
         # the v1 claim schema, and 1 is the truth about it, not a stand-in for a missing value.
@@ -107,13 +117,62 @@ def _record_version(conn: sqlite3.Connection, version: int) -> None:
 
 
 def _upgrade_claim_to_v2(conn: sqlite3.Connection, schema_text: str) -> None:
-    new_table = "claim__v2"
+    columns = ", ".join(_V1_CLAIM_COLUMNS)
+
+    def insert(new_table: str) -> None:
+        # Every v1 column copied by name; ids preserved so claims, findings' claim_ids and inference
+        # rows all keep pointing at the same claim. The columns this build adds keep their defaults:
+        # a v1 claim was made before provenance and before source assessment existed, and "not
+        # recorded" is the truth about it - not an assessment invented from its missing list.
+        conn.execute(f"INSERT INTO {new_table} ({columns}) SELECT {columns} FROM claim")
+
+    _rebuild_claim_table(conn, schema_text, insert)
+
+
+def _upgrade_claim_sources_to_v3(conn: sqlite3.Connection, schema_text: str) -> None:
+    """Add ``sources_assessed``, and settle every existing claim's source state honestly.
+
+    A v2 store has no record of *whether* the registry was consulted - only, sometimes, of what it
+    said. The snapshot's meta is the evidence that decides it: a claim whose snapshot carries the
+    registry record and the analyser's needs was assessed, and keeps its stored list; a claim whose
+    snapshot carries no registry record is not assessed, whatever list the row happens to hold. That
+    list was written without a registry behind it - a default - and promoting it to an assessment is
+    exactly the failure this ticket exists to close. Nothing is deleted: the snapshot still holds
+    what the run recorded about its sources; only the claim stops claiming it was looked at.
+    """
+    rows = [dict(row) for row in conn.execute("SELECT * FROM claim ORDER BY id")]
+    metas: dict[str, dict | None] = {}
+    for row in rows:
+        if row["run_id"] not in metas:
+            metas[row["run_id"]] = _snapshot_meta(conn, row["run_id"])
+
+    columns = [row[1] for row in conn.execute("PRAGMA table_info(claim)")]
+    target = [column for column in columns
+              if column not in ("sources_missing", "sources_assessed")]
+    target += ["sources_missing", "sources_assessed"]
+    values = []
+    for row in rows:
+        assessed = assessment_for(metas[row["run_id"]], row["analyser"]) is not None
+        values.append(tuple([row[column] for column in target[:-2]]
+                            + [row["sources_missing"] if assessed else None,
+                               1 if assessed and row["sources_missing"] is not None else 0]))
+
+    def insert(new_table: str) -> None:
+        conn.executemany(
+            f"INSERT INTO {new_table} ({', '.join(target)}) VALUES ({', '.join('?' for _ in target)})",
+            values)
+
+    _rebuild_claim_table(conn, schema_text, insert)
+
+
+def _rebuild_claim_table(conn: sqlite3.Connection, schema_text: str, insert) -> None:
+    """Rebuild ``claim`` from ``schema.sql``'s own DDL, filling it through ``insert(new_table)``."""
+    new_table = "claim__rebuild"
     ddl = _canonical_claim_ddl(schema_text)
     new_ddl, replaced = re.subn(r"^CREATE TABLE\s+claim\b", f"CREATE TABLE {new_table}", ddl, count=1)
     if not replaced:
         raise RuntimeError(f"schema.sql no longer creates a table named claim: {ddl[:80]!r}")
 
-    columns = ", ".join(_V1_CLAIM_COLUMNS)
     conn.commit()
     previous_isolation = conn.isolation_level
     try:
@@ -122,9 +181,7 @@ def _upgrade_claim_to_v2(conn: sqlite3.Connection, schema_text: str) -> None:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(f"DROP TABLE IF EXISTS {new_table}")
         conn.execute(new_ddl)
-        # Every v1 column copied by name; ids preserved so claims, findings' claim_ids and inference
-        # rows all keep pointing at the same claim.
-        conn.execute(f"INSERT INTO {new_table} ({columns}) SELECT {columns} FROM claim")
+        insert(new_table)
         conn.execute("DROP TABLE claim")
         conn.execute(f"ALTER TABLE {new_table} RENAME TO claim")
         conn.execute("COMMIT")
@@ -141,6 +198,24 @@ def _upgrade_claim_to_v2(conn: sqlite3.Connection, schema_text: str) -> None:
     broken = conn.execute("PRAGMA foreign_key_check").fetchall()
     if broken:
         raise RuntimeError(f"migration left dangling references: {broken[:5]}")
+
+
+def _snapshot_meta(conn: sqlite3.Connection, run_id: str) -> dict | None:
+    """The snapshot meta for a claim's run, or ``None`` when there is none to read.
+
+    Unreadable JSON is treated as no record here rather than as an assessment: a migration that
+    cannot read what a run could see must not decide that it could see everything.
+    """
+    row = conn.execute(
+        "SELECT s.meta FROM run r JOIN snapshot s ON s.id = r.snapshot_id WHERE r.id = ?",
+        (run_id,)).fetchone()
+    if row is None or not row[0]:
+        return None
+    try:
+        value = json.loads(row[0])
+    except json.JSONDecodeError:
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _canonical_claim_ddl(schema_text: str) -> str:
