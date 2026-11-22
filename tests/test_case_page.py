@@ -402,6 +402,7 @@ def test_the_case_list_shows_what_the_claim_asserts_not_a_truncated_title(tmp_pa
     assert "the panel" in text
     assert title not in text
     assert statement not in text, "the index shows the analyser's essay, not the claim"
-    # The whole asserted step, as one piece of anchor text: no truncation, no mid-sentence ending.
+    # TESTOPS-33: the link text is a judgement and the scenario title, never the bare step the
+    # claim stores - a step is not a headline. The scenario here is "the panel".
     m = re.search(r'<p class="claimtext">(.*?)</p>', body, re.S)
-    assert m and htmllib.unescape(m.group(1)).strip() == "the panel"
+    assert m and htmllib.unescape(m.group(1)).strip() == "Not proved \u2014 the panel"

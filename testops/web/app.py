@@ -2,6 +2,11 @@
 
 Two screens. Server-rendered HTML, one form, no JavaScript, nothing behind a disclosure.
 
+The list is the way in, and every row is a link a reader would follow: a judgement in the verdict's
+own words and the scenario title, never the raw assertion fragment it used to print, and never a
+phrase that stops on "should be" (TESTOPS-33). The rows are grouped by project, and the verdict
+sits as a badge beside the case's state so a claim nobody could place does not read as settled.
+
 The case page is one argument, said once, in the order a reader needs it (TESTOPS-23). The page used
 to be six sections that narrated the analysis: the claim restated three times, a numbered section on
 where a scenario's name came from, sentences about "the words" a rule had read, and fragment
@@ -113,6 +118,10 @@ ul.cases li a:hover { background:#f6f4f0; }
 .badge { display:inline-block; font-size:.78rem; letter-spacing:.03em; text-transform:uppercase;
          border:1px solid var(--line); border-radius:99px; padding:.1rem .55rem; color:var(--dim); }
 .badge.hot { border-color:var(--bad); color:var(--bad); }
+/* The verdict beside the case state (TESTOPS-33): a claim that could not be placed wears a dashed
+   badge, so "Cannot tell" never looks as settled as "Checked". */
+.badge.verdict { border-color:var(--accent); color:var(--accent); }
+.badge.verdict.soft { border-style:dashed; border-color:var(--dim); color:var(--dim); }
 blockquote.assertion { margin:.6rem 0 .5rem; padding:.6rem .9rem; background:#fff;
                        border-left:3px solid var(--accent); font-size:1.12rem; }
 .code { font-family: ui-monospace, Consolas, monospace; font-size:.8rem; color:var(--dim); }
@@ -662,6 +671,170 @@ def step_definition_snippet(c: dict) -> list[str]:
                          "The step definition that runs it:")
 
 
+# ---------------------------------------------------------------- the case list's headline
+#
+# TESTOPS-33. The list rendered the claim's stored assertion fragment as the link text -
+# "the suggestions list should be" - and the Product Owner's verdict was that he would not click it:
+# it says what the step reads, not what the case is about, and it is not even a complete phrase.
+#
+# A row now reads "<judgement> — <subject>". The judgement is the verdict in the reader's words -
+# a statement, not a category (TESTOPS-23's rule, applied to the list) - and the subject is the
+# scenario title, which is the test author's name for the case. Only a claim with no scenario
+# recorded falls back to its step text, normalised: keyword stripped, dangling tail trimmed. A
+# headline never ends on a word that cannot end a phrase, and never exceeds 90 characters: a link
+# that dangles is not a title, whichever end it dangles from.
+
+# The judgement each verdict makes, short enough to sit in a list. These are the same statements
+# the case page opens with, cut to a heading: "Not proved", not "gap"; "Already asserted elsewhere",
+# not "duplicate".
+LIST_JUDGEMENT = {
+    "distinct": "Checked",
+    "review": "Checked, but over-tested",
+    "duplicate": "Already asserted elsewhere",
+    "gap": "Not proved",
+    "unplaced": "Cannot tell",
+}
+# Verdicts the analyser no longer writes. A row that still carries one is a claim recorded before
+# the vocabulary changed (TESTOPS-9); it gets the judgement its old word made, so an old case can
+# be listed without the list inventing a new verdict for it.
+LEGACY_JUDGEMENT = {"necessary": "Checked", "optimal": "Checked",
+                    "overbuilt": "Checked, but over-tested"}
+
+HEADLINE_MAX = 90
+HEADLINE_SEP = " \u2014 "
+
+# A word that cannot end a phrase. "the suggestions list should be" ends on "be", "the panel at" on
+# "at": the reader is left holding half a clause. The list trims these rather than printing them,
+# and ``headline_problems`` lets a test refuse any that survives.
+DANGLING = frozenset("""
+a an the this that these those its their his her our your my
+and or but nor so yet either neither both each every all any no not none some such
+is are was were be been being am has have had do does did
+should would could will shall may might must can cannot
+about above across after against along among around as at before behind below beneath beside
+between beyond by despite down during except for from in inside into like near of off on onto
+opposite out outside over past per since than through throughout till to toward towards under
+underneath until up upon via with within without
+if then when whenever while because although though whether which who whom whose what
+there here more most much many few less least very only just also too again ever never still
+yet rather quite own same other another
+""".split())
+
+_TRAILING_MARKS = re.compile(r"[\s,;:.\-\u2013\u2014/|]+$")
+_WORDS = re.compile(r"[A-Za-z0-9']+")
+
+
+def list_judgement(verdict: str | None) -> str | None:
+    """The verdict as the list's judgement, or ``None`` when the row records no verdict."""
+    if not verdict:
+        return None
+    if verdict in LIST_JUDGEMENT:
+        return LIST_JUDGEMENT[verdict]
+    if verdict in LEGACY_JUDGEMENT:
+        return LEGACY_JUDGEMENT[verdict]
+    return verdict.replace("_", " ").capitalize()
+
+
+def _dangling_word(text: str) -> bool:
+    words = _WORDS.findall(text or "")
+    return not words or words[-1].lower().strip("'") in DANGLING
+
+
+def ends_in_fragment(headline: str) -> bool:
+    """True when a headline stops on a word that cannot end a phrase: "should be", "at", "the"."""
+    return _dangling_word(headline)
+
+
+def _trim_tail(text: str) -> str:
+    """The subject without a tail that cannot end a phrase, and without trailing punctuation."""
+    text = " ".join((text or "").split())
+    while True:
+        trimmed = _TRAILING_MARKS.sub("", text)
+        words = trimmed.split()
+        if len(words) <= 1:
+            # One word left: keep it only if it is a phrase on its own. A lone "with" is the
+            # fragment this rule exists to remove, and a headline made of nothing is worse.
+            return "" if _dangling_word(trimmed) else trimmed
+        if not _dangling_word(trimmed):
+            return trimmed
+        text = " ".join(words[:-1])
+
+
+def _trim_to(text: str, limit: int) -> str:
+    """The longest whole-word prefix that fits ``limit`` characters, or ``""`` if none does."""
+    if len(text) <= limit:
+        return _trim_tail(text)
+    if limit <= 0:
+        return ""
+    cut = text[:limit]
+    if " " in cut:
+        cut = cut[:cut.rindex(" ")]
+    else:
+        return ""
+    return _trim_tail(cut)
+
+
+def normalised_subject(text: str | None) -> str:
+    """A claim's step text, fit to be a headline's subject: no keyword, no dangling tail."""
+    cleaned = " ".join((text or "").split())
+    match = GHERKIN.match(cleaned)
+    if match:
+        cleaned = match.group(2)
+    return _trim_tail(cleaned)
+
+
+def case_headline(judgement: str | None, subject: str | None) -> str:
+    """``<judgement> — <subject>``: one line, never a trailing fragment, never over 90 characters."""
+    head = " ".join((judgement or "").split())
+    body = normalised_subject(subject)
+    if not head:
+        return _trim_to(body, HEADLINE_MAX)
+    if not body or _dangling_word(body):
+        return head
+    room = HEADLINE_MAX - len(head) - len(HEADLINE_SEP)
+    if len(body) > room:
+        if room <= 3:
+            return head
+        body = _trim_to(body, room - 1)     # one character is kept for the ellipsis
+        if not body:
+            return head
+        body += "\u2026"
+    return f"{head}{HEADLINE_SEP}{body}"
+
+
+def headline_problems(headline: str) -> list[str]:
+    """What is wrong with a rendered headline: too long, or ending on a word that cannot end one."""
+    problems: list[str] = []
+    if len(headline) > HEADLINE_MAX:
+        problems.append(f"{len(headline)} characters: {headline!r}")
+    if _dangling_word(headline):
+        problems.append(f"ends on a dangling word: {headline!r}")
+    return problems
+
+
+def row_headline(row: dict) -> str:
+    """The case list's link text for one row: a judgement and a subject, or the run's own words."""
+    judgement = list_judgement(row.get("verdict"))
+    subject = row.get("scenario") or normalised_subject(row.get("assertion")
+                                                        or row.get("statement"))
+    if judgement is None:
+        # A case with no claim (a quiet run) has no verdict to state. It keeps its own label rather
+        # than borrowing a judgement nobody made (TESTOPS-22, TESTOPS-34).
+        return case_headline(NO_FINDINGS_LABEL, subject) if subject else NO_FINDINGS_LABEL
+    return case_headline(judgement, subject)
+
+
+def verdict_badge(row: dict) -> str:
+    """The row's verdict badge - dashed and muted when the claim could not be placed (AC5)."""
+    judgement = list_judgement(row.get("verdict"))
+    if not judgement:
+        return ""
+    verdict = row.get("verdict")
+    soft = verdict not in LIST_JUDGEMENT or verdict == "unplaced"
+    cls = "badge verdict soft" if soft else "badge verdict"
+    return f'<span class="{cls}">{esc(judgement)}</span> '
+
+
 # ---------------------------------------------------------------- home screen
 
 def index(conn) -> bytes:
@@ -680,24 +853,29 @@ def index(conn) -> bytes:
             body.append('<p class="quiet">No cases yet. Nothing has been analysed, so this page '
                         'cannot say anything about the code.</p>')
     else:
-        body.append('<ul class="cases">')
+        # Grouped by project (AC5): a person reads the list one repository at a time, and a heading
+        # per project is what says which repository the rows below belong to. A project that has
+        # more than one case gets one heading, not one per case: the newest case still comes first.
+        groups: dict[str, list[dict]] = {}
         for r in rows:
-            n = r["findings"]
-            shown = display_state(r["state"], n)
-            hot = ' class="hot"' if shown in ("Open", "Needs a fix") else ""
-            # The claim's own words, never finding.title: a title cut to 160 characters ends
-            # mid-sentence and leaves the reader to guess what is alleged. The asserted step is
-            # what the claim is; the stored statement is the analyser's essay about it, and only a
-            # v1 claim (which recorded no step) falls back to it (TESTOPS-23).
-            statement = (r.get("assertion") or r.get("statement")
-                         or "No claim: this run raised no finding.")
-            body.append(
-                f'<li><a href="/case/{esc(r["id"])}">'
-                f'<div><span class="badge{hot}">{esc(shown)}</span> '
-                f'<span class="meta">{esc(r["project"])} \u00b7 {esc(analyser_text(r["analyser"]))} '
-                f'\u00b7 {n} finding{"s" if n != 1 else ""} \u00b7 {esc(age(r["created_at"]))}</span>'
-                f'</div><p class="claimtext">{esc(statement)}</p></a></li>')
-        body.append("</ul>")
+            groups.setdefault(r["project"], []).append(r)
+        for project, group in groups.items():
+            body.append(f'<h2 class="section">{esc(project)}</h2>')
+            body.append('<ul class="cases">')
+            for r in group:
+                n = r["findings"]
+                shown = display_state(r["state"], n)
+                hot = ' class="hot"' if shown in ("Open", "Needs a fix") else ""
+                # TESTOPS-33: the link text is a judgement and a subject, never the raw assertion
+                # fragment. A row whose step text is all there is falls back to its normalised step,
+                # and the badge beside it says which verdict the headline is stating.
+                body.append(
+                    f'<li><a href="/case/{esc(r["id"])}">'
+                    f'<div><span class="badge{hot}">{esc(shown)}</span> {verdict_badge(r)}'
+                    f'<span class="meta">{esc(analyser_text(r["analyser"]))} '
+                    f'\u00b7 {n} finding{"s" if n != 1 else ""} \u00b7 {esc(age(r["created_at"]))}</span>'
+                    f'</div><p class="claimtext">{esc(row_headline(r))}</p></a></li>')
+            body.append("</ul>")
     if older:
         body.append(f'<p class="quiet">{older} earlier run{"s" if older != 1 else ""} not shown '
                     f'\u2014 only the newest case per analyser is listed.</p>')
