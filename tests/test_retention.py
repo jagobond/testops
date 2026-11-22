@@ -18,8 +18,14 @@ The ticket's decision is dedupe-by-content-hash. These tests hold it to that:
 """
 from __future__ import annotations
 
+import re
+import threading
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
+
+import pytest
 
 import level_fixtures as level_fixtures
 import reqoverflow_fixtures as reqoverflow
@@ -512,3 +518,116 @@ def test_the_default_is_report_only_and_says_so(tmp_path, monkeypatch, capsys):
     finally:
         conn.close()
     assert remaining == ["snap-3"]
+
+
+# -------------------------------------------------------------------------------------- TESTOPS-30
+
+# AC1: N is per project. The behaviour is accepted (it deletes fewer than a global count would),
+# so these tests hold the *words* to it - the help, the plan header, and the per-project counts a
+# reader can check the sentence against.
+
+def test_the_help_text_says_keep_n_is_per_project(capsys):
+    from testops import cli
+
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["retention", "--help"])
+    assert exited.value.code == 0
+    help_text = " ".join(capsys.readouterr().out.split())
+    assert "keep N per project" in help_text
+    assert "the N most recent snapshots in each project" in help_text
+
+
+def test_the_prune_report_says_per_project_and_prints_the_counts(tmp_path, monkeypatch, capsys):
+    from testops import cli
+
+    monkeypatch.setattr(blobs, "BLOB_DIR", tmp_path / "blobs")
+    path = tmp_path / "wording.db"
+    connect = db.connect
+    conn = connect(path)
+    try:
+        for day in (1, 2, 3):
+            _snapshot(conn, f"busy-{day}", "busy", f"2026-01-0{day}T00:00:00+00:00")
+        for day in (1, 2):
+            _snapshot(conn, f"quiet-{day}", "quiet", f"2026-01-0{day}T12:00:00+00:00")
+        conn.commit()
+    finally:
+        conn.close()
+    monkeypatch.setattr(db, "connect", lambda: connect(path))
+
+    # Without --yes it refuses *after* printing the plan, so the wording is visible on a safe run.
+    assert cli.main(["retention", "--prune", "--keep", "1"]) == 2
+    out = capsys.readouterr().out
+    assert "keep 1 per project" in out
+    # One per project, though each project holds more: the counts say so rather than leaving the
+    # reader to infer it from the delete list.
+    assert re.search(r"^\s+busy\s+1 / 3$", out, re.M), out
+    assert re.search(r"^\s+quiet\s+1 / 2$", out, re.M), out
+
+
+# AC2/AC3: a case id whose snapshot was pruned answers 404 with a page that explains itself; a
+# surviving id is untouched. Both requests go through the real handler over a real socket, so the
+# status code under test is the one a browser would receive.
+
+def _pruned_store_with_one_orphaned_case(tmp_path, monkeypatch):
+    """Two snapshots, two cases, then a keep-1 prune: ``case-1`` loses its evidence."""
+    monkeypatch.setattr(blobs, "BLOB_DIR", tmp_path / "blobs")
+    path = tmp_path / "stale-id.db"
+    real_connect = db.connect
+    conn = real_connect(path)
+    try:
+        for day in (1, 2):
+            _snapshot(conn, f"snap-{day}", "p", f"2026-01-0{day}T00:00:00+00:00")
+            _case_with_finding(conn, f"case-{day}", f"snap-{day}", f"fp-{day}")
+        conn.commit()
+        result = retention.prune(conn, keep=1, yes=True, blob_dir=tmp_path / "blobs")
+    finally:
+        conn.close()
+    assert result["deleted"]["snapshots"] == ["snap-1"]
+    return path, real_connect
+
+
+def _serve_store(connect, monkeypatch):
+    from testops.web import app
+
+    monkeypatch.setattr(app.db, "connect", connect)   # the handler opens its own connection
+    httpd = app.ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd, f"http://127.0.0.1:{httpd.server_address[1]}"
+
+
+def _get(url: str) -> tuple[int, str]:
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            return response.status, response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read().decode("utf-8")
+
+
+def test_a_pruned_case_id_is_a_404_page_that_names_the_case_and_retention(tmp_path, monkeypatch):
+    path, connect = _pruned_store_with_one_orphaned_case(tmp_path, monkeypatch)
+    httpd, base = _serve_store(lambda: connect(path), monkeypatch)
+    try:
+        status, body = _get(f"{base}/case/case-1")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    assert status == 404
+    assert "case-1" in body
+    assert "no longer in the store" in body
+    assert "retention" in body and "pruned" in body
+    assert "<h1>" in body, "a page, not a blank body"
+
+
+def test_a_surviving_case_id_still_answers_200_after_the_prune(tmp_path, monkeypatch):
+    path, connect = _pruned_store_with_one_orphaned_case(tmp_path, monkeypatch)
+    httpd, base = _serve_store(lambda: connect(path), monkeypatch)
+    try:
+        status, body = _get(f"{base}/case/case-2")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    assert status == 200
+    assert "case-2" in body
+    assert "no longer in the store" not in body
