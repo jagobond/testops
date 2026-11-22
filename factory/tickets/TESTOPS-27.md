@@ -2,7 +2,7 @@
 id: TESTOPS-27
 title: The action line drops anything after a semicolon, and trusts that it was redundant
 feature: F1
-status: ready
+status: superseded
 autonomy: build
 depends_on: TESTOPS-26
 ---
@@ -61,3 +61,9 @@ ticket is not done until it passes its own probes.
 | AC7 | The eight probes above are tests, and every one is kept. Matching handles inflected forms (stems plus `-s`, `-ed`, `-ing`, `-es`, and irregulars the vocabulary actually contains) and passive constructions (`should be deleted`, `needs deleting`, `must be removed`, `worth keeping`) as instructions. |
 | AC8 | A tail is dropped only when the drop is proved: the clause opens with a word whose subject is the head clause AND contains no verb from the instruction vocabulary in any inflection, AND no modal or passive marker. The proof is in the test, not in the comment. |
 | AC9 | The 94 real tails that currently drop still drop — the fix must not turn every tail into a kept clause, or the corpus becomes noisy and the reader stops reading the second sentence. Report the before/after counts. |
+
+## Superseded
+
+See TESTOPS-28. Two review passes leaked three orders between them; the classification is removed and the
+whole action is kept. The evidence is in `factory/reports/2026-11-22/TESTOPS-27-review.md` and
+`TESTOPS-27-review-2.md`.
