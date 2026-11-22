@@ -1,0 +1,83 @@
+REVIEW WORKFLOW — TESTOPS
+=========================
+
+Written after TESTOPS-35, when a review session's fixture case (`rev-duplicate`, analyser `x`)
+reached the live store and rendered on the Product Owner's dashboard. The fault was not one
+careless INSERT. It was that nothing between a review harness and `data/testops.db` said "no".
+
+THE RULE, IN ONE SENTENCE
+-------------------------
+A review fixture belongs in a COPY of the store. The live store at
+C:/Users/Chester/Projects/testops/data is the Product Owner's evidence: never write a case, claim,
+snapshot, artefact or blob into it, and never run a destructive command against it.
+
+
+1. WORK IN A WORKTREE
+----------------------
+    git -C C:/Users/Chester/Projects/testops worktree add C:/Users/Chester/Projects/testops-tNN -b factory/testops-NN-slug origin/main
+    cd C:/Users/Chester/Projects/testops-tNN
+
+The worktree has no .venv. Use the main checkout's interpreter with this directory first on the
+path, and verify the import resolves here before reviewing anything:
+
+    env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 PYTHONPATH=. \
+      C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -c "import testops; print(testops.__file__)"
+
+If that prints the main checkout, stop: you are about to review the wrong code.
+
+
+2. COPY THE STORE BEFORE YOU TOUCH IT
+-------------------------------------
+    mkdir -p C:/Users/Chester/AppData/Local/Temp/review/store/data
+    cp -r C:/Users/Chester/Projects/testops/data/. C:/Users/Chester/AppData/Local/Temp/review/store/data/
+    export TESTOPS_HOME=C:/Users/Chester/AppData/Local/Temp/review/store
+
+`TESTOPS_HOME` is what moves everything — the CLI, the web UI, retention, scrub — onto the copy.
+`data/testops.db` and `data/blobs/` both come across, so pages render from stored blobs exactly as
+they do in production. Check the CLI is pointed at the copy before any command that can write:
+
+    python -m testops.cli scrub-fixtures --dry-run
+    # first line must name .../review/store/data/testops.db, not C:/Users/Chester/Projects/testops/data
+
+Everything you rehearse — a decision, a retention prune, a scrub, a fixture you write yourself —
+runs against this copy. If a rehearsal needs a second fixture, copy the copy.
+
+
+3. WHERE A FIXTURE GOES IF YOU NEED ONE
+---------------------------------------
+A fixture is a case, claim, run or snapshot you construct to see how a page behaves. It goes in
+the copy, and nowhere else:
+
+    conn = sqlite3.connect("C:/Users/Chester/AppData/Local/Temp/review/store/data/testops.db")
+
+Never into `C:/Users/Chester/Projects/testops/data/`. The test suite now refuses that too: a test
+that opens a product store for writing fails at the connection (tests/conftest.py `store_guard`),
+and the only permitted access to a real store is a declared read-only open
+(`sqlite3.connect("file:<path>?mode=ro", uri=True)`).
+
+
+4. IF A FIXTURE HAS ALREADY REACHED THE LIVE STORE
+--------------------------------------------------
+Do not hand-edit SQLite. Use the command that exists for it, and run it against the copy first to
+see exactly what it will remove:
+
+    python -m testops.cli scrub-fixtures --dry-run    # report only; names ids, counts, fingerprints
+    python -m testops.cli scrub-fixtures --yes        # removes only what the report listed
+
+A case whose `analyser` is not a registered analyser (`duplication`, `level_fitness`) is a
+fixture. `scrub-fixtures` removes the case, its findings, its recorded decisions and its orphaned
+suppressions; the run, snapshot, artefacts, observations and claims stay, because real cases rest
+on them.
+
+The web UI treats such a case the same way: `/case/<id>` answers 404 with the TESTOPS-30 page and
+says which analyser the row named, and the case is not listed on the dashboard.
+
+
+5. WHAT A REVIEW MAY NEVER DO
+-----------------------------
+- Write to C:/Users/Chester/Projects/testops/data — no exceptions, including "just one row".
+- Run any command with `--yes`, or retention `--prune`, without pointing at the copy first and
+  printing the dry run.
+- Edit product code, tests, or the ticket while reviewing. One file goes in the worktree:
+  factory/reports/<date>/TESTOPS-NN-review.md.
+- Leave a TESTOPS_HOME or a fixture behind that a later session could mistake for the live store.

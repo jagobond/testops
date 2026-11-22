@@ -46,6 +46,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .. import cases, queries, sources
+from ..analysers import is_registered
 from ..extract.stepbindings import LAYER_ORDER
 from ..store import db
 
@@ -1077,18 +1078,34 @@ def footnote(claims: list[dict]) -> list[str]:
             f'{esc("; ".join(parts))}.</p>']
 
 
-def stale_case_page(case_id: str) -> bytes:
+def stale_case_page(case_id: str, unregistered_analyser: str | None = None) -> bytes:
     """A case id the store no longer holds.
 
     Retention deletes a snapshot together with the cases that rest on it (TESTOPS-24), so a
     bookmark or a link in an old report outlives the evidence. Answering that request with a
     page that names the id and says why the evidence is gone is the whole job here; a caller
     rendering this must never get an exception or an empty page (TESTOPS-30).
+
+    A case whose analyser this build does not know is answered with the same page (TESTOPS-35):
+    the row may still be in the store, but nothing here could have raised it, so its argument is
+    not the store's to make. Saying "pruned by retention" about that row would be false, so the
+    explanation changes while the heading, the status and the way back do not.
     """
     body = [f'<p class="meta"><a href="/">\u2190 all cases</a></p>',
             '<h1>This case is no longer in the store</h1>',
             f'<p>The case <span class="code">{esc(case_id)}</span> is not in the store any '
-            'more.</p>',
+            'more.</p>']
+    if unregistered_analyser is not None:
+        body.extend([
+            f'<p>It was recorded under the analyser <span class="code">'
+            f'{esc(unregistered_analyser)}</span>, which is not one this build can run. A case is '
+            'a finding an analyser raised, so a row naming an analyser nobody has is not a claim '
+            'about the code and is not rendered. Nothing it said should be acted on.</p>',
+            '<p>If it is still in the store it was written by something other than this analysis '
+            '- a review harness or a hand-written row - and '
+            '<span class="code">testops scrub-fixtures</span> reports and removes it.</p>'])
+    else:
+        body.extend([
             '<p>Its evidence was pruned by retention. A case lives with the snapshot its '
             'findings were raised from, and retention deletes snapshots outside the keep window '
             '(<span class="code">retention --prune --keep N</span>). The case, its '
@@ -1096,7 +1113,7 @@ def stale_case_page(case_id: str) -> bytes:
             'render.</p>',
             '<p>An id that was never in the store reads the same way: the store keeps no record '
             'of what it has deleted, so it cannot tell a pruned id from one it never '
-            'held.</p>']
+            'held.</p>'])
     return page(f"TestOps \u00b7 {case_id}", "".join(body))
 
 
@@ -1109,6 +1126,11 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
     row = queries.case_row(conn, case_id)
     if not row:
         return stale_case_page(case_id), 404
+    # A case naming an analyser this build does not have cannot be an argument about the code
+    # (TESTOPS-35): nothing here could have raised it, so its row is treated exactly like an id
+    # the store does not hold and the page says which analyser it named.
+    if not is_registered(row["analyser"]):
+        return stale_case_page(case_id, row["analyser"]), 404
     findings = queries.finding_rows(conn, case_id)
     claims = [c for f in findings for c in f["claims"]]
     versions = versions_text(row["versions"])

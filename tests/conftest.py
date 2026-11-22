@@ -1,14 +1,28 @@
 """Shared fixtures.
 
-The only global obligation here is AC10: a session-scoped guard digests the repository before the
-first test and compares it after the last one, so a write by *any* test fails the run regardless of
-file or collection order.
+Two global obligations here:
+
+  * AC10 of an earlier ticket: a session-scoped guard digests the repository before the first test
+    and compares it after the last one, so a write by *any* test fails the run regardless of file
+    or collection order.
+  * TESTOPS-35 AC3: the suite cannot open a product store for writing. The guard refuses the
+    connection itself, so a fixture script that reaches for ``data/testops.db`` fails at the line
+    that reached for it rather than being noticed, if at all, by a digest an hour later. The only
+    permitted access to a real store is a declared read-only open (``file:...?mode=ro``).
 """
 from __future__ import annotations
 
 import pytest
 
-from support import repository_snapshot, snapshot_difference
+from support import (install_store_guard, repository_snapshot, snapshot_difference)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def store_guard():
+    """TESTOPS-35 AC3: no test may open the live store for writing."""
+    monkeypatch = install_store_guard()
+    yield
+    monkeypatch.undo()
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -8,8 +8,8 @@ import argparse
 import json
 from pathlib import Path
 
-from . import cases, retention
-from .config import KEYS_DIR, load_env, project
+from . import analysers, cases, retention, scrub
+from .config import DB_PATH, KEYS_DIR, load_env, project
 from .store import db
 from .web.app import serve
 from .pipeline import run_duplication, run_level_fitness
@@ -78,6 +78,67 @@ def cmd_case_set(args) -> int:
         sup = cases.suppressed(conn, fp)
         print(f"  {'suppressed' if sup else 'active    '} {fp}  {f['title'][:60]}")
     return 0
+
+
+def cmd_scrub_fixtures(args) -> int:
+    """Report - and only on --yes remove - cases whose analyser is not registered.
+
+    TESTOPS-35. The finding this exists for: a review session wrote a case into the live store with
+    an analyser name no build can run, and it became a page the Product Owner could act on. A
+    destructive command has to be re-runnable and legible before it is safe, so the default is a
+    report, the report names every row it would remove, and the deletion prints what SQLite
+    actually removed rather than what the plan predicted.
+    """
+    if args.dry_run and args.yes:
+        print("--dry-run and --yes are contradictory; nothing was done.")
+        return 2
+    # Never let db.connect() create the store: "scrubbed 0 rows" against a store that was not
+    # there would read as a clean bill, and the file it created would be a new live store.
+    if not DB_PATH.exists():
+        print(f"no store at {DB_PATH}; nothing to do.")
+        return 1
+    conn = db.connect()
+    try:
+        found = scrub.plan(conn)
+        print(f"store         {DB_PATH}")
+        print(f"registered    {', '.join(sorted(analysers.registered_names()))}")
+        if not found["cases"]:
+            print("fixture cases 0 — every case names a registered analyser.")
+            return 0
+        print(f"fixture cases {len(found['cases'])}")
+        print()
+        for case in found["cases"]:
+            print(f"  {case['id']}")
+            print(f"    project={case['project']} analyser={case['analyser']!r} "
+                  f"run={case['run_id']} findings={len(case['findings'])}")
+            for finding in case["findings"]:
+                print(f"    finding {finding['id']} fingerprint {finding['fingerprint']}")
+            if case["state"] is not None:
+                print(f"    decision {case['state']['state']} by {case['state']['actor']} "
+                      f"{case['state']['at']}")
+        print()
+        print("rows to remove: " + " · ".join(f"{name} {n}"
+                                              for name, n in found["counts"].items()))
+        if found["suppression_fingerprints"]:
+            print("  suppressions removed: " + ", ".join(found["suppression_fingerprints"]))
+        print("kept: the run, snapshot, artefacts, observations and claims the cases rested on")
+
+        if not args.yes:
+            print("\nDry run — nothing was removed. Re-run with --yes to remove these rows.")
+            return 0
+
+        result = scrub.scrub(conn, yes=True)
+        print()
+        print("removed " + " · ".join(f"{table} {n}"
+                                      for table, n in result["removed"].items()))
+        before, after = result["totals_before"], result["totals_after"]
+        changed = [f"{table} {before[table]} -> {after[table]}"
+                   for table in before if before[table] != after[table]]
+        print("store totals: " + (" · ".join(changed) if changed else "unchanged"))
+        print(f"fixture cases remaining: {len(result['after']['cases'])}")
+        return 0
+    finally:
+        conn.close()
 
 
 def cmd_serve(args) -> int:
@@ -210,6 +271,14 @@ def main(argv=None) -> int:
     st.add_argument("--actor", default="harry")
     st.add_argument("--note", default="")
     st.set_defaults(func=cmd_case_set)
+
+    sf = sub.add_parser("scrub-fixtures",
+                        help="report cases whose analyser is not registered; remove them with --yes")
+    sf.add_argument("--dry-run", action="store_true",
+                    help="report only (the default); kept explicit so the documented sequence "
+                         "reads --dry-run then --yes")
+    sf.add_argument("--yes", action="store_true", help="remove the reported rows")
+    sf.set_defaults(func=cmd_scrub_fixtures)
 
     sv = sub.add_parser("serve", help="run the local UI")
     sv.add_argument("--port", type=int, default=8787)
