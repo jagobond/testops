@@ -2,7 +2,7 @@
 id: TESTOPS-43
 title: A sentence that hides its own partial reads
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-41
 ---

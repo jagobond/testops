@@ -2,7 +2,7 @@
 id: TESTOPS-39
 title: A second specimen of a different shape, to find out whether the analyses generalise
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-38
 ---

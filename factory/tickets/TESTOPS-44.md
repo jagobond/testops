@@ -2,7 +2,7 @@
 id: TESTOPS-44
 title: The secret guard errs in both directions, and the store upgrades without saying so
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-38
 ---
