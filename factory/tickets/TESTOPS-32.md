@@ -2,7 +2,7 @@
 id: TESTOPS-32
 title: A duplicate claim never shows the copy it names
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-31
 ---

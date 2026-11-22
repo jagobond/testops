@@ -2,7 +2,7 @@
 id: TESTOPS-35
 title: A reviewer's fixture case is sitting in Harry's live store
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-34
 ---

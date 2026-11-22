@@ -2,7 +2,7 @@
 id: TESTOPS-33
 title: The case list says "the suggestions list should be", which is not a case
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-32
 ---

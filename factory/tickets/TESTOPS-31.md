@@ -2,7 +2,7 @@
 id: TESTOPS-31
 title: Duplication calls two scenarios the same when their tables differ
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-29
 ---

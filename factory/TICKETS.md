@@ -37,12 +37,12 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-26 | The summary is there, but the reader has to dig it out of a paragraph | F1 | done | Three-part scan block; plain-English lint proven to bite; reviewed with T23 |
 | TESTOPS-27 | The action line drops anything after a semicolon, and trusts that it was redundant | F1 | ready | Reviewer finding on T23/26: a truncated action is the one thing a reader cannot detect |
 | TESTOPS-30 | Two small defects the retention review found: --keep scope, and a stale case id | F1 | ready | A crash where a 404 belongs; a flag whose name promises more than it does |
-| TESTOPS-31 | Duplication calls two scenarios the same when their tables differ | F1 | ready | **Product Owner** — the 'duplicate' asserts a different list. Tables are ignored by the signature; a false positive |
-| TESTOPS-32 | A duplicate claim never shows the copy it names | F1 | ready | **Product Owner** — the page names `file:line` and never shows it, offering context instead |
-| TESTOPS-33 | The case list says "the suggestions list should be", which is not a case | F1 | ready | **Product Owner** — the list renders a raw assertion fragment as a link title |
-| TESTOPS-34 | A run with no findings is listed as an open case awaiting a decision | F1 | ready | **Product Owner** — 'an open case to tell me there are no findings? This seems like a defect' |
-| TESTOPS-35 | A reviewer's fixture case is sitting in Harry's live store | F1 | ready | `/case/rev-duplicate`: analyser "x", written by a review session, visible on the dashboard |
-| TESTOPS-36 | Two analysers, one step, two pages that never mention each other | F1 | ready | **Product Owner** — 'are these duplicate claims of each other?' Competing instructions with no link |
+| TESTOPS-31 | Duplication calls two scenarios the same when their tables differ | F1 | done | One pair resolved, no new duplicates; PR #25 |
+| TESTOPS-32 | A duplicate claim never shows the copy it names | F1 | done | Counterpart shown before context; three lies tried, none rendered wrongly; PR #26 |
+| TESTOPS-33 | The case list says "the suggestions list should be", which is not a case | F1 | done | Headlines; round 1 NEEDS-FIX (badge markup, inverted trim), round 2 PASS; PR #28 |
+| TESTOPS-34 | A run with no findings is listed as an open case awaiting a decision | F1 | done | Rule moved into the list query; closed and quiet provably distinct; PR #29 |
+| TESTOPS-35 | A reviewer's fixture case is sitting in Harry's live store | F1 | done | Scrub ran on the live store: case_ 168->167, 1 fixture removed; PR #27 |
+| TESTOPS-36 | Two analysers, one step, two pages that never mention each other | F1 | done | Cross-reference both ways; four adversarial stores, no lie; PR #30 |
 
 Feature F1 = "a claim a developer can act on". F0 is scaffolding and carries no product outcome.
 

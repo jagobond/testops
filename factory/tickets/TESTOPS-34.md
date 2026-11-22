@@ -2,7 +2,7 @@
 id: TESTOPS-34
 title: A run with no findings is listed as an open case awaiting a decision
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-33
 ---

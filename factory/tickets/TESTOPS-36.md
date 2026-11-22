@@ -2,7 +2,7 @@
 id: TESTOPS-36
 title: Two analysers, one step, two pages that never mention each other
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-35
 ---
