@@ -103,8 +103,12 @@ def test_a_pass_with_two_labels_says_on_the_page_why(tmp_path):
     assert note.count("for 1 assertion") == 2, note
     assert "The run is one" in note
     assert not CODE.search(note), f"the explanation carries a code: {note!r}"
-    assert note in text, "the explanation never reached the page"
-    assert "This scenario carries 2 answers to one run" in text
+    # TESTOPS-23: the page says the same fact in its own words, not in the analyser's sentence.
+    assert ("This scenario holds other assertions that need something different to settle them" in
+            text)
+    assert ("one is settled by the response the server sends and one says nothing about what "
+            "would settle it" in text)
+    assert note not in text
 
 
 def test_a_pass_with_one_label_offers_no_explanation(tmp_path):

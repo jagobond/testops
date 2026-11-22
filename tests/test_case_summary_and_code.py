@@ -1,21 +1,17 @@
 """TESTOPS-19: the case opens with the answer, and shows the code it is talking about.
 
-Two findings from the Product Owner, and what each test pins:
+Two findings from the Product Owner, and what each test pins - re-shaped by TESTOPS-23, which
+replaced the summary block with one argument paragraph:
 
-- AC1/AC3/AC4: the summary block is the first content of the case, carries the stored statement
-  and the stored proposed action without re-wording either, and never cuts a sentence in half.
-  A claim with no recorded action says so rather than inventing one.
+- AC1/AC3/AC4: the argument is the first content of the case, quotes the stored step with its
+  Gherkin keyword, and ends with the stored proposed action. A claim with no recorded action says
+  so rather than inventing one, and no sentence restates the analyser's essay.
 - AC5/AC6/AC7/AC8: the asserting step and the step definition that runs it are rendered inline,
   read from the content-addressed blobs, HTML-escaped, with the asserted line marked; a blob this
   store does not hold produces the "recorded but not stored" sentence, never an empty box.
 - AC9: rendering is a pure function of the store. A socket that raises is not reached.
 - AC10: no claim row is read or written by any of this - the verdict set cannot move. The corpus
   replay is reported with the build; the suite's own store is built under ``tmp_path``.
-
-AC2 needs a browser to measure pixels. None is available to this suite, and adding one would make
-the suite depend on a downloaded browser and a display. The structural branch of AC2 is used
-instead: the summary is the first content block after the page heading and carries exactly two
-labelled statements. That is what "one screenful" is protecting.
 """
 from __future__ import annotations
 
@@ -151,63 +147,66 @@ def _html(conn) -> str:
 
 # --------------------------------------------------------------------------- AC1
 
-def test_the_summary_is_the_first_content_and_quotes_the_stored_rows(tmp_path):
-    conn, _ = _seed(tmp_path)
-    try:
-        body = _html(conn)
-    finally:
-        conn.close()
+def test_the_argument_is_the_first_content_and_states_the_stored_rows(tmp_path):
+    """TESTOPS-26 AC1/AC2: the first content is a scan block with judgement, fault and action.
 
-    after_title = body.split("</h1>", 1)[1].lstrip()
-    assert after_title.startswith('<section class="summary"'), after_title[:120]
-    assert body.index('class="summary"') < body.index("1. What is asserted")
-    # Before the verdict badge and before the six sections.
-    assert body.index('class="summary"') < body.index(app.LABEL["gap"])
-    assert body.index('class="summary"') < body.index('<h2 class="section">')
-
-    finding = re.search(r'<p class="summary-finding">(.*?)</p>', body, re.S)
-    action = re.search(r'<p class="summary-action">(.*?)</p>', body, re.S)
-    assert finding and htmllib.unescape(finding.group(1)) == STATEMENT
-    assert action and htmllib.unescape(action.group(1)) == ACTION
-
-
-def test_the_summary_carries_no_decision_control(tmp_path):
-    """Summary first, evidence next, decision last: the form may not ride on two sentences."""
-    conn, _ = _seed(tmp_path)
-    try:
-        body = _html(conn)
-    finally:
-        conn.close()
-    summary = body.split('class="summary"', 1)[1].split("</section>", 1)[0]
-    assert "<form" not in summary and "<button" not in summary
-
-
-# --------------------------------------------------------------------------- AC2
-
-def test_the_summary_is_one_block_with_exactly_two_labelled_statements(tmp_path):
-    """The structural branch of AC2 - no browser in the suite, so no pixel measurement.
-
-    A browser would need a downloaded engine and a display, neither of which a store-contract suite
-    may assume. What the pixel budget protects is asserted directly: the summary is the first block
-    and it is two statements, the finding and the action, each under its own label.
+    It opens with the verdict as a headline, quotes the step the file holds (keyword included)
+    once, in monospace, and ends with the stored action on its own line.
     """
     conn, _ = _seed(tmp_path)
     try:
         body = _html(conn)
     finally:
         conn.close()
-    after_title = body.split("</h1>", 1)[1].lstrip()
-    assert after_title.startswith('<section class="summary"')
-    assert body.count('class="summary-label"') == 2
-    labels = re.findall(r'<p class="summary-label">(.*?)</p>', body)
-    assert [htmllib.unescape(x) for x in labels] == ["What this is", "What to do"]
-    assert body.count('<p class="summary-finding">') == 1
-    assert body.count('<p class="summary-action">') == 1
+
+    scan = re.search(r'<section class="scan">(.*?)</section>', body, re.S)
+    assert scan is not None, body[:400]
+    block = scan.group(1)
+    text = htmllib.unescape(re.sub(r"<[^>]+>", " ", block))
+    text = " ".join(text.split())
+    assert text.startswith("Not proved"), text
+    assert '<code class="ident">Then the panel is served</code>' in block
+    assert "What to do" in text
+    assert text.endswith("Call the HTTP client for this step instead of the browser."), text
+    assert "asserts the same" not in text
+    # The block is the first content of section 1, before the evidence sections.
+    assert body.index('class="scan"') < body.index('<h2 class="section">2. The step')
+
+
+def test_the_argument_carries_no_decision_control(tmp_path):
+    """Argument first, evidence next, decision last: the form may not ride on one paragraph."""
+    conn, _ = _seed(tmp_path)
+    try:
+        body = _html(conn)
+    finally:
+        conn.close()
+    scan = body.split('class="scan"', 1)[1].split("</section>", 1)[0]
+    assert "<form" not in scan and "<button" not in scan
+
+
+# --------------------------------------------------------------------------- AC2
+
+def test_the_argument_does_not_repeat_the_claim_or_the_analysers_essay(tmp_path):
+    """AC1: one argument, said once - the quote appears once in the prose, and not the statement."""
+    conn, _ = _seed(tmp_path)
+    try:
+        body = _html(conn)
+        text = _text(body.encode("utf-8"))
+    finally:
+        conn.close()
+
+    prose = re.sub(r"<pre.*?</pre>", " ", body, flags=re.S)
+    prose = htmllib.unescape(re.sub(r"<[^>]+>", " ", prose))
+    prose = " ".join(prose.split())
+    assert prose.count("Then the panel is served") == 1, prose
+    # The stored statement is the analyser's essay; the page argues from the assertion instead.
+    assert STATEMENT not in text
+    assert "This test asserts that the panel is served." not in text
 
 
 # --------------------------------------------------------------------------- AC3
 
-def test_a_claim_with_no_action_says_so_and_still_opens_with_the_finding(tmp_path):
+def test_a_claim_with_no_action_says_so_and_still_opens_with_the_claim(tmp_path):
     conn, _ = _seed(tmp_path, schema_version=1, action=None)
     try:
         body = _html(conn)
@@ -215,39 +214,32 @@ def test_a_claim_with_no_action_says_so_and_still_opens_with_the_finding(tmp_pat
     finally:
         conn.close()
 
-    assert "<section" in body
-    assert STATEMENT in text
     assert "No proposed action was recorded for this claim." in text
-    # The finding is before the statement of what is missing.
+    # The claim as recorded is before the sentence about what is missing.
     assert text.index(STATEMENT) < text.index("No proposed action was recorded for this claim.")
-    # No invented action: the page never claims a next step nobody recorded.
     assert ACTION not in text
 
 
 # --------------------------------------------------------------------------- AC4
 
-def test_a_statement_over_budget_keeps_its_first_sentence_whole(tmp_path):
-    first = ("The assertion is about the panel as served and " + "many more words " * 40
-             + "and this first sentence ends here.")
-    second = "This second sentence is beyond the summary budget."
-    statement = f"{first} {second}"
-    assert len(statement) > queries.SUMMARY_CHARS
-    conn, _ = _seed(tmp_path, statement=statement)
+def test_the_verdict_states_what_is_true_and_the_provenance_sits_under_the_quote(tmp_path):
+    """AC7/AC3: a label that does not need inverting, and a labelled footnote, not a section."""
+    conn, _ = _seed(tmp_path)
     try:
         body = _html(conn)
         text = _text(body.encode("utf-8"))
     finally:
         conn.close()
 
-    finding = re.search(r'<p class="summary-finding">(.*?)</p>', body, re.S)
-    assert finding is not None
-    shown = htmllib.unescape(finding.group(1))
-    assert shown == first
-    assert shown.endswith(".")
-    assert second not in shown
-    # Section 4 always holds the full text.
-    assert statement in text
-    assert "The rest of this statement is in section 4." in text
+    assert "Not proved \u2014 nothing runs a browser" in text
+    for old in ("Browser not needed", "Never actually proved", "Could not be judged",
+                "Established", "Already covered"):
+        assert old not in text, old
+    assert "Where this comes from:" in text
+    assert "2. Where the name came from" not in text
+    assert f"features/panel_api.feature:{LINE}" in text
+    assert f"{COMMIT[:8]}" in text
+    assert "the scenario \u201cthe panel is served\u201d" in text
 
 
 # --------------------------------------------------------------------------- AC5
@@ -303,7 +295,7 @@ def test_the_step_definition_body_is_shown_and_marked_as_the_step_asserted(tmp_p
     figures = re.findall(r'<figure class="snippet">(.*?)</figure>', body, re.S)
     assert len(figures) == 2, len(figures)
     step_definition = figures[1]
-    assert "The step definition that runs the assertion, the step that is asserted:" in text
+    assert "The step definition that runs it:" in text
     assert f"{STEPS}:{BINDING_LINE}" in text
     assert (f'<span class="sline hit"><span class="ln">{BINDING_LINE}</span>'
             f'<mark class="hit">' in step_definition)

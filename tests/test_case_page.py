@@ -26,12 +26,11 @@ OTHER_COMMIT = "b" * 40
 PATH = "features/panel_api.feature"
 LINE = 17
 SECTIONS = (
-    "1. What is asserted",
-    "2. Where the name came from",
-    "3. What the test actually does",
-    "4. Why that does or does not establish it",
-    "5. What could not be checked",
-    "6. Proposed action and decision",
+    "1. What is asserted, and what settles it",
+    "2. The step that is asserted",
+    "3. The other steps in this scenario, for context",
+    "4. What could not be checked",
+    "5. Decision",
 )
 CODE = re.compile(r"\b(I[1-4]|KP)\b")
 
@@ -103,7 +102,7 @@ def _page_text(conn) -> str:
 
 # --------------------------------------------------------------------------- AC1
 
-def test_every_v2_case_renders_all_six_sections_in_order(tmp_path):
+def test_every_v2_case_renders_all_five_sections_in_order(tmp_path):
     conn, _ = _seed(tmp_path)
     try:
         text = _page_text(conn)
@@ -111,7 +110,7 @@ def test_every_v2_case_renders_all_six_sections_in_order(tmp_path):
         conn.close()
     positions = [text.find(s) for s in SECTIONS]
     assert all(p >= 0 for p in positions), f"missing section(s): {text}"
-    assert positions == sorted(positions), "the six sections are out of order"
+    assert positions == sorted(positions), "the five sections are out of order"
 
 
 def test_the_page_is_server_rendered_with_no_javascript_and_no_network(tmp_path, monkeypatch):
@@ -201,8 +200,9 @@ def test_the_scenario_title_is_labelled_as_the_tests_own(tmp_path):
         text = _page_text(conn)
     finally:
         conn.close()
-    assert "own scenario title" in text
-    assert "not a requirement" in text
+    # TESTOPS-23 AC3: the title is a footnote under the quote, labelled as the author's name.
+    assert "Where this comes from:" in text
+    assert "the test author\u2019s own name for the scenario, not a requirement" in text
     # Nothing on the page claims a requirement was checked: none was connected.
     assert not re.search(r"\b(requirement|acceptance criteria) (is|was) (met|satisfied|covered)\b",
                          text, re.I)
@@ -267,11 +267,12 @@ def test_span_label_and_rule_render_as_reader_words_not_data(tmp_path):
     assert '["api", "ui"]' not in text
     assert "['api', 'ui']" not in text
     assert '"span"' not in text
-    assert "It drives a browser." in text
-    assert "It reaches the HTTP API and a browser." in text
-    assert "It needs a browser." in text
-    assert ("Why it was classified this way: asserts an accessibility property the browser computes"
+    # TESTOPS-23: the argument states the fact the rule found, never the rule or its vocabulary.
+    assert ("nothing short of a browser settles it, and the test drives a browser instead."
             in text)
+    assert "Why it was classified this way" not in text
+    assert "the words" not in text
+    assert "asserts an accessibility property the browser computes" not in text
 
 
 # --------------------------------------------------------------------------- AC8
@@ -318,8 +319,9 @@ def test_a_v1_claim_says_provenance_was_not_captured_instead_of_failing(tmp_path
     assert body is not None
     text = _text(body)
     assert "recorded before provenance was captured" in text
-    assert "What settles it was not recorded" not in text  # the sentence is grammatical
-    assert "What settles this claim was not recorded." in text
+    # The claim is still shown, as it was recorded: no invented quote and no invented step.
+    assert "The claim as recorded was: \u201cTwo scenarios assert the same thing.\u201d" in text
+    assert "The test asserts the step" not in text
     assert "Whether any source needed for this claim was missing was not recorded" not in text
     assert ("Nothing was checked against any source for this claim, so nothing here says its "
             "sources were clean." in text)
@@ -359,8 +361,12 @@ def test_the_empty_home_page_reports_freshness_not_all_clear(tmp_path):
 
 # --------------------------------------------------------------------------- AC11
 
-def test_the_case_list_shows_the_claim_statement_not_a_truncated_title(tmp_path):
-    """The index gets its words from the claim, so a heading cannot end mid-sentence."""
+def test_the_case_list_shows_what_the_claim_asserts_not_a_truncated_title(tmp_path):
+    """The index gets its words from the claim, so a heading cannot end mid-sentence.
+
+    TESTOPS-23: the first line is the asserted step, in the test's own words - not the analyser's
+    essay about it, and never finding.title.
+    """
     conn = db.connect(tmp_path / "index.db")
     db.upsert_snapshot(conn, SNAP, "fixture", TS, {"owner/test": COMMIT}, schema_version=2)
     db.start_run(conn, RUN, "fixture", SNAP, "level_fitness", TS)
@@ -391,9 +397,11 @@ def test_the_case_list_shows_the_claim_statement_not_a_truncated_title(tmp_path)
     finally:
         conn.close()
 
+    assert rows[0]["assertion"] == "the panel"
     assert rows[0]["statement"] == statement
-    assert statement in text
+    assert "the panel" in text
     assert title not in text
-    # The whole statement, as one piece of anchor text: no truncation, no mid-sentence ending.
+    assert statement not in text, "the index shows the analyser's essay, not the claim"
+    # The whole asserted step, as one piece of anchor text: no truncation, no mid-sentence ending.
     m = re.search(r'<p class="claimtext">(.*?)</p>', body, re.S)
-    assert m and htmllib.unescape(m.group(1)).strip() == statement
+    assert m and htmllib.unescape(m.group(1)).strip() == "the panel"
