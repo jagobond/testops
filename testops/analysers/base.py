@@ -19,9 +19,20 @@ class Evidence:
 
 @dataclass
 class Claim:
+    """One thing an analyser asserts about a snapshot.
+
+    ``verdict`` is one of the names the analysers emit, and nothing else. A reader builds against
+    this word, so a name here that no analyser writes is a branch that can never fire:
+
+    Verdicts: distinct | gap | review | unplaced | duplicate
+
+    ``tests/test_verdict_vocabulary.py`` reads the emitted names from the analysers' own literals
+    and fails if this list, the field comment below, or the store's column comment names a verdict
+    no analyser emits - or misses one it does.
+    """
     subject_ref: str
     statement: str
-    verdict: str                  # optimal | overbuilt | necessary | unplaced | duplicate
+    verdict: str                  # distinct | gap | review | unplaced | duplicate
     confidence: float = 0.0
     evidence: list[Evidence] = field(default_factory=list)
     detail: dict = field(default_factory=dict)

@@ -59,6 +59,11 @@ CREATE TABLE IF NOT EXISTS run (
 -- A v2 claim is about one assertion: which Gherkin step says it, where that step lives, and at
 -- which commit. The store refuses a v2 row without those three coordinates, so no caller can write
 -- a v2 claim a reader cannot check. Blanks are refused too: '' is not a path.
+--
+-- The verdict vocabulary is the analysers' own: the column comment below follows the code, and
+-- tests/test_verdict_vocabulary.py fails if the two disagree. Rows written before the vocabulary
+-- settled may carry retired names; they are read, never rewritten (see LEGACY_JUDGEMENT in
+-- testops/web/app.py).
 CREATE TABLE IF NOT EXISTS claim (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   run_id TEXT NOT NULL REFERENCES run(id),
@@ -66,7 +71,7 @@ CREATE TABLE IF NOT EXISTS claim (
   analyser_version TEXT NOT NULL,
   subject_ref TEXT NOT NULL,               -- scenario:<feature>#<name> | issue:COTW-12
   statement TEXT NOT NULL,                 -- the claim's own heading, in plain words
-  verdict TEXT NOT NULL,                   -- optimal | overbuilt | necessary | unplaced | duplicate
+  verdict TEXT NOT NULL,                   -- distinct | gap | review | unplaced | duplicate
   confidence REAL NOT NULL DEFAULT 0.0,
   support TEXT NOT NULL DEFAULT '[]',      -- json: [observation ids]
   schema_version INTEGER NOT NULL DEFAULT 1,
