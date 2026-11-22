@@ -1,12 +1,20 @@
 """Configuration: where things live, and how to reach each project.
 
 Credentials are read from an existing .env and never copied into the repo, the store or a prompt.
+
+TESTOPS-41. The collector's file kinds are **data**, declared here, not a list buried in a loop.
+The rule the ticket turns on is not "know every language" - that list can never be complete, and a
+longer list is the same bug with more entries. The rule is that the list is configuration, and the
+collector *reports everything that fell outside it*, with a reason and a count, in the run's own
+record. A file nothing read is then never counted as consulted.
 """
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from . import sources
 
 HOME = Path(os.environ.get("TESTOPS_HOME", Path.home() / "Projects" / "testops"))
 DATA = HOME / "data"
@@ -28,6 +36,70 @@ def load_env(path: Path = ENV_FILE) -> dict[str, str]:
         k, v = line.split("=", 1)
         out[k.strip()] = v.strip()
     return out
+
+
+@dataclass(frozen=True)
+class FileKind:
+    """One kind of file the collector reads: its suffix, its artefact kind, what it can serve.
+
+    ``capability`` is the capability a fetched file of this kind can stand as evidence for.
+    ``""`` means the capability of the arm that fetched it - a `.py` file is product code when the
+    product repository holds it and test code when the test repository does, and a `.csproj` is
+    configuration belonging to whichever arm it was read from.
+
+    ``kind`` is the artefact kind written to the store. It is a separate fact from the capability:
+    a `.js` file is a step definition to this collector (the vocabulary it was built with), so it
+    serves test code even when it is fetched from the product repository. That misfiling is
+    TESTOPS-39's finding and is not fixed here; what this ticket adds is that a repository whose
+    files fall outside this list says so, instead of counting them as consulted.
+    """
+    suffix: str
+    kind: str
+    capability: str = ""
+    note: str = ""
+
+
+# The list is this tuple, and only this tuple. Add a suffix here to widen the collector - and the
+# run will still report, per repository, every file that fell outside it.
+FILE_KINDS: tuple[FileKind, ...] = (
+    FileKind(".csproj", "build",
+             note="MSBuild project file: read for its exclusion patterns, an artefact of its arm"),
+    FileKind(".feature", "feature", sources.TEST_CODE),
+    FileKind(".py", "source",
+             note="the only source kind declared: product code in the product arm, test code in "
+                  "the test arm"),
+    FileKind(".cs", "stepdef", sources.TEST_CODE),
+    FileKind(".ts", "stepdef", sources.TEST_CODE),
+    FileKind(".js", "stepdef", sources.TEST_CODE),
+)
+
+# Paths the collector refuses on purpose. Not the same as "a kind it does not read": these are
+# ignored by pattern, and the run records them as ignored rather than as unsupported.
+IGNORE_PATTERNS = ("/bin/", "/obj/", "/.git/", "/node_modules/", "/.venv/", "__pycache__")
+
+# Suffixes dropped by rule: generated code-behind, recorded as an ignore pattern rather than
+# silently filtered after the fact.
+DROPPED_SUFFIXES = (".feature.cs",)
+
+MAX_FILE_BYTES = 512 * 1024
+
+
+def kind_for(path: str) -> FileKind | None:
+    """The rule that reads ``path``, or ``None`` when no rule does.
+
+    The arm a file came from never decides *whether* a kind is read - that is the whole point of the
+    list being configuration. It decides only what a source file *is*: the test arm's Python is test
+    code, which the collector settles after this call.
+    """
+    for rule in FILE_KINDS:
+        if path.endswith(rule.suffix):
+            return rule
+    return None
+
+
+def arm_capability(role: str) -> str:
+    """Which capability an arm can serve: the product is code, the test repository is test code."""
+    return sources.CODE if role == "product" else sources.TEST_CODE
 
 
 @dataclass(frozen=True)

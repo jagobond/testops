@@ -69,5 +69,6 @@ def stub_pipeline(monkeypatch, pipeline, tmp_path):
     # corpus back the way the product does. Do not patch it here: `pipeline.blobs` is the same module.
     monkeypatch.setattr(pipeline.github, "collect",
                         lambda repo, token, role="product": Collected(commit=COMMIT, files=corpus))
-    monkeypatch.setattr(pipeline.surface_discovery, "discover", lambda product_texts: [])
+    monkeypatch.setattr(pipeline.surface_discovery, "discover",
+                        lambda product_texts: pipeline.surface_discovery.Discovery((), "zero"))
     return path, real_connect
