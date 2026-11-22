@@ -2,7 +2,7 @@
 id: TESTOPS-24
 title: Retention — keep every run explainable without keeping every byte four times
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-22
 ---
