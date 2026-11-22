@@ -74,7 +74,7 @@ def protected_store_dirs() -> tuple[Path, ...]:
     """
     from testops import config
 
-    candidates = [Path(config.DATA), ROOT.parent / "testops" / "data"]
+    candidates = [ROOT / "data", ROOT.parent / "testops" / "data"]
     out: list[Path] = []
     for candidate in candidates:
         resolved = candidate.resolve()
@@ -87,7 +87,7 @@ def real_store_path() -> Path:
     """The live store this checkout would write to, whether or not the file exists."""
     from testops import config
 
-    return Path(config.DB_PATH).resolve()
+    return Path(config.settings().db_path).resolve()
 
 
 def _is_protected(path: Path) -> bool:
@@ -138,7 +138,7 @@ def guarded_db_connect(path=None):
     """
     from testops import config
 
-    target = Path(path) if path is not None else Path(config.DB_PATH)
+    target = Path(path) if path is not None else Path(config.settings().db_path)
     if _is_protected(target):
         raise StoreWriteRefused(
             f"a test tried to open the product store for writing: {target}\n"

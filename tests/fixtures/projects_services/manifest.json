@@ -1,0 +1,21 @@
+{
+  "store": "before_v3.db",
+  "cases": [
+    "case-page-01",
+    "case-page-02",
+    "case-page-03",
+    "case-page-04",
+    "case-page-05",
+    "case-page-06",
+    "case-page-07",
+    "case-page-08",
+    "case-page-09",
+    "case-page-10",
+    "case-page-11",
+    "case-page-12"
+  ],
+  "pages": [
+    "index.html",
+    "runs.html"
+  ]
+}

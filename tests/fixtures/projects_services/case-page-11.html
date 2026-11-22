@@ -1,0 +1,77 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TestOps · case-page-11</title><style>
+:root { --ink:#1b1f24; --dim:#5b6672; --line:#dfe3e8; --bg:#fbfbfa; --accent:#8C5E2C; --bad:#8a2b2b; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink);
+       font:16px/1.55 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+main { max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+h1 { font-size: 1.15rem; letter-spacing:.02em; text-transform:uppercase; color:var(--dim); font-weight:600; }
+h2 { font-size: 1.35rem; margin: 1.9rem 0 .35rem; }
+h2.section { font-size: 1.02rem; letter-spacing:.01em; border-bottom:1px solid var(--line);
+             padding-bottom:.3rem; margin-top:2rem; }
+a { color: var(--accent); }
+.fresh { color: var(--dim); font-size:.92rem; border-bottom:1px solid var(--line); padding-bottom:.9rem; }
+.fresh strong { color: var(--ink); font-weight:600; }
+ul.cases { list-style:none; padding:0; margin:1.5rem 0; }
+ul.cases li { border:1px solid var(--line); border-radius:6px; background:#fff; margin-bottom:.6rem; }
+ul.cases li a { display:block; padding:.85rem 1rem; text-decoration:none; color:inherit; }
+ul.cases li a:hover { background:#f6f4f0; }
+.claimtext { margin:.35rem 0 0; font-size:1rem; }
+.meta { color:var(--dim); font-size:.9rem; }
+.badge { display:inline-block; font-size:.78rem; letter-spacing:.03em; text-transform:uppercase;
+         border:1px solid var(--line); border-radius:99px; padding:.1rem .55rem; color:var(--dim); }
+.badge.hot { border-color:var(--bad); color:var(--bad); }
+/* The verdict beside the case state (TESTOPS-33): a claim that could not be placed wears a dashed
+   badge, so "Cannot tell" never looks as settled as "Checked". */
+.badge.verdict { border-color:var(--accent); color:var(--accent); }
+.badge.verdict.soft { border-style:dashed; border-color:var(--dim); color:var(--dim); }
+blockquote.assertion { margin:.6rem 0 .5rem; padding:.6rem .9rem; background:#fff;
+                       border-left:3px solid var(--accent); font-size:1.12rem; }
+.code { font-family: ui-monospace, Consolas, monospace; font-size:.8rem; color:var(--dim); }
+ul.ev { margin:.35rem 0 0; padding-left:1.1rem; }
+ul.ev li { margin:.2rem 0; }
+.footnote { margin-top:2.2rem; border-top:1px solid var(--line); padding-top:.7rem; }
+form.decide { margin-top:2rem; border-top:1px solid var(--line); padding-top:1.2rem; }
+form.decide button { font:inherit; padding:.5rem .9rem; border-radius:5px; border:1px solid var(--line);
+                     background:#fff; cursor:pointer; margin:.25rem .35rem .25rem 0; }
+form.decide button.term { border-color:var(--bad); color:var(--bad); }
+form.decide input[type=text] { font:inherit; padding:.45rem .6rem; border:1px solid var(--line);
+                               border-radius:5px; width:min(28rem,100%); }
+.warn { color: var(--bad); font-size:.9rem; }
+.quiet { color:var(--dim); }
+.scan { margin:1.15rem 0 1rem; padding:.85rem 1rem .9rem; background:#fff;
+        border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:6px; }
+p.judgement { margin:0 0 .5rem; }
+p.judgement strong.verdict { font-size:1.32rem; font-weight:700; line-height:1.25; }
+p.judgement strong.verdict.hot { color:var(--bad); }
+p.wrong { margin:0 0 .85rem; font-size:1.06rem; line-height:1.6; }
+/* The font puts more of its line box above the baseline than below, so equal padding leaves the
+   descenders closer to the box's bottom edge. The half-leading is paid on the bottom instead, so
+   the space a reader sees above and below the text is the same (AC11). */
+p.action { margin:0; padding:.51rem .8rem .69rem; background:#f6f4f0; border-radius:5px;
+           font-weight:600; line-height:1.5; }
+p.action .act { display:inline-block; margin-right:.55rem; font-size:.72rem; font-weight:700;
+                letter-spacing:.09em; text-transform:uppercase; color:var(--accent); }
+/* A code span ends where its identifier ends: the padding is cancelled by an equal negative margin,
+   so a comma written against the span sits against the word it follows, not a gap away (AC10). */
+code.ident { font-family: ui-monospace, Consolas, monospace; font-size:.9em; background:#f3f1ec;
+             padding:.05em .25em; margin:0 -.25em; border-radius:3px; white-space:nowrap; }
+p.provenance { margin:0 0 1rem; }
+p.provenance .fn { font-weight:600; color:var(--ink); }
+ul.context { margin:.35rem 0 0; padding-left:1.1rem; color:var(--dim); }
+ul.context li { margin:.2rem 0; }
+figure.snippet { margin:.7rem 0 1rem; }
+figure.snippet figcaption { font-size:.86rem; color:var(--dim); margin-bottom:.3rem; }
+pre.snippet { margin:0; background:#f3f1ec; border:1px solid var(--line); border-radius:5px;
+              padding:.55rem .7rem; overflow-x:auto; font-size:.82rem; line-height:1.45; }
+pre.snippet code { font-family: ui-monospace, Consolas, monospace; }
+pre.snippet .sline { display:block; white-space:pre; }
+pre.snippet .ln { display:inline-block; width:2.6rem; color:var(--dim); user-select:none; }
+pre.snippet .sline.hit { background:#f6e7c8; }
+pre.snippet mark.hit { background:transparent; color:inherit; font-weight:600; }
+aside.xref { margin:.2rem 0 1rem; padding:.55rem .85rem .6rem; background:#f6f4f0;
+             border-radius:5px; font-size:.94rem; }
+aside.xref p { margin:.15rem 0; }
+</style></head>
+<body><main><p class="meta"><a href="/">← all cases</a> · <a href="/runs">all runs</a></p><h1>reqoverflow · Level fitness</h1><p class="meta"><span class="badge hot">Open</span> · Analysed a fixed time ago at cotw-bdd@a3f19853</p><h2 class="section">1. What is asserted, and what settles it</h2><section class="scan"><p class="judgement"><strong class="verdict">Cannot tell</strong></p><p class="wrong">The test asserts the step <code class="ident">Then the panel is served</code>, but what would settle it was not recorded.</p><p class="action"><span class="act">What to do</span> No proposed action was recorded for this claim.</p></section><p class="meta provenance"><span class="fn">Where this comes from:</span> <span class="code">features/panel.feature:21</span> at commit <span class="code">a3f19853</span>, in the scenario “the panel is served by case 11” — the test author’s own name for the scenario, not a requirement; nothing here was checked against one. This run did not record which repository the file lives in, so there is no link to open.</p><h2 class="section">2. The step that is asserted</h2><p class="quiet">The source was recorded but its content is not in this store: <span class="code">features/panel.feature:21</span>.</p><p class="quiet">This run holds no observations, so the source above is the only evidence there is — and the emptiness here is not a sign the claim is clean. Its snapshot holds no artefacts either, so nothing was collected.</p><p class="quiet">No step definition in this run binds the asserted step, so there is no body to show.</p><h2 class="section">3. The other steps in this scenario, for context</h2><p class="quiet">This run recorded no other step in this scenario.</p><h2 class="section">4. What could not be checked</h2><p class="quiet">Nothing was checked against any source for this claim, so nothing here says its sources were clean.</p><h2 class="section">5. Decision</h2><form class="decide" method="post" action="/case/case-page-11/state"><p><strong>Decide this case</strong> — 1 finding rides on this decision, and it applies to this case only.</p><p><input type="text" name="note" placeholder="Why? (optional, shown next time)"></p><p><button name="state" value="needs_fix">Needs a fix</button> <button class="term" name="state" value="resolved">Resolved — stop reporting</button> <button class="term" name="state" value="false_positive">Not a real finding — stop reporting</button></p><p class="warn">Resolved and “not a real finding” hide this evidence from future runs, for this case only. You can reopen the case later; reopening deletes the suppression and makes it report again.</p></form><p class="code footnote">Debugging shorthand, not part of the finding: verdict unplaced.</p></main></body></html>

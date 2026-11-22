@@ -31,9 +31,10 @@ import re
 import sqlite3
 
 from ..sources import assessment_for
+from ..config import LEGACY_PROJECTS
 
 # The schema this build writes and reads. A store above this is refused.
-CURRENT_VERSION = 3
+CURRENT_VERSION = 4
 
 # The oldest store this build can still open. v1 is readable: its claims are evidence.
 MIN_SUPPORTED_VERSION = 1
@@ -104,8 +105,54 @@ def prepare(conn: sqlite3.Connection, schema_text: str) -> int:
         conn.execute("ALTER TABLE snapshot ADD COLUMN meta TEXT NOT NULL DEFAULT '{}'")
 
     conn.executescript(schema_text)  # creates anything missing; a no-op on a current store
+    if version is not None and version < 4:
+        _seed_projects(conn)
     _record_version(conn, CURRENT_VERSION)
     return CURRENT_VERSION
+
+
+def _seed_projects(conn: sqlite3.Connection) -> None:
+    """Carry the projects this build knew as Python literals into the store, once.
+
+    TESTOPS-38 AC1. The migration reads :data:`testops.config.LEGACY_PROJECTS`, which existed only
+    so that a store written before the model could be brought forward without a second source of
+    truth; it is not consulted at run time. A store that already holds a project is not touched:
+    a second team's rows are their configuration, and a migration may not overwrite configuration.
+    """
+    already = conn.execute("SELECT COUNT(*) FROM project").fetchone()[0]
+    if already:
+        return
+    import datetime as _dt
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
+
+    def add(slug: str, kind: str, role: str, name: str, settings: dict) -> None:
+        conn.execute(
+            "INSERT INTO service (project, type, role, name, settings, created_at)"
+            " VALUES (?,?,?,?,?,?)",
+            (slug, kind, role, name, json.dumps(settings, sort_keys=True), now))
+
+    for slug, project in LEGACY_PROJECTS.items():
+        conn.execute("INSERT INTO project (slug, name, created_at) VALUES (?,?,?)",
+                     (slug, slug, now))
+        for role, repo in (("product", project.product), ("test", project.test)):
+            if repo is None:
+                continue
+            add(slug, "git_repo", role, f"{repo.slug} ({role})", {"repo": repo.slug})
+        if project.jira_key:
+            add(slug, "jira_board", "", f"Jira board {project.jira_key}",
+                {"board": project.jira_key})
+        if project.ado_org:
+            ids = project.ado_pipeline_ids or (None,)
+            for pipeline_id in ids:
+                settings: dict[str, object] = {"org": project.ado_org,
+                                               "project": project.ado_project or ""}
+                if pipeline_id is not None:
+                    settings["pipeline_id"] = pipeline_id
+                name = f"{project.ado_project or project.ado_org} pipeline"
+                if pipeline_id is not None:
+                    name += f" #{pipeline_id}"
+                add(slug, "ado_pipeline", "", name, settings)
+    conn.commit()
 
 
 def _record_version(conn: sqlite3.Connection, version: int) -> None:

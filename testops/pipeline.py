@@ -11,7 +11,7 @@ from .surfaces import discover as surface_discovery
 from .collectors import github, jira
 from .config import Project, load_env
 from .extract import csproj, gherkin, stepbindings
-from . import cases, config, sources
+from . import cases, config, services, sources
 from .store import db
 
 
@@ -66,6 +66,25 @@ def _analyser_record(analyser) -> dict:
     """
     return {analyser.name: {"needs": sorted(analyser.NEEDS),
                             "consults": sorted(analyser.CONSULTS)}}
+
+
+def _service_meta(project: Project, conn) -> dict:
+    """The services the project resolved, and their states, written into this run's snapshot (AC4).
+
+    A project assembled by a test, or by an older caller, has no services; it records nothing and
+    the page is exactly the page it was. A project resolved from the store records one entry per
+    service, so the page can name the service that was not connected and why - including the
+    service the project does not declare at all.
+    """
+    states = [dict(state) for state in getattr(project, "service_states", ()) or ()]
+    if not states:
+        return {}
+    services.record_consultation(conn, project.key, states)
+    out: dict = {"service_states": states}
+    if getattr(project, "assessment_state", ""):
+        out["project_assessment"] = {"state": project.assessment_state,
+                                     "reason": project.assessment_reason}
+    return out
 
 
 def _skip_reason(capability: str, arms: list[tuple[str, github.Collected]]) -> str:
@@ -198,7 +217,7 @@ def run_duplication(project: Project, token: str,
     test_repo = declared.use(sources.GITHUB,
                              lambda: github.collect(project.test, token, role="test"), role="test")
     product = None
-    if project.product.slug != project.test.slug:
+    if project.product is not None and project.product.slug != project.test.slug:
         product = declared.use(sources.GITHUB,
                                lambda: github.collect(project.product, token, role="product"),
                                role="product")
@@ -206,6 +225,15 @@ def run_duplication(project: Project, token: str,
     declared = declared.with_readings(_readings(arms))
     missing_sources = declared.missing(duplication.NEEDS | duplication.CONSULTS)
     assessment = declared.assess(duplication.NEEDS)
+    if project.product is None and "product" not in missing_sources:
+        # AC7: the project has tests and no product repository. That is not a zero and not a
+        # failure - it is "cannot assess", with the reason travelling beside it.
+        missing_sources = list(missing_sources) + ["product"]
+        assessment = sources.Assessment(
+            (sources.CODE, sources.TEST_CODE), sources.NOT_ASSESSABLE,
+            blind_spots=(sources.BlindSpot(
+                "product", "Product repository", sources.ABSENT,
+                "this project has no product git repository configured"),))
 
     snapshot_id = _new_snapshot_id(conn, f"{project.key}-{dt.date.today():%Y%m%d}-{test_repo.commit[:8]}")
     versions = {project.test.slug: test_repo.commit}
@@ -219,7 +247,8 @@ def run_duplication(project: Project, token: str,
                        meta={"sources_missing": missing_sources,
                              "sources": declared.record(),
                              "reads": {role: collected.record() for role, collected in arms},
-                             "analysers": _analyser_record(duplication)})
+                             "analysers": _analyser_record(duplication),
+                             **_service_meta(project, conn)})
 
     # 2. artefacts + observations
     texts = {}
@@ -374,13 +403,25 @@ def run_level_fitness(project: Project, token: str,
     declared = _declared(project, registry)
     test_repo = declared.use(sources.GITHUB,
                              lambda: github.collect(project.test, token, role="test"), role="test")
-    product = declared.use(sources.GITHUB,
-                           lambda: github.collect(project.product, token, role="product"),
-                           role="product")
-    arms = [("test", test_repo), ("product", product)]
+    product = None
+    if project.product is not None:
+        product = declared.use(sources.GITHUB,
+                               lambda: github.collect(project.product, token, role="product"),
+                               role="product")
+    arms = [("test", test_repo)] + ([("product", product)] if product else [])
     declared = declared.with_readings(_readings(arms))
     missing_sources = declared.missing(level_fitness.NEEDS | level_fitness.CONSULTS)
     assessment = declared.assess(level_fitness.NEEDS)
+    if project.product is None and "product" not in missing_sources:
+        # AC7. A test repository with no product repository is `not_assessable` with a reason: the
+        # run has something to read and nothing to judge it against, and saying "zero" would be a
+        # claim nobody made.
+        missing_sources = list(missing_sources) + ["product"]
+        assessment = sources.Assessment(
+            (sources.CODE, sources.TEST_CODE), sources.NOT_ASSESSABLE,
+            blind_spots=(sources.BlindSpot(
+                "product", "Product repository", sources.ABSENT,
+                "this project has no product git repository configured"),))
 
     snapshot_id = _new_snapshot_id(
         conn, f"{project.key}-levels-{dt.date.today():%Y%m%d}-{test_repo.commit[:8]}")
@@ -389,22 +430,33 @@ def run_level_fitness(project: Project, token: str,
     # reader could make of it is part of the snapshot's record (TESTOPS-41): a run that found no
     # surface because it cannot read the language must say that, and a run page read months later
     # has no blob of its own to ask.
-    product_texts = {path: blobs.text(sha) for path, (sha, _kind) in sorted(product.files.items())}
-    discovery = surface_discovery.discover(product_texts)
+    if product is None:
+        product_texts: dict[str, str] = {}
+        discovery = surface_discovery.Discovery(
+            (), surface_discovery.NOT_ASSESSABLE,
+            reason="this project has no product git repository, so there was no product to read")
+    else:
+        product_texts = {path: blobs.text(sha) for path, (sha, _kind) in sorted(product.files.items())}
+        discovery = surface_discovery.discover(product_texts)
     surfaces = list(discovery.surfaces)
 
-    db.upsert_snapshot(conn, snapshot_id, project.key, _now(),
-                       {project.test.slug: test_repo.commit, project.product.slug: product.commit},
+    versions = {project.test.slug: test_repo.commit}
+    if product is not None and project.product is not None:
+        versions[project.product.slug] = product.commit
+    db.upsert_snapshot(conn, snapshot_id, project.key, _now(), versions,
                        schema_version=2,
                        # What a rebuild needs and an artefact cannot say. All of it is recorded now,
                        # so rebuilding from this snapshot alone cannot invent a clean bill of health
                        # and cannot invent a source state the run did not have.
                        meta={"sources_missing": missing_sources,
-                             "arms": {"test": project.test.slug, "product": project.product.slug},
+                             "arms": {"test": project.test.slug,
+                                      **({"product": project.product.slug}
+                                         if project.product is not None else {})},
                              "sources": declared.record(),
                              "reads": {role: collected.record() for role, collected in arms},
                              "surfaces": discovery.record(),
-                             "analysers": _analyser_record(level_fitness)})
+                             "analysers": _analyser_record(level_fitness),
+                             **_service_meta(project, conn)})
 
     texts = {}
     artefact_ids: dict[str, int] = {}
@@ -413,7 +465,7 @@ def run_level_fitness(project: Project, token: str,
         artefact_ids[path] = db.add_artefact(
             conn, snapshot_id, f"github:{project.test.slug}@{test_repo.commit}:{path}",
             kind, sha, {"role": "test"})
-    for path, (sha, kind) in sorted(product.files.items()):
+    for path, (sha, kind) in (sorted(product.files.items()) if product is not None else []):
         db.add_artefact(conn, snapshot_id,
                         f"github:{project.product.slug}@{product.commit}:{path}",
                         kind, sha, {"role": "product"})

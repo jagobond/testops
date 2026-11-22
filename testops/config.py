@@ -16,16 +16,51 @@ from pathlib import Path
 
 from . import sources
 
-HOME = Path(os.environ.get("TESTOPS_HOME", Path.home() / "Projects" / "testops"))
-DATA = HOME / "data"
+HOME = Path(os.environ.get("TESTOPS_HOME", ""))
+DATA = Path(os.environ.get("TESTOPS_DATA", "data"))
 DB_PATH = DATA / "testops.db"
 BLOB_DIR = DATA / "blobs"
-ENV_FILE = Path(os.environ.get("TESTOPS_ENV", Path.home() / "Projects" / "cotw-continuity" / ".env"))
-KEYS_DIR = HOME.parent / "cotw-eval"
+ENV_FILE = Path(os.environ.get("TESTOPS_ENV", ".env"))
 
 
-def load_env(path: Path = ENV_FILE) -> dict[str, str]:
+@dataclass(frozen=True)
+class Settings:
+    """Where the store and the blobs live. One object, because they are one deployment decision.
+
+    TESTOPS-38 AC6: a container mounts a volume and points ``TESTOPS_DATA`` at it. Nothing here is
+    an absolute host path, so the same defaults work from a checkout, a container image and a
+    temporary directory a test creates outside the checkout. ``TESTOPS_ENV`` names the file secrets
+    are read from; it is a path, and its default is relative for the same reason.
+    """
+
+    data: Path
+
+    @classmethod
+    def from_env(cls, environ: dict[str, str] | None = None) -> "Settings":
+        env = os.environ if environ is None else environ
+        return cls(Path(env.get("TESTOPS_DATA") or "data"))
+
+    @property
+    def db_path(self) -> Path:
+        return self.data / "testops.db"
+
+    @property
+    def blob_dir(self) -> Path:
+        return self.data / "blobs"
+
+    @property
+    def env_file(self) -> Path:
+        return Path(os.environ.get("TESTOPS_ENV") or ".env")
+
+
+def settings() -> Settings:
+    """The deployment settings as they stand now, not as they stood at import."""
+    return Settings.from_env()
+
+
+def load_env(path: Path | None = None) -> dict[str, str]:
     """Read KEY=VALUE pairs. Returns {} when the file is absent rather than raising."""
+    path = path or settings().env_file
     out: dict[str, str] = {}
     if not path.exists():
         return out
@@ -114,17 +149,33 @@ class Repo:
 
 @dataclass(frozen=True)
 class Project:
-    """A project is coordinates: repos, a Jira key, an ADO query."""
+    """A project is coordinates: repos, a Jira key, an ADO query.
+
+    TESTOPS-38 moved the *identity* of a project into the store (``project`` and ``service``
+    tables); this dataclass remains the shape the pipeline and collectors already speak. A project
+    read from the store is assembled into one of these, with ``service_states`` carrying what each
+    of its services said about itself at the moment the run resolved it.
+    """
     key: str
-    product: Repo
+    product: Repo | None
     test: Repo
     jira_key: str
     ado_org: str | None = None
     ado_project: str | None = None
     ado_pipeline_ids: tuple[int, ...] = field(default_factory=tuple)
+    service_states: tuple[dict, ...] = field(default_factory=tuple)
+    # The project's own answer, from its services, recorded with the run: `not_assessable` when a
+    # service it needs is absent (AC7). Empty means the caller assembled the Project directly and
+    # recorded no service assessment.
+    assessment_state: str = ""
+    assessment_reason: str = ""
 
 
-PROJECTS: dict[str, Project] = {
+
+# The seed for the one forward migration that carried this build's projects out of Python and into
+# the store. It is data a migration reads once (``store/migrate.py``), not configuration a running
+# build resolves: after the migration, adding or changing a project is a row, never an edit here.
+LEGACY_PROJECTS: dict[str, Project] = {
     "cotw": Project(
         key="cotw",
         product=Repo("jagobond", "cotw-continuity"),
@@ -158,7 +209,20 @@ PROJECTS: dict[str, Project] = {
 }
 
 
-def project(name: str) -> Project:
-    if name not in PROJECTS:
-        raise SystemExit(f"unknown project {name!r}; known: {', '.join(PROJECTS)}")
-    return PROJECTS[name]
+def project(name: str, conn=None) -> Project:
+    """Resolve a project slug from the store, refusing an unknown slug by name.
+
+    TESTOPS-38 AC8. There is no in-code project list to fall back on: a project that is not in the
+    ``project`` table is not a project this build can analyse, and the message names it rather than
+    offering a default.
+    """
+    from . import services
+    from .store import db
+
+    own = conn is None
+    conn = conn or db.connect()
+    try:
+        return services.project_from_store(conn, name)
+    finally:
+        if own:
+            conn.close()

@@ -157,3 +157,33 @@ CREATE INDEX IF NOT EXISTS idx_claim_run ON claim(run_id);
 CREATE INDEX IF NOT EXISTS idx_finding_case ON finding(case_id);
 
 CREATE INDEX IF NOT EXISTS idx_case_state_case ON case_state(case_id);
+
+-- TESTOPS-38. A project is an identity and owns no data; a service is one analysable resource
+-- inside it. Runs and cases keep their ``project`` column and it holds this slug, so every existing
+-- row and every existing page keeps its meaning without a rewrite.
+CREATE TABLE IF NOT EXISTS project (
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT ''
+);
+
+-- The service's own last-consulted state and reason (AC4): what it said about itself the last time
+-- a run resolved the project, never a guess made at render time. ``settings`` holds hosts, repo
+-- coordinates, board keys and paths - never a credential; secrets resolve from the environment.
+CREATE TABLE IF NOT EXISTS service (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project TEXT NOT NULL REFERENCES project(slug) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('git_repo', 'jira_board', 'ado_pipeline')),
+  role TEXT NOT NULL DEFAULT '' CHECK (role IN ('', 'product', 'test')),
+  name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+  settings TEXT NOT NULL DEFAULT '{}',
+  last_state TEXT,
+  last_reason TEXT,
+  last_consulted_at TEXT,
+  created_at TEXT NOT NULL DEFAULT '',
+  CONSTRAINT service_role_for_git_repo CHECK (
+    type != 'git_repo' OR role IN ('product', 'test')
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_service_project ON service(project);

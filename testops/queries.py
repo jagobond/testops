@@ -354,6 +354,10 @@ def _attach_sources(conn, claim: dict) -> dict:
                               "reason": spot.reason, "blocked_by": spot.blocked_by,
                               "recorded": True})
     claim["source_notes"] = notes
+    # TESTOPS-38 AC4: what each service said about itself when this run resolved the project. A
+    # snapshot written before the model has no such record and the page is unchanged.
+    service_states = meta.get("service_states") if isinstance(meta, dict) else None
+    claim["service_states"] = service_states if isinstance(service_states, list) else None
     return claim
 
 
@@ -586,7 +590,10 @@ def _source_facts(conn, run_id: str, analyser: str | None) -> dict:
              # product repository. ``None`` means the snapshot predates the record - not "nothing
              # was skipped", which is the same mistake in a different place.
              "reads": meta.get("reads") if isinstance(meta, dict) else None,
-             "surfaces": meta.get("surfaces") if isinstance(meta, dict) else None}
+             "surfaces": meta.get("surfaces") if isinstance(meta, dict) else None,
+             "service_states": (meta.get("service_states")
+                                if isinstance(meta, dict)
+                                and isinstance(meta.get("service_states"), list) else None)}
     if not facts["registry_recorded"]:
         return facts
     assessment = sources.assessment_for(meta, analyser or "")
