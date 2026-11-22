@@ -1,0 +1,36 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-37.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-37-decision-survives`, tree clean.
+Ticket:     factory/tickets/TESTOPS-37.md
+Diff:       git diff main..HEAD
+
+The ticket exists because `pipeline.py` consulted `cases.suppressed()` at three points and no test touched any of
+them. The build adds `tests/test_decision_survives.py` (8 tests) and claims: decisions stop the next run, reopening
+reverses it, all three gates proven by deletion, and AC4 refuted on purpose (fingerprint excludes the line so
+reformatting does not resurrect a judged case).
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Break the promise in ways a user would.** Decide a case, then: change whitespace/comments above the assertion;
+  change the assertion's WORDING slightly (one word); change the test data in a table; rename the scenario; move the
+  scenario to another feature file; analyse a different commit. For each, report whether the decided finding stays
+  silent or comes back. A decision that silently stops working is the failure the Product Owner is worried about;
+  one that comes back loudly after a rename is acceptable if the page explains it.
+- **Verify the deletion proof yourself.** Delete each of the three gates in turn and confirm exactly one test fails
+  and it is the right one. Restore byte-identically (`git status` clean) and say so.
+- **Check the end-to-end test cannot pass for the wrong reason.** Does it assert the claim was still analysed and
+  still had the same verdict and fingerprint? If a changed verdict could explain the silence, the test proves
+  nothing.
+- **Judge the AC4 deviation.** The build says the fingerprint deliberately excludes the line. Say whether you agree,
+  and name the case where line-insensitivity would be wrong (two identical assertions in the same scenario?).
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-37-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## Criteria — AC1..AC6 HOLDS / WEAK / NOT MET.
+  ## What keeps a decision — the six edits and what happened to the decided finding.
+  ## Gate deletion — each gate, which test failed.
+  ## Three sharpest concerns.
+
+Then reply with the verdict, whether decisions are safe to use, and a summary under 300 words.
