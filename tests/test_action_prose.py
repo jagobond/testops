@@ -281,7 +281,7 @@ def test_a_duplicate_action_asks_for_one_copy_and_nothing_more(tmp_path, monkeyp
     the field the reader acts on.
     """
     result = _duplication_claims(tmp_path, monkeypatch)
-    assert len(result.claims) == 18
+    assert len(result.claims) == 17
     for claim in result.claims:
         action = claim.detail["proposed_action"]
         assert action == "Raise this with the team: keep one.", action

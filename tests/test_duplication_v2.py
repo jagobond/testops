@@ -16,7 +16,10 @@ run analysed:
   * AC5 - the evidence resolves from the claim's coordinates and the asserting step is shown inline.
 
 The corpus is the stored run's own 108 test-suite files (see ``reqoverflow_fixtures``), so the numbers
-are the Product Owner's numbers: 18 claims, 18 cases.
+are the Product Owner's numbers: 18 claims, 18 cases. TESTOPS-31 corrected one of them: two
+QuestionSuggestions scenarios were declared duplicates on step text alone while their tables assert
+different lists, so the corrected signature yields 17 claims and 17 cases. See
+``test_duplication_tables`` for that pair pinned both ways.
 """
 from __future__ import annotations
 
@@ -66,7 +69,7 @@ def test_every_claim_is_v2_with_its_assertion_coordinates(tmp_path, monkeypatch)
     finally:
         conn.close()
 
-    assert len(rows) == 18
+    assert len(rows) == 17
     assert snapshot["schema_version"] == 2, "a duplication snapshot now records the claim schema it wrote"
     for row in rows:
         assert row["schema_version"] == 2
@@ -104,8 +107,8 @@ def test_every_statement_is_distinct_and_names_its_copy(tmp_path, monkeypatch):
         conn.close()
 
     statements = [row["statement"] for row in rows]
-    assert len(statements) == 18
-    assert len(set(statements)) == 18, "two findings share a statement"
+    assert len(statements) == 17
+    assert len(set(statements)) == 17, "two findings share a statement"
 
     for row in rows:
         statement = row["statement"]
@@ -142,7 +145,7 @@ def test_the_two_copies_of_one_claim_say_what_each_actually_does(tmp_path, monke
 
 # --------------------------------------------------------------------------- AC3
 
-def test_eighteen_findings_are_eighteen_cases_with_one_finding_each(tmp_path, monkeypatch):
+def test_every_finding_is_its_own_case_with_one_finding_each(tmp_path, monkeypatch):
     result, conn = _run(tmp_path, monkeypatch)
     try:
         claim_count = conn.execute("SELECT COUNT(*) FROM claim").fetchone()[0]
@@ -156,15 +159,15 @@ def test_eighteen_findings_are_eighteen_cases_with_one_finding_each(tmp_path, mo
     finally:
         conn.close()
 
-    assert claim_count == 18
-    assert case_count == 18
-    assert finding_count == 18
-    assert len(result.case_ids) == 18
+    assert claim_count == 17
+    assert case_count == 17
+    assert finding_count == 17
+    assert len(result.case_ids) == 17
     assert result.case_id == result.case_ids[0]
     assert len(case_ids) == len(set(case_ids)), "case ids must be unique"
     assert {row["n"] for row in per_case} == {1}, "a case must never group two findings"
     assert all(len(ids) == 1 for ids in claim_ids)
-    # No case carries two findings - the defect was one case carrying all eighteen.
+    # No case carries two findings - the defect was one case carrying all of them.
     assert max(row["n"] for row in per_case) == 1
 
 
@@ -186,8 +189,8 @@ def test_each_case_page_shows_only_its_own_claim(tmp_path, monkeypatch):
     finally:
         conn.close()
 
-    assert len(pages) == 18
-    assert len(assertions) == 18
+    assert len(pages) == 17
+    assert len(assertions) == 17
     for page, html, assertion in zip(pages, html_pages, assertions):
         # TESTOPS-23: the page quotes its own claim's step, with the keyword the file gives it.
         assert assertion
@@ -211,7 +214,7 @@ def test_the_action_raises_the_duplicate_for_the_team_and_keeps_one(tmp_path, mo
     finally:
         conn.close()
 
-    assert len(actions) == 18
+    assert len(actions) == 17
     for action in actions:
         assert action.startswith("Raise this with the team:")
         assert action.endswith("keep one.")

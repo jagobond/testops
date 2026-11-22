@@ -6,6 +6,16 @@ claim — and it costs maintenance forever.
 
 No model is involved. This runs in CI and can fail a build.
 
+v2.2.0 (TESTOPS-31) — the table is part of the assertion.
+
+v2.1.0 compared scenarios by their step *words*. Two scenarios that said "Then the suggestions
+list should be" over different tables therefore had one signature, and the page told a reader the
+project ran the same test twice when it ran two different lists. The signature now includes the
+rows of every data table and the text of every doc string, and the claim's ``assertion_text``
+carries them too, so it reads as something a reader can check rather than a sentence that stops at
+"should be". Digits are no longer parameterised: "12 questions" and "3 questions" are different
+test data. A genuinely identical pair - same words, same rows - stays a duplicate.
+
 v2.1.0 (TESTOPS-29) — the action states the change, and the statement states the finding.
 
 The action used to restate the statement before saying what to do: "this copy calls the HTTP
@@ -32,9 +42,10 @@ finding. This version writes what the Product Owner asked for:
   * the scenario's step-definition observations are recorded in ``support`` (the asserting step's binding
     first), so the evidence resolves from the claim's coordinates rather than from a live source.
 
-The grouping rule is unchanged: identical normalised step sequence, judged by the highest layer any step's
-binding reaches, cheapest known layer first. One claim per duplicated scenario remains the unit - the
-ticket is explicit that duplicates are not merged into one finding.
+The grouping rule is identical normalised step sequence *and data*: the rows of every table, the text
+of every doc string and an outline's examples, judged by the highest layer any step's binding reaches,
+cheapest known layer first. One claim per duplicated scenario remains the unit - the ticket is explicit
+that duplicates are not merged into one finding.
 """
 from __future__ import annotations
 
@@ -46,7 +57,7 @@ from ..extract import gherkin, stepbindings
 from .base import Claim, Evidence
 
 name = "duplication"
-version = "2.1.0"
+version = "2.2.0"
 uses_model = False
 
 # Duplication is a question about test code, so test code is what its verdict rests on. Requirements
@@ -130,9 +141,14 @@ def _quote(text: str) -> str:
 
 
 def _assertion_phrase(scenario: gherkin.Scenario) -> str:
-    """What the scenario asserts, quoted: every asserting step, or its one fallback step."""
+    """What the scenario asserts, quoted: every asserting step, or its one fallback step.
+
+    The quote is the step's words *with its data*. Quoting only the words produced "the suggestions
+    list should be", which is not an assertion - the list was in the table underneath it
+    (TESTOPS-31).
+    """
     steps = _asserting_steps(scenario) or [scenario.steps[-1]]
-    texts = [_quote(step.text) for step in steps]
+    texts = [_quote(step.assertion_text) for step in steps]
     if len(texts) == 1:
         return texts[0]
     return ", ".join(texts[:-1]) + " and " + texts[-1]
@@ -206,14 +222,15 @@ def _claim(member: _Member, other: _Member, *, cheapest: str, same_level: bool, 
         "group_size": group_size,
         "duplicate_of": other_where,
         "intra_level": same_level,
-        "assertion_text": assertion.text,
+        "assertion_text": assertion.assertion_text,
         "assertion_path": feature.path,
         "assertion_line": assertion.line,
         "assertion_commit": commit,
         "interaction_label": label,
         "instrument": member.layer,
         "established_by": (f"the scenario's steps match those of {other_where} after normalisation, "
-                           f"and its step definitions place this copy at {member.layer}"),
+                           f"tables and doc strings included, and its step definitions place this "
+                           f"copy at {member.layer}"),
         "sources_assessed": assessed,
         "sources_missing": list(missing) if assessed else None,
         "assessment": assessment_record,

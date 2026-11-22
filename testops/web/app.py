@@ -302,11 +302,13 @@ def quoted_assertion(claim: dict) -> str | None:
         return None
     line = _asserted_line(claim)
     match = GHERKIN.match(line or "")
-    if match and match.group(2).strip() == text.strip():
+    # The stored assertion may carry its step's table or doc string after the step's words
+    # (TESTOPS-31); the file line stops at the words, so the line is a prefix of what was stored.
+    if match and text.strip().startswith(match.group(2).strip()):
         keyword = match.group(1)
         if keyword in ("And", "But"):
             keyword = "Then"
-        return f"{keyword} {match.group(2).strip()}"
+        return f"{keyword} {text.strip()}"
     return "Then " + text.strip()
 
 
