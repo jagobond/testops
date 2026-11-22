@@ -49,7 +49,7 @@ def test_a_distinct_claim_proposes_no_change_but_still_names_the_step():
     distinct = next(claim for claim in fixtures.analyse_fact_sheet() if claim.verdict == "distinct")
     action = distinct.detail["proposed_action"]
     assert action.startswith("No change")
-    assert "is the cheapest one" in action
+    assert "cheapest level that establishes it" in action
     assert distinct.detail["assertion_text"].lstrip()[:1].lower() + \
         distinct.detail["assertion_text"].lstrip()[1:] in action
 

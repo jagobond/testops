@@ -172,7 +172,11 @@ def test_the_step_is_referred_to_rather_than_quoted_twice_and_nothing_else_is_sh
 
 
 # ------------------------------------------------------------------- the real analyser's shapes
-
+#
+# These are stored actions, not current analyser output. The store keeps every run it was given, so
+# rows written by level_fitness 0.10.1 and duplication 2.0.0 still have to render - whole - on a page
+# built after TESTOPS-29 rewrote those strings. That is why the fixtures below are the old strings
+# verbatim: the renderer's contract is with what is stored, never with what today's analyser writes.
 
 DUPLICATE = ("Raise this with the team: this copy calls the HTTP client to establish what "
              "ReqOverflow.Specs.Controller/Features/Home.feature:7 settles in-process; keep one.")
@@ -212,36 +216,35 @@ def _referred(stored: str, step: str) -> str:
     return stored
 
 
-@pytest.mark.parametrize("verdict", ["distinct", "gap"])
-def test_a_real_analyser_tail_is_on_the_page_now(verdict):
-    """AC3 on the analyser's own strings: the restatement tails the old rule dropped are kept.
+def test_a_real_analyser_tail_is_on_the_page_now():
+    """AC3 on the analyser's own strings: what today's analyser writes, the page renders whole.
 
-    Each verdict's stored action has a tail after ``"; "``. The page now shows that tail as its own
-    sentence, and every content word of the stored action survives - the analyser's redundancy is
-    visible to the reader rather than tidied away by the renderer.
+    The distinct verdict is the one action that still carries the level fact (TESTOPS-29 removed the
+    clauses that restated the statement). It now states that fact inside the instruction rather than
+    as a second sentence, and the page must give it back word for word: the fact appears nowhere else
+    on the page, so a renderer that dropped or reshaped it would take it off the page entirely.
     """
-    claims = {claim.verdict: claim for claim in _claims()}
-    assert verdict in claims, sorted(claims)
-    claim = claims[verdict]
+    claim = next(claim for claim in _claims() if claim.verdict == "distinct")
     stored, visible = claim.detail["proposed_action"], _visible(claim)
-    head, sep, tail = stored.partition("; ")
-    assert sep and tail.strip()
-    tail = tail.strip()
-    assert visible.endswith(tail[:1].upper() + tail[1:]), (stored, visible)
-    source = _referred(stored, claim.detail["assertion_text"])
-    missing = [word for word in _content(source) if word not in _words(visible)]
+    assert stored.endswith("at the cheapest level that establishes it."), stored
+    expected = _referred(stored, claim.detail["assertion_text"])
+    expected = " ".join(part.strip()[:1].upper() + part.strip()[1:]
+                        for part in re.split(r";\s*", expected) if part.strip())
+    assert visible == expected, (stored, visible)
+    missing = [word for word in _content(expected) if word not in _words(visible)]
     assert missing == [], (missing, stored, visible)
 
 
-def test_an_unplaced_claim_keeps_its_reason_too():
-    text = ("Feature: counts\n"
-            "  Scenario: the count is reported\n"
-            "    Then that count is correct for the store it was run against\n")
-    claims = fixtures.analyse_text(text, fixtures.api_bindings())
-    assert len(claims) == 1 and claims[0].verdict == "unplaced", claims[0].verdict
-    assert claims[0].detail["proposed_action"].endswith(
-        "a judgement with no comparison in it cannot be checked at any level.")
-    visible = _visible(claims[0])
+def test_a_stored_action_whose_tail_is_a_reason_still_renders_whole():
+    """A row the store already holds keeps its reason clause, whatever today's analyser writes.
+
+    This is the shape level_fitness 0.10.1 wrote for an unplaced meta claim. TESTOPS-29 stopped it
+    being written; TESTOPS-28's renderer is what must keep it readable for as long as the row is in
+    the store.
+    """
+    stored = ('Rewrite the step "that count is correct" to say what it is compared with, then '
+              're-run; a judgement with no comparison in it cannot be checked at any level.')
+    visible = app.action_line({"proposed_action": stored, "provenance": {}}, None)
     assert visible.endswith(
         "A judgement with no comparison in it cannot be checked at any level."), visible
 

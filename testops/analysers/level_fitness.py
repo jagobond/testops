@@ -1,4 +1,27 @@
-"""Level fitness v0.10 - one claim per assertion, in words a reader can act on.
+"""Level fitness v0.10.2 - one claim per assertion, in words a reader can act on.
+
+v0.10.2 is TESTOPS-29: the action states the change, the statement states the reason, once each.
+
+  * TESTOPS-28 stopped the renderer cutting a stored action at its semicolon, which made the
+    analyser's own redundancy visible: a review claim's action read "Rewrite this step to call the
+    HTTP client instead of the browser. The response decides everything the browser is being used
+    for." The second sentence is the *reason*, and the argument one line above already gives it
+    ("the page the server sends settles it, ... so it pays for a browser that decides nothing
+    extra"). A reason dressed as an instruction is worse than a missing one, because the reader
+    acts on it. Every action here now states the change and stops; the reason was never the
+    action's to carry, so nothing is deleted from the page - a corpus test asserts the reason is
+    still in the statement and still reaches the reader through the argument (AC1-AC3). The
+    repetition measure is the TESTOPS-28 review's own: a content word repeated between the two
+    sentences of one action box, which was 2 of 94 and is now 0;
+  * the duplicate-action wording lives in the duplication analyser and follows the same rule
+    (AC4): its trailing restatement of the statement goes, "keep one" stays;
+  * one action keeps a second clause: the distinct claim's "at the cheapest level that
+    establishes it". That fact appears nowhere else on the page - the statement says the run
+    settles the claim and never says this was the cheapest level that could - so deleting it would
+    be the TESTOPS-27 leak again: information a reader had and can no longer see (AC2). It is
+    folded into the instruction so the action states a disposition rather than a justification;
+  * not one verdict moves. Rewording an action cannot move a verdict, and the corpus test pins the
+    counts to prove it.
 
 v0.10.1 is TESTOPS-18: two wording defects from the TESTOPS-12 review, and not one verdict moves.
 
@@ -143,7 +166,7 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.10.1"
+version = "0.10.2"
 uses_model = False
 
 # What this analyser's verdict rests on, and what it would like to check itself against but does
@@ -544,25 +567,34 @@ def _statement(interaction: str, clause: str, verdict: str, instrument: str,
 
 
 def _proposed_action(interaction: str, clause: str, verdict: str, why: str = "") -> str:
-    """One sentence naming the step to change. This is the field a case reviewer acts on."""
+    """What to change, and never why. This is the field a case reviewer acts on (TESTOPS-29).
+
+    The action is not a summary of the case: the statement above it is. A second sentence giving
+    the reason duplicates the argument in the reader's own scan line, and - worse - presents a
+    reason as an instruction, so a reader who acts on the plan takes the justification with it.
+    Where a reason used to trail an action here, the statement already said it; where it did not,
+    the fact is folded into the instruction (the distinct claim's level) rather than dropped.
+
+    One instruction, one or two sentences, no restatement of the statement (AC1).
+    """
     if verdict == "gap":
-        return (f"Move the step \"{clause}\" into a test that drives a browser, or delete it; at this "
-                f"level nothing establishes what it asserts.")
+        return f'Move the step "{clause}" into a test that drives a browser, or delete it.'
     if verdict == "review":
-        return (f"Rewrite the step \"{clause}\" to call the HTTP client instead of the browser; the "
-                f"response decides everything the browser is being used for.")
+        return f'Rewrite the step "{clause}" to call the HTTP client instead of the browser.'
     if verdict == "unplaced":
         if why == WHY_META:
-            return (f"Rewrite the step \"{clause}\" to say what it is compared with - the value, the "
-                    f"row or the report it should agree with - then re-run; a judgement with no "
-                    f"comparison in it cannot be checked at any level.")
+            return (f'Rewrite the step "{clause}" to say what it is compared with - the value, the '
+                    f"row or the report it should agree with - then re-run.")
         if interaction == "U":
-            return (f"Rewrite the step \"{clause}\" to say whether it is about the data, the response, "
+            return (f'Rewrite the step "{clause}" to say whether it is about the data, the response, '
                     f"the page, or what a person sees, then re-run.")
-        return (f"Bind the step \"{clause}\" to a step definition whose driver can be identified, then "
-                f"re-run; nothing can be judged until then.")
-    return (f"No change: keep the step \"{clause}\" where it is; this level is the cheapest one that "
-            f"establishes it.")
+        return (f'Bind the step "{clause}" to a step definition whose driver can be identified, '
+                f"then re-run.")
+    # A distinct claim's one extra fact: this level is the cheapest that establishes the assertion,
+    # and nothing else on the page says so. It is stated as the disposition ("keep it at the
+    # cheapest level") rather than as a reason for it, because an action that reads "keep it,
+    # because ..." leaves a reader holding an argument where they asked for a plan.
+    return f'No change: keep the step "{clause}" at the cheapest level that establishes it.'
 
 
 def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = None, *,

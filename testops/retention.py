@@ -11,9 +11,9 @@ The store is append-only evidence. Two facts about it decide this module:
    why pruning refuses any snapshot a decided or suppressed case references.
 
 Nothing here runs on a schedule and nothing deletes without being asked. ``retention`` reports;
-``retention --prune --keep N --yes`` is the only path that removes a row, and it refuses without
-``--yes``. There is no default prune and no timer: silent deletion of evidence is the failure this
-module exists to avoid.
+``retention --prune --keep N --yes`` (N per project) is the only path that removes a row, and it
+refuses without ``--yes``. There is no default prune and no timer: silent deletion of evidence is
+the failure this module exists to avoid.
 """
 from __future__ import annotations
 
@@ -279,7 +279,8 @@ def _claims_referenced_by_surviving_findings(conn, candidates: set[str]) -> set[
 def plan(conn, keep: int, blob_dir: Path | None = None) -> dict:
     """Decide what ``--keep N`` would delete, and what must survive, with its reason.
 
-    ``keep`` is applied per project: a project's N most recent snapshots are kept whatever the
+    ``keep`` is applied per project (``--keep N`` has always meant N per project; TESTOPS-30 is
+    the wording catching up): a project's N most recent snapshots are kept whatever the
     other projects hold. A global count would let a busy project starve a quiet one and delete the
     quiet one's whole history, which is not a retention policy anybody asked for.
 

@@ -113,7 +113,23 @@ def _print_plan(plan: dict) -> None:
     deleting = [row for row in plan["snapshots"] if row["action"] == "delete"]
     kept = [row for row in plan["snapshots"] if row["action"] == "keep"]
     print()
-    print(f"prune plan — keep {keep} most recent per project")
+    # N is per project, not for the store as a whole (TESTOPS-30). Saying so here is the difference
+    # between a reader who expects two rows left and a reader who can see three.
+    print(f"prune plan — keep {keep} per project "
+          f"(the {keep} most recent snapshot{'s' if keep != 1 else ''} in each project)")
+    # The counts, so the reader can check what N meant on their own store rather than trust the
+    # sentence above.
+    held: dict[str, int] = {}
+    surviving: dict[str, int] = {}
+    for row in plan["snapshots"]:
+        held[row["project"]] = held.get(row["project"], 0) + 1
+        if row["action"] == "keep":
+            surviving[row["project"]] = surviving.get(row["project"], 0) + 1
+    if held:
+        print("  per project (kept / held):")
+        width = max(len(name) for name in held)
+        for name in sorted(held):
+            print(f"    {name:{width}}  {surviving.get(name, 0)} / {held[name]}")
     if not deleting:
         print("  nothing to delete: every snapshot is protected or within the keep window")
     for row in deleting:
@@ -144,7 +160,7 @@ def cmd_retention(args) -> int:
                 print("\n--keep/--yes only apply with --prune; this run was report-only.")
             return 0
         if args.keep is None:
-            print("\nretention --prune needs --keep N. Nothing was deleted.")
+            print("\nretention --prune needs --keep N (N per project). Nothing was deleted.")
             return 2
         # Print the plan before acting: a reader must see what is about to go while it is still
         # there. ``prune`` re-derives it rather than trusting this one, so the printed list and the
@@ -202,9 +218,11 @@ def main(argv=None) -> int:
 
     rt = sub.add_parser("retention", help="report store size per snapshot; prune only on request")
     rt.add_argument("--prune", action="store_true",
-                    help="delete snapshots older than --keep; does nothing without --yes")
+                    help="delete snapshots outside the --keep window (N per project); "
+                         "does nothing without --yes")
     rt.add_argument("--keep", type=int, default=None,
-                    help="keep this many most recent snapshots per project")
+                    help="keep N per project: the N most recent snapshots in each project survive, "
+                         "and older ones are candidates for deletion")
     rt.add_argument("--yes", action="store_true", help="confirm the deletion")
     rt.set_defaults(func=cmd_retention)
 
