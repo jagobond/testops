@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from ..config import settings
-from . import migrate
+from . import migrate, verdicts
 from .migrate import SchemaCorruptError, SchemaTooNewError  # re-exported: callers catch db.SchemaTooNewError
 
 SCHEMA = Path(__file__).with_name("schema.sql")
@@ -135,9 +135,16 @@ def add_claim(conn, run_id: str, analyser: str, version: str, subject_ref: str,
     record behind it - and is stored as ``None`` beside ``sources_assessed = 0``. Passing
     ``sources_assessed=True`` with no list is incoherent and the database refuses it: "assessed" with
     nothing to show is exactly the guarantee this column exists to prevent.
+
+    The verdict is checked here against the *current* vocabulary (TESTOPS-46), even though the
+    database accepts a retired name on INSERT so that a store can be restored from its own history.
+    This function is the analyser emission boundary: a live run may only say what the analysers say
+    today, and a retired name in a new claim is history being invented. The trigger cannot make that
+    distinction - it cannot tell a restore from an analyser - so the strict half lives here.
     """
     if not sources_assessed:
         sources_missing = None
+    verdicts.validate_verdict(verdict, verdicts.current(conn))
     cur = conn.execute(
         "INSERT INTO claim (run_id, analyser, analyser_version, subject_ref, statement, verdict,"
         " confidence, support, schema_version, assertion_text, assertion_path, assertion_line,"

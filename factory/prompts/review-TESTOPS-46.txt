@@ -1,0 +1,31 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-46.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t46 (branch `factory/testops-46-restore`). Work only here.
+Ticket:  factory/tickets/TESTOPS-46.md
+Build:   factory/reports/2026-11-22/TESTOPS-46-build.md
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+The change makes the INSERT trigger accept every name in `verdict_vocabulary` (current and retired) so a store can be
+restored from its own history, keeps the UPDATE trigger current-only, and makes `db.add_claim` actually call
+`validate_verdict` — the build says that guard previously existed but nobody called it.
+
+HARD RULES - the risk is that a restore path quietly widens a guard:
+- Run the suite from this worktree with the interpreter above.
+- **The asymmetry is the design; test both halves.** INSERT of `optimal` must succeed (restore); UPDATE of an existing
+  row TO `optimal` must still be REFUSED; UPDATE to `total_nonsense` refused; INSERT of `total_nonsense` refused. Quote
+  each error.
+- **Now check the widened INSERT cannot be used as a back door:** can an analyser run, or `db.add_claim`, write a
+  retired name and get away with it because the trigger now allows it? The build claims `db.add_claim` calls the code
+  guard. Prove it: call the real write path with `optimal` and report what happens. If the only thing stopping an
+  analyser from writing a retired name is a function that some other path skips, say so loudly.
+- **Restore, end to end:** take the live store (read-only copy), dump claims, restore row-by-row into a fresh store,
+  and compare digests. Then restore a store containing a CURRENT name only, and one containing an UNKNOWN name (the
+  build says the unknown case needs the destination trigger dropped - verify that claim and say whether the workaround
+  is acceptable or a hole).
+- **v6 migration:** confirm the trigger bodies were replaced (not duplicated), that `sqlite_master` holds exactly two
+  claim triggers afterwards, and that a v5 store opens and migrates without touching rows.
+- **check-store** three states with counts, against a real store copy.
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-46-review.md with: ## Verdict; ## The asymmetry (four probes); ## Back door
+  (the real write path); ## Restore end to end; ## v6 migration; ## check-store; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 300 words.

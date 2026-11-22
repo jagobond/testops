@@ -23,6 +23,13 @@ holds rows under retired names keeps them exactly as they are - a trigger constr
 next, never what was written before - and the upgrade records the new version without touching a
 claim.
 
+v6 (TESTOPS-46) changes the *body* of the INSERT trigger: a restore may carry a retired name, so the
+trigger asks "has this product ever emitted this name?" rather than "is it current today?". The
+``CREATE TRIGGER IF NOT EXISTS`` in ``schema.sql`` cannot express that change - it leaves an existing
+v5 trigger body in place - so a v5 store has its two verdict triggers dropped here and recreated by
+the ``executescript`` that follows. Rows are not copied or rewritten; only the guard above them is
+replaced.
+
 SQLite cannot add a table-level CHECK to an existing table, and AC4's refusal has to live in the
 database - a Python guard in ``add_claim`` would be skippable by the next caller. So the ``claim``
 table is rebuilt: same rows, same ids, same values, new columns defaulted to "not recorded", and the
@@ -42,7 +49,9 @@ from ..config import LEGACY_PROJECTS
 # The schema this build writes and reads. A store above this is refused.
 # v5 adds the verdict vocabulary table and its two claim triggers (TESTOPS-45): they change what may
 # be written, not the shape of any stored row, so no existing row is copied or rewritten to get them.
-CURRENT_VERSION = 5
+# v6 widens the INSERT trigger's allowed set to every name the product has ever emitted (TESTOPS-46),
+# so a store can be restored from its own history; the trigger is replaced, no row is touched.
+CURRENT_VERSION = 6
 
 # The oldest store this build can still open. v1 is readable: its claims are evidence.
 MIN_SUPPORTED_VERSION = 1
@@ -124,6 +133,12 @@ def prepare(conn: sqlite3.Connection, schema_text: str) -> int:
         # truth about an older snapshot: it recorded nothing about its arms or blind spots, which is
         # different from recording that nothing was missing - a rebuild refuses rather than guess.
         conn.execute("ALTER TABLE snapshot ADD COLUMN meta TEXT NOT NULL DEFAULT '{}'")
+
+    if version is not None and version < 6:
+        # schema.sql creates a trigger only if it is absent, so a v5 body would survive the
+        # executescript below. Drop it here and let the canonical DDL install v6's guard.
+        conn.execute("DROP TRIGGER IF EXISTS claim_verdict_insert")
+        conn.execute("DROP TRIGGER IF EXISTS claim_verdict_update")
 
     conn.executescript(schema_text)  # creates anything missing; a no-op on a current store
     if version is not None and version < 4:

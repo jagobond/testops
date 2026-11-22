@@ -188,12 +188,14 @@ def cmd_scrub_fixtures(args) -> int:
 def cmd_check_store(args) -> int:
     """Report claims whose verdict the store can no longer explain, without rendering a page.
 
-    TESTOPS-45 AC5. The web layer renders whatever string it finds, and a legacy store may hold a
-    verdict the vocabulary never recorded. That is a fact about the evidence, not a reason for a
-    reader to meet a half-rendered page: this command names the rows so the store can be inspected
-    honestly. Retired names (optimal, overbuilt, necessary) are reported separately - they are
-    historical evidence and are never treated as corruption. Nothing is created: a check against a
-    store that is not there says so rather than conjuring an empty one that would read as clean.
+    TESTOPS-45 AC5, three states in TESTOPS-46 AC4. The web layer renders whatever string it finds,
+    and a legacy store may hold a verdict the vocabulary never recorded. That is a fact about the
+    evidence, not a reason for a reader to meet a half-rendered page: this command names the rows so
+    the store can be inspected honestly. Every claim is reported in exactly one of three states:
+    ``current`` (a name an analyser may emit today), ``historical`` (a retired name, read as stored
+    and never rewritten) and ``unknown`` (a defect: the store has no record of the value at all).
+    Nothing is created: a check against a store that is not there says so rather than conjuring an
+    empty one that would read as clean.
     """
     if not DB_PATH.exists():
         print(f"no store at {DB_PATH}; nothing to check.")
@@ -206,6 +208,12 @@ def cmd_check_store(args) -> int:
     allowed = ", ".join(sorted(report["allowed"]))
     print(f"store         {DB_PATH}")
     print(f"allowed       {allowed}")
+    current = report["current"]
+    if report["current_total"]:
+        detail = ", ".join(f"{name} {count}" for name, count in current.items() if count)
+        print(f"current       {report['current_total']} ({detail}) — names an analyser may emit today")
+    else:
+        print("current       0")
     historical = report["historical"]
     if report["historical_total"]:
         detail = ", ".join(f"{name} {count}" for name, count in historical.items() if count)

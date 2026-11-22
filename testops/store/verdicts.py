@@ -12,9 +12,19 @@ that want to refuse before touching the database, and as the description a Postg
 re-implement). ``tests/test_verdict_trigger.py`` reads both and fails if they disagree, so a future
 move to Postgres starts from this function rather than from a rediscovery of the vocabulary.
 
+TESTOPS-46. The guards answer two different questions, and this module keeps them apart:
+
+* **At the database**, a new row's verdict must be a name this product has *ever* emitted - current
+  or retired. A store must be restorable from its own history, so ``INSERT INTO claim SELECT ...``
+  carrying ``optimal`` out of an older store is accepted: restoring history is not writing history.
+* **In the code**, an analyser may emit only a name that is *current today*. :func:`validate_verdict`
+  refuses a retired name, and ``db.add_claim`` calls it, so no live run can write history even
+  though the database would accept it from a restore. An UPDATE of a stored verdict is also held to
+  today's set: changing evidence to a retired name is a rewrite, not a restore.
+
 The 128 rows written before the vocabulary settled still carry ``optimal``, ``overbuilt`` and
 ``necessary``. They are not unknown: the table records them as retired, with the ticket that retired
-them, and the triggers never consult them - a retired name is history, not something to write again.
+them, and ``check-store`` reports them as history rather than as corruption.
 """
 from __future__ import annotations
 
@@ -23,6 +33,7 @@ from collections.abc import Collection
 
 _CURRENT = "SELECT name FROM verdict_vocabulary WHERE status = 'current' ORDER BY name"
 _RETIRED = "SELECT name, retired_by FROM verdict_vocabulary WHERE status = 'retired' ORDER BY name"
+_EVER = "SELECT name FROM verdict_vocabulary ORDER BY name"
 
 
 class UnknownVerdict(ValueError):
@@ -45,7 +56,7 @@ def validate_verdict(value: str, allowed: Collection[str]) -> str:
 
 
 def current(conn: sqlite3.Connection) -> frozenset[str]:
-    """The verdicts this store accepts on a new claim, read from the store itself."""
+    """The verdicts an analyser may emit today, read from the store itself."""
     return frozenset(row[0] for row in conn.execute(_CURRENT))
 
 
@@ -54,13 +65,25 @@ def retired(conn: sqlite3.Connection) -> dict[str, str]:
     return {row[0]: row[1] for row in conn.execute(_RETIRED)}
 
 
+def ever_emitted(conn: sqlite3.Connection) -> frozenset[str]:
+    """Every name the product has ever emitted, current or retired.
+
+    This is the set the INSERT trigger accepts and therefore the set a restore may carry. It is
+    deliberately not the set :func:`validate_verdict` is given: a live run may only say what the
+    analysers say today.
+    """
+    return frozenset(row[0] for row in conn.execute(_EVER))
+
+
 def inventory(conn: sqlite3.Connection) -> dict:
-    """Every claim whose verdict is not current, split into historical and unknown.
+    """Every claim, classified as current, historical or unknown, with a count for each state.
 
     ``unknown`` is the defect: a value the store has no record of at all, whether it predates the
-    vocabulary or arrived through a store written before the guard. ``historical`` is the 128 rows
-    under retired names - reported so an operator can see them, never treated as corruption and
-    never rewritten. One query, so the counts cannot disagree with the rows printed beside them.
+    vocabulary or arrived through a store written before the guard. ``historical`` is the rows under
+    retired names - reported so an operator can see them, never treated as corruption and never
+    rewritten. ``current`` is the ordinary case, counted per name so the three states are three
+    statements rather than one negative. One pass, so the counts cannot disagree with the rows
+    printed beside them.
     """
     allowed = current(conn)
     retired_names = retired(conn)
@@ -69,9 +92,11 @@ def inventory(conn: sqlite3.Connection) -> dict:
         " FROM claim c ORDER BY c.id")
     unknown: list[dict] = []
     historical: dict[str, int] = {name: 0 for name in retired_names}
+    current_counts: dict[str, int] = {name: 0 for name in sorted(allowed)}
     for row in rows:
         verdict = row[4]
         if verdict in allowed:
+            current_counts[verdict] += 1
             continue
         if verdict in retired_names:
             historical[verdict] += 1
@@ -79,5 +104,6 @@ def inventory(conn: sqlite3.Connection) -> dict:
         unknown.append({"id": row[0], "run_id": row[1], "analyser": row[2],
                         "subject_ref": row[3], "verdict": verdict})
     return {"allowed": allowed, "retired": retired_names,
-            "unknown": unknown, "historical": historical,
-            "historical_total": sum(historical.values())}
+            "current": current_counts, "current_total": sum(current_counts.values()),
+            "unknown": unknown, "unknown_total": len(unknown),
+            "historical": historical, "historical_total": sum(historical.values())}
