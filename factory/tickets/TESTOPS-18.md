@@ -2,7 +2,7 @@
 id: TESTOPS-18
 title: The response is not the store's mouthpiece
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-12
 ---

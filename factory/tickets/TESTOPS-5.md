@@ -2,7 +2,7 @@
 id: TESTOPS-5
 title: Sources are declared, not assumed — the capability registry
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-16
 ---

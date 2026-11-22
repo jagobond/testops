@@ -2,7 +2,7 @@
 id: TESTOPS-10
 title: Classification coverage — half the real corpus is unclassifiable
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-4
 ---

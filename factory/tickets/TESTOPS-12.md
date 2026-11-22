@@ -2,7 +2,7 @@
 id: TESTOPS-12
 title: Labels finish the job, and restraint stops being a be-verb pattern
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-16
 ---

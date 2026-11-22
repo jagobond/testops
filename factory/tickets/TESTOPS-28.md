@@ -2,7 +2,7 @@
 id: TESTOPS-28
 title: Stop classifying the tail; keep the whole action and fix redundancy at the source
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-27
 supersedes: TESTOPS-27

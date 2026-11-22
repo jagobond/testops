@@ -13,36 +13,42 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | id | title | feature | status | note |
 |----|-------|---------|--------|------|
 | TESTOPS-1 | Factory scaffolding: git baseline, PRODUCT/ROLES/AGENTS, board | F0 | done | Lead work, no builder |
-| TESTOPS-2 | Test harness baseline: pytest, one real test, dev extras | F1 | done | 17 tests; PR #1 merged into feature/f1 as 5c008b7 after a PASS review |
-| TESTOPS-3 | Claim schema v2 — per-assertion subject, sources used and missing, `not_assessable` | F1 | done | 53 tests; PR #2 merged as 616d5d8 after a PASS review |
-| TESTOPS-4 | Level-fitness analyser emits one claim per assertion, with plain-language statement and proposed action | F1 | done | 84 tests; PR #3 merged as 595894e after a PASS review |
-| TESTOPS-5 | Sources are declared, not assumed: the capability registry | F1 | done | 162 tests; crux held end to end; PR #13 merged after a PASS review |
-| TESTOPS-6 | Case page rebuilt around the six sections; provenance labels; codes to footnote | F1 | done | 111 tests; PR #6 merged as fecfb6e after a PASS review |
+| TESTOPS-2 | Test harness baseline | F1 | done | 17 tests; PR #1 merged into feature/f1 as 5c008b7 after a PASS review |
+| TESTOPS-3 | Claim schema v2 — one claim per assertion, with provenance and blind spots | F1 | done | 53 tests; PR #2 merged as 616d5d8 after a PASS review |
+| TESTOPS-4 | One claim per assertion, said in words a developer can act on | F1 | done | 84 tests; PR #3 merged as 595894e after a PASS review |
+| TESTOPS-5 | Sources are declared, not assumed — the capability registry | F1 | done | 162 tests; crux held end to end; PR #13 merged after a PASS review |
+| TESTOPS-6 | The case page — an argument a developer can act on | F1 | done | 111 tests; PR #6 merged as fecfb6e after a PASS review |
 | TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | Unblocked by T5/T17; waits on F2 direction. The suite a real team would keep |
 | TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | blocked | Reviewer concern 3 on TESTOPS-2: `test_packaging` imports via sys.path, so a broken `package-data` stays green |
 | TESTOPS-9 | Stale claim vocabulary: `schema.sql`, the `Claim` docstring and `analysers/base.py` describe verdicts (`optimal`/`overbuilt`/`necessary`) the analyser abandoned | F1 | blocked | Found by the TESTOPS-2 builder; schema comments that lie mislead every reader |
-| TESTOPS-10 | Classification coverage: 51% of the real corpus is `unplaced` | F1 | done | 48 → 0 unplaced, gaps unchanged; PR #4 merged after a PASS review |
-| TESTOPS-11 | Restraint: a claim is not `distinct` because one of its words is familiar | F1 | done | 90 distinct / 1 unplaced / 1 gap / 2 review; PR #5 merged as 1c1fca3 after a PASS review |
-| TESTOPS-12 | Labels finish the job, and the restraint rule stops being a be-verb pattern | F1 | ready | Accumulated polish: eleven scenarios with mixed labels, be-verb restraint, every statement opening "This test", plus the TESTOPS-16 wording nit |
-| TESTOPS-13 | Python floor: the app cannot be imported by the 3.11 interpreter that serves it | F1 | done | 118 pass on 3.12, 114 pass + 4 skip on 3.11; PR #7 merged after a PASS review |
-| TESTOPS-14 | Evidence depth: a level run records only the product arm and its claims carry no observations | F1 | done | 195 observations, 0 claims empty; verdicts unmoved; PR #8 merged as 28894a5 after a PASS review |
-| TESTOPS-15 | Make the floor real: the suite runs on 3.11 in CI, not just on a machine where someone remembers | F1 | done | Proven fail-capable (run 44962212770): 3.11 leg red, 3.12 green; PR #10 merged |
-| TESTOPS-16 | Say which kind of nothing it is: "not recorded" vs "nothing bears on it" | F1 | done | 140 tests; PR #12 merged after a PASS review |
-| TESTOPS-17 | A clean bill requires having looked: no registry, no verdict | F1 | done | schema v3, 1005 old claims demoted to not-assessed; PR #14 merged after a PASS review |
-| TESTOPS-19 | The case page opens with the answer, and shows the code inline | F1 | done | 210 tests; snippets verified against commit bytes; PR #16 merged after a PASS review |
+| TESTOPS-10 | Classification coverage — half the real corpus is unclassifiable | F1 | done | 48 → 0 unplaced, gaps unchanged; PR #4 merged after a PASS review |
+| TESTOPS-11 | Restraint — a claim is not checked because one of its words is familiar | F1 | done | 90 distinct / 1 unplaced / 1 gap / 2 review; PR #5 merged as 1c1fca3 after a PASS review |
+| TESTOPS-12 | Labels finish the job, and restraint stops being a be-verb pattern | F1 | done | Accumulated polish: eleven scenarios with mixed labels, be-verb restraint, every statement opening "This test", plus the TESTOPS-16 wording nit |
+| TESTOPS-13 | The app cannot be imported by the interpreter that serves it | F1 | done | 118 pass on 3.12, 114 pass + 4 skip on 3.11; PR #7 merged after a PASS review |
+| TESTOPS-14 | A level run cannot rebuild itself, and its claims carry no observations | F1 | done | 195 observations, 0 claims empty; verdicts unmoved; PR #8 merged as 28894a5 after a PASS review |
+| TESTOPS-15 | Make the floor real — the suite runs on 3.11 in CI | F1 | done | Proven fail-capable (run 44962212770): 3.11 leg red, 3.12 green; PR #10 merged |
+| TESTOPS-16 | Say which kind of nothing it is | F1 | done | 140 tests; PR #12 merged after a PASS review |
+| TESTOPS-17 | A clean bill requires having looked | F1 | done | schema v3, 1005 old claims demoted to not-assessed; PR #14 merged after a PASS review |
+| TESTOPS-18 | The response is not the store's mouthpiece | F1 | done | Restored from the ticket file |
+| TESTOPS-19 | The case page opens with the answer, and shows the code | F1 | done | 210 tests; snippets verified against commit bytes; PR #16 merged after a PASS review |
 | TESTOPS-21 | The duplication analyser still writes v1 claims, so its cases say nothing | F1 | done | 220 tests; 18 cases, 1 finding each, 18 distinct statements; PR #17 merged after a PASS review |
 | TESTOPS-22 | A quiet run is not a resolved case | F1 | done | 228 tests; counts traced to stored rows; PR #18 merged after a PASS review |
-| TESTOPS-24 | Retention: keep every run explainable without keeping every byte four times | F1 | done | 288 tests; blobs dedupe proven (0 bytes per re-run); PR #22 merged after a PASS review |
+| TESTOPS-23 | The page narrates the analyser instead of telling the reader one story | F1 | done | Restored from the ticket file |
+| TESTOPS-24 | Retention — keep every run explainable without keeping every byte four times | F1 | done | 288 tests; blobs dedupe proven (0 bytes per re-run); PR #22 merged after a PASS review |
 | TESTOPS-25 | The fixture is somebody else's MIT code, and we are not carrying its licence | F1 | done | 108 files verified against upstream blobs; PR #20 merged after a PASS review |
 | TESTOPS-26 | The summary is there, but the reader has to dig it out of a paragraph | F1 | done | Three-part scan block; plain-English lint proven to bite; reviewed with T23 |
-| TESTOPS-27 | The action line drops anything after a semicolon, and trusts that it was redundant | F1 | ready | Reviewer finding on T23/26: a truncated action is the one thing a reader cannot detect |
-| TESTOPS-30 | Two small defects the retention review found: --keep scope, and a stale case id | F1 | ready | A crash where a 404 belongs; a flag whose name promises more than it does |
+| TESTOPS-27 | The action line drops anything after a semicolon, and trusts that it was redundant | F1 | superseded | Reviewer finding on T23/26: a truncated action is the one thing a reader cannot detect |
+| TESTOPS-28 | Stop classifying the tail; keep the whole action and fix redundancy at the source | F1 | done | Restored from the ticket file |
+| TESTOPS-29 | The analyser's action strings repeat the argument, and the reader now sees it | F1 | done | Restored from the ticket file |
+| TESTOPS-30 | Two small defects the retention review found: --keep scope, and a stale case id | F1 | done | A crash where a 404 belongs; a flag whose name promises more than it does |
 | TESTOPS-31 | Duplication calls two scenarios the same when their tables differ | F1 | done | One pair resolved, no new duplicates; PR #25 |
 | TESTOPS-32 | A duplicate claim never shows the copy it names | F1 | done | Counterpart shown before context; three lies tried, none rendered wrongly; PR #26 |
 | TESTOPS-33 | The case list says "the suggestions list should be", which is not a case | F1 | done | Headlines; round 1 NEEDS-FIX (badge markup, inverted trim), round 2 PASS; PR #28 |
 | TESTOPS-34 | A run with no findings is listed as an open case awaiting a decision | F1 | done | Rule moved into the list query; closed and quiet provably distinct; PR #29 |
 | TESTOPS-35 | A reviewer's fixture case is sitting in Harry's live store | F1 | done | Scrub ran on the live store: case_ 168->167, 1 fixture removed; PR #27 |
 | TESTOPS-36 | Two analysers, one step, two pages that never mention each other | F1 | done | Cross-reference both ways; four adversarial stores, no lie; PR #30 |
+
+|----|-------|---------|--------|------|
 
 Feature F1 = "a claim a developer can act on". F0 is scaffolding and carries no product outcome.
 
