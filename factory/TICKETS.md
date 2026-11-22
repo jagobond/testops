@@ -34,6 +34,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-22 | A quiet run is not a resolved case | F1 | done | 228 tests; counts traced to stored rows; PR #18 merged after a PASS review |
 | TESTOPS-24 | Retention: keep every run explainable without keeping every byte four times | F1 | ready | Product Owner approved dedupe-by-hash; growth to be measured, not estimated |
 | TESTOPS-25 | The fixture is somebody else's MIT code, and we are not carrying its licence | F1 | ready | Found by the T21 reviewer: the corpus is a copy of Reqnroll's MIT sample with no notice |
+| TESTOPS-26 | The summary is there, but the reader has to dig it out of a paragraph | F1 | ready | Lead review of the T23 build: action buried third, step quoted twice, "dearer" |
 
 Feature F1 = "a claim a developer can act on". F0 is scaffolding and carries no product outcome.
 
