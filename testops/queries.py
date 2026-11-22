@@ -162,11 +162,39 @@ def pass_note_from_rows(rows: list[tuple[str | None, str | None]]) -> str | None
     if len(counts) < 2:
         return None
     parts = [f'"{label}" for {_assertions(n)}' for label, n in counts.items()]
-    asks = "; ".join(_ASKS.get(codes[label], f"one is about {label}") for label in counts)
-    return (f"This scenario carries {len(counts)} answers to one run: "
-            + ", and ".join(parts)
-            + f". The run is one - {asks} - so the answers differ in what the assertions ask, not "
-              f"in which instrument read them.")
+    asks = _asks(counts, codes)
+    sentence = (f"This scenario carries {len(counts)} answers to one run: "
+                + _listed(parts) + ".")
+    # A label is a phrase for what settles a claim, not a subject a sentence can be built around:
+    # "one is about settled by the response the server sends" is a placeholder wearing the label's
+    # clothes (TESTOPS-18, AC1). The code says what the assertion asks; a row that has a label and
+    # no code cannot be explained from the label, so the note says only what it can stand behind.
+    if asks:
+        return (f"{sentence} The run is one: {asks}, so the answers differ in what the assertions "
+                f"ask, not in which instrument read them.")
+    return (f"{sentence} The run is one: the answers differ in what the assertions ask, not in "
+            f"which instrument read them.")
+
+
+def _asks(counts: dict[str, int], codes: dict[str, str]) -> str | None:
+    """What each label's assertions ask, or ``None`` when the rows cannot say.
+
+    Every clause is read from ``_ASKS`` by interaction code. The label is never interpolated: it
+    answers "what settles it", and a label beginning "settled by ..." dropped after "one is about"
+    produces a clause no reader would write. When any label has no code, the whole list is withheld
+    rather than half-guessed - the sentence still explains why one run carries two answers.
+    """
+    asks = [_ASKS.get(codes.get(label) or "") for label in counts]
+    if any(ask is None for ask in asks):
+        return None
+    return _listed(asks)
+
+
+def _listed(items: list[str]) -> str:
+    """Two things are joined by ``and``; three or more get the commas a reader expects."""
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return ", ".join(items[:-1]) + f", and {items[-1]}"
 
 
 def _assertions(n: int) -> str:

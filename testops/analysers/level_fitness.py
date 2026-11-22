@@ -1,5 +1,16 @@
 """Level fitness v0.10 - one claim per assertion, in words a reader can act on.
 
+v0.10.1 is TESTOPS-18: two wording defects from the TESTOPS-12 review, and not one verdict moves.
+
+  * an I1 claim checked through an HTTP response no longer says "that answer says what is stored".
+    The response is evidence *about* the store, not the store: the sentence now takes the answer as
+    the report of what is stored and stops where the answer stops speaking for it. The KP sentence
+    says where its inference stops for the page, and the I2 sentence names the response as the
+    thing asked about rather than borrowing the store's authority;
+  * the multi-label pass note never quotes a label back at the reader. What each assertion asks is
+    read from its interaction code; a row with a label and no code withholds the explanation
+    instead of producing "one is about settled by the response the server sends".
+
 v0.10 is TESTOPS-12: four readability defects, recorded by reviewers, and not one verdict moves.
 
   * one verification pass carries one label. The label answers "what settles it", so the suite
@@ -132,7 +143,7 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.10.0"
+version = "0.10.1"
 uses_model = False
 
 # What this analyser's verdict rests on, and what it would like to check itself against but does
@@ -482,16 +493,24 @@ def _second(interaction: str, instrument: str) -> str:
     Built from the same table as the label, so the two cannot name different instruments. Where an
     api suite settles a claim about stored data, the sentence says how the answer arrives rather
     than leaving a reader to wonder how a store can be read without opening it.
+
+    It also says where the inference stops. An HTTP response is evidence *about* the store, never
+    the store itself: a handler can return cached state or a value it computed without touching the
+    disk, so "that answer says what is stored" granted the response authority it does not have
+    (TESTOPS-18, AC3). The sentence names the inference - the answer is *taken as* the report of
+    what is stored, and the check reaches only as far as that answer speaks for the store. The
+    same discipline applies to the page the response carries (KP) and to the response claim (I2),
+    which may say the response is the thing asked about but may not borrow the store's authority.
     """
     if interaction == "I1" and instrument in ("api", "controller"):
-        return (f"The run {_reads(instrument)}, and that answer says what is stored, so the "
-                f"assertion is checked.")
+        return (f"The run {_reads(instrument)}, and takes that answer as the report of what is "
+                f"stored, so the assertion is checked as far as that answer speaks for the store.")
     if interaction == "KP" and instrument in ("api", "controller"):
-        return (f"The run {_reads(instrument)}, and that page arrives in the response, so the "
-                f"assertion is checked.")
+        return (f"The run {_reads(instrument)}, and takes that answer as the page the server "
+                f"sends, so the assertion is checked as far as that answer speaks for the page.")
     if interaction == "I2" and instrument in ("api", "controller"):
-        return (f"The run {_reads(instrument)}, which is exactly the answer it asks about, so the "
-                f"assertion is checked.")
+        return (f"The run {_reads(instrument)}, which is exactly the answer the assertion asks "
+                f"about, so the assertion is checked.")
     if instrument == "engine":
         return (f"The run {_reads(instrument)}, whose own answer about the stored data settles it, "
                 f"so the assertion is checked.")

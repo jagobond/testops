@@ -6,6 +6,7 @@ Fixtures are in-memory objects and a synthetic ``github:`` URI. No repository ch
 """
 from __future__ import annotations
 
+import re
 import socket
 
 import level_fixtures as fixtures
@@ -242,3 +243,70 @@ def test_a_review_statement_names_the_instrument_that_settles_it():
     assert claim.detail["interaction_label"] == "settled by the page the server sends"
     assert "The page the server sends settles it" in claim.statement
     assert "The response the server sends settles it" not in claim.statement
+
+
+# --- TESTOPS-18: the response is evidence about the store, never the store ------------------------
+
+INFERENCE = "takes that answer as the report of what is stored"
+STORE_AUTHORITY = re.compile(
+    r"\bsays what is stored\b"
+    r"|\bthe response is what is stored\b"
+    r"|\bthat answer is the store\b"
+    r"|\bthe response is the store\b"
+    r"|\bproves what is stored\b"
+    r"|\bthe answer is the data\b", re.I)
+
+
+def test_an_i1_claim_read_over_http_names_the_inference_as_an_inference():
+    """AC3/AC5: a handler can return cached or computed values without touching the disk.
+
+    The sentence may say the answer is *taken as* the report of what is stored, and it must say
+    where that reading stops. "That answer says what is stored" is the sentence this ticket exists
+    to keep out.
+    """
+    text = "the canon store contains one fact per admitted proposal"
+    claim = _scenario_claim("features/approval_queue.feature",
+                            "The audit counts what rests on a batch decision", text,
+                            layer="api")[text]
+    assert claim.detail["interaction_code"] == "I1"
+    assert claim.verdict == "distinct"
+    assert INFERENCE in claim.statement, claim.statement
+    assert "as far as that answer speaks for the store" in claim.statement, claim.statement
+    assert not STORE_AUTHORITY.search(claim.statement), claim.statement
+
+
+def test_no_statement_confers_store_authority_on_the_response():
+    """AC5 regression: one drifted sentence in the analyser fails the suite, not a reviewer's eye."""
+    steps = ["the canon store contains one fact per admitted proposal",
+             "the rejected fact is not in the canon store",
+             "each of those facts records review mode \"batch\""]
+    claims = _scenario_claim("features/approval_queue.feature",
+                             "The audit counts what rests on a batch decision", *steps,
+                             layer="api")
+    i1 = [claim for claim in claims.values() if claim.detail["interaction_code"] == "I1"]
+    assert len(i1) == len(steps)
+    for claim in i1:
+        assert INFERENCE in claim.statement, claim.statement
+        assert not STORE_AUTHORITY.search(claim.statement), claim.statement
+
+
+def test_the_kp_and_i2_sentences_say_where_their_inference_stops():
+    """AC4: the page arrives in the response; the response claim is the thing asked about.
+
+    Neither may borrow the store's authority, and neither may present a page or a response as
+    identical to what the other holds.
+    """
+    kp_text = "the page is served with stable fact anchors"
+    i2_text = "the response status is not an error"
+    claims = _scenario_claim("features/approval_queue.feature",
+                             "The audit counts what rests on a batch decision",
+                             kp_text, i2_text, layer="api")
+    kp, i2 = claims[kp_text], claims[i2_text]
+    assert kp.detail["interaction_code"] == "KP"
+    assert i2.detail["interaction_code"] == "I2"
+    assert "takes that answer as the page the server sends" in kp.statement
+    assert "as far as that answer speaks for the page" in kp.statement
+    assert "the answer the assertion asks about" in i2.statement
+    for claim in (kp, i2):
+        assert not STORE_AUTHORITY.search(claim.statement), claim.statement
+        assert "says what is stored" not in claim.statement, claim.statement
