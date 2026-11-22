@@ -1,0 +1,30 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-45.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t45 (branch `factory/testops-45-verdict-trigger`). Work only here.
+Ticket:  factory/tickets/TESTOPS-45.md
+Build:   factory/reports/2026-11-22/TESTOPS-45-build.md
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+The change adds schema v5: a `verdict_vocabulary` table (5 current + 3 retired names) and BEFORE INSERT / BEFORE
+UPDATE OF verdict triggers that refuse anything else, plus `testops check-store`.
+
+HARD RULES - constraints that do not fire are worse than none, because they create false confidence:
+- Run the suite from this worktree with the interpreter above.
+- **Fire the triggers by direct SQL**, not through the repository layer: INSERT `verdict='total_nonsense'`; UPDATE an
+  existing row to `total_nonsense`; INSERT NULL; INSERT '' ; INSERT 'DISTINCT' (wrong case). Report each error text.
+- **Try to slip past them:** insert through a transaction with `PRAGMA ignore_check_constraints=ON`; insert with the
+  trigger temporarily dropped (expected to pass - say what that proves); `INSERT OR REPLACE`; a row copied with
+  `INSERT INTO claim SELECT ...` from a store holding a retired name. The last one matters most: history must remain
+  copyable.
+- **The 128 retired rows:** confirm they still read and render, and that a v4 store migrated to v5 keeps all claim rows
+  byte-identical (hash the dump before and after).
+- **The allowed set is claimed to have ONE definition.** Verify: `verdict_vocabulary` table vs `store/verdicts.py` vs
+  the analysers' emitted set vs the documented names. Report any drift in either direction.
+- **check-store:** run it against (a) a clean store, (b) a copy with a bogus verdict inserted with the trigger dropped,
+  (c) a path that does not exist. Report exit codes and whether it created a store.
+- Judge the RAISE() limitation honestly: the trigger cannot name the offending value. Is the message a reader gets
+  sufficient to fix the problem, or does it send them hunting?
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-45-review.md with: ## Verdict; ## Triggers fired (each probe, error text);
+  ## Attempts to slip past; ## Retired rows and the migration hash; ## Allowed set drift; ## check-store; ## RAISE.
+- Reply with the verdict and a summary under 300 words.

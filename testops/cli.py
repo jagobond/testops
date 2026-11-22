@@ -10,7 +10,7 @@ from pathlib import Path
 
 from . import analysers, cases, retention, scrub, services
 from .config import DB_PATH, load_env
-from .store import db
+from .store import db, verdicts
 from .web.app import serve
 from .pipeline import run_duplication, run_level_fitness
 from .score import level as level_score
@@ -185,6 +185,45 @@ def cmd_scrub_fixtures(args) -> int:
         conn.close()
 
 
+def cmd_check_store(args) -> int:
+    """Report claims whose verdict the store can no longer explain, without rendering a page.
+
+    TESTOPS-45 AC5. The web layer renders whatever string it finds, and a legacy store may hold a
+    verdict the vocabulary never recorded. That is a fact about the evidence, not a reason for a
+    reader to meet a half-rendered page: this command names the rows so the store can be inspected
+    honestly. Retired names (optimal, overbuilt, necessary) are reported separately - they are
+    historical evidence and are never treated as corruption. Nothing is created: a check against a
+    store that is not there says so rather than conjuring an empty one that would read as clean.
+    """
+    if not DB_PATH.exists():
+        print(f"no store at {DB_PATH}; nothing to check.")
+        return 1
+    conn = db.connect()
+    try:
+        report = verdicts.inventory(conn)
+    finally:
+        conn.close()
+    allowed = ", ".join(sorted(report["allowed"]))
+    print(f"store         {DB_PATH}")
+    print(f"allowed       {allowed}")
+    historical = report["historical"]
+    if report["historical_total"]:
+        detail = ", ".join(f"{name} {count}" for name, count in historical.items() if count)
+        print(f"historical    {report['historical_total']} ({detail}) — retired names, read as stored,"
+              f" never rewritten")
+    else:
+        print("historical    0")
+    unknown = report["unknown"]
+    if not unknown:
+        print("unknown       0 — every claim's verdict is current or a documented historical name")
+        return 0
+    print(f"unknown       {len(unknown)}")
+    for row in unknown:
+        print(f"  claim {row['id']} run {row['run_id']} analyser {row['analyser']} "
+              f"verdict {row['verdict']!r} subject {row['subject_ref']}")
+    return 1
+
+
 def cmd_serve(args) -> int:
     serve(args.port, args.host)
     return 0
@@ -328,6 +367,10 @@ def main(argv=None) -> int:
                          "reads --dry-run then --yes")
     sf.add_argument("--yes", action="store_true", help="remove the reported rows")
     sf.set_defaults(func=cmd_scrub_fixtures)
+
+    ck = sub.add_parser("check-store",
+                        help="report claims whose verdict is not in the store's vocabulary")
+    ck.set_defaults(func=cmd_check_store)
 
     sv = sub.add_parser("serve", help="run the local UI")
     sv.add_argument("--port", type=int, default=8787)
