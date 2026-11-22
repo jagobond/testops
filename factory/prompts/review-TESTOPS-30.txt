@@ -1,0 +1,35 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-30.
+
+Repository: C:/Users/Chester/Projects/testops-t30 (a git worktree of the same repository), branch
+`factory/testops-30-stale-id`, tree clean.
+Ticket:     C:/Users/Chester/Projects/testops/factory/tickets/TESTOPS-30.md
+Diff:       git diff feature/f1..HEAD
+
+IMPORTANT: this worktree has no .venv. Use the main checkout's interpreter with this directory first on the
+path: `cd C:/Users/Chester/Projects/testops-t30 && env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1
+PYTHONPATH=. C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q`
+Verify that imports resolve to THIS directory (`python -c "import testops; print(testops.__file__)"`), not the
+main checkout. If they do not, stop and say so rather than reviewing the wrong code.
+
+HARD RULES
+- **Break the 404 page.** Request a case id whose snapshot was pruned (prune a COPY of data/ first), then try:
+  a case id that never existed, an empty id, an id with a slash, an id with a percent-encoded path, a very long
+  id, and a case id that survives. Report the status code and the first line of each response. A crash here is
+  NEEDS-FIX.
+- **Check the wording claim.** Run the command with --help and with a plain report; confirm N is expressed as
+  per project everywhere it appears, and that the report prints the per-project counts. Do not accept a code
+  comment as the fix.
+- **Confirm nothing destructive changed**: the pruning rules from TESTOPS-24 must be untouched. Re-run one
+  refusal (a decided case) and report.
+- Confirm verdicts 94/90/1/1/2.
+- Do not edit product code, tests or the ticket. Write exactly one file in THIS worktree:
+  factory/reports/2026-11-22/TESTOPS-30-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## Criteria — AC1..AC4 HOLDS / WEAK / NOT MET.
+  ## Ids tried — each request, status, first line.
+  ## Wording — the actual --help and report lines.
+  ## Three sharpest concerns.
+
+Then reply with the verdict and a summary under 300 words.
