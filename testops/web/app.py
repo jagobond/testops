@@ -1476,31 +1476,45 @@ def could_not_read_lines(run: dict | None) -> list[str]:
     reads = run.get("reads")
     if not isinstance(reads, dict) or not reads:
         return out
-    # The list is shown when it explains something: a capability this run could not read. A run
-    # that read every capability it needed is not made more truthful by a list of its README files,
-    # and the record - not the page - is where the full skip list lives (AC1).
-    unread = [spot for spot in (run.get("blind_spots") or [])
-              if spot.get("state") == sources.NOT_READABLE]
-    if not unread:
-        return out
+    # TESTOPS-43. The list prints for every run that skipped anything, whatever the verdict. It
+    # used to print only when it explained a capability the run could not read at all, so a run
+    # that skipped 500 `.sql` files and read its code fine said nothing about the 500: the skip was
+    # in the store and absent from the page, which is the one combination this section may not
+    # have. Each kind carries its count and its reason, and the names sit behind a disclosure.
+    #
+    # Files passed over by a rule (generated code-behind, vendored libraries) are counted in one
+    # quiet line rather than listed: they were not missed, and their names belong in the record.
     skipped = [(role, entry) for role in sorted(reads)
                for entry in ((reads.get(role) or {}).get("skipped") or [])
                if entry.get("reason") != "ignore pattern"]
-    if not skipped:
+    ignored = [(role, entry) for role in sorted(reads)
+               for entry in ((reads.get(role) or {}).get("skipped") or [])
+               if entry.get("reason") == "ignore pattern"]
+    if not skipped and not ignored:
         return out
-    skipped.sort(key=lambda item: (-int(item[1].get("count") or 0), item[1].get("kind") or ""))
-    total = sum(int(entry.get("count") or 0) for _role, entry in skipped)
-    out.append('<h2 class="section">Files this run could not read</h2>')
-    out.append(f'<p>{_count(total, "file")} in the repositories were not fetched. Nothing in this '
-               f'run says what they contain, so nothing here counts them as consulted.</p>')
-    for role, entry in skipped:
-        files = entry.get("files") or []
-        out.append(f'<p><strong>{entry.get("count")} {esc(entry.get("kind") or "")}</strong> in the '
-                   f'{esc(role)} repository \u2014 {esc(entry.get("reason") or "")}.</p>')
-        if files:
-            out.append('<details><summary>Name them</summary><ul>')
-            out.extend(f'<li><span class="code">{esc(path)}</span></li>' for path in files)
-            out.append('</ul></details>')
+    if skipped:
+        skipped.sort(key=lambda item: (-int(item[1].get("count") or 0),
+                                       item[1].get("kind") or ""))
+        total = sum(int(entry.get("count") or 0) for _role, entry in skipped)
+        kinds = len({entry.get("kind") or "" for _role, entry in skipped})
+        out.append('<h2 class="section">Files this run could not read</h2>')
+        out.append(f'<p>The repositories hold {_count(total, "file")} in {_count(kinds, "kind")} '
+                   f'that this run did not fetch. Nothing in this run says what they contain, so '
+                   f'nothing here counts them as consulted.</p>')
+        for role, entry in skipped:
+            files = entry.get("files") or []
+            out.append(f'<p><strong>{entry.get("count")} {esc(entry.get("kind") or "")}</strong> in the '
+                       f'{esc(role)} repository \u2014 {esc(entry.get("reason") or "")}.</p>')
+            if files:
+                out.append('<details><summary>Name them</summary><ul>')
+                out.extend(f'<li><span class="code">{esc(path)}</span></li>' for path in files)
+                out.append('</ul></details>')
+    if ignored:
+        # Nothing recorded may be silent. These were passed over by a rule rather than missed, so
+        # they get a count and no list: their names belong in the record, not on every page.
+        passed = sum(int(entry.get("count") or 0) for _role, entry in ignored)
+        out.append(f'<p class="quiet">It also passed over {_count(passed, "file")} of generated or '
+                   f'vendored code, which this tool never reads.</p>')
     return out
 
 
