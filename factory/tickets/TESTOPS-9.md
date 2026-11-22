@@ -2,7 +2,7 @@
 id: TESTOPS-9
 title: Stale claim vocabulary — the schema and the docstrings describe verdicts that were abandoned
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-2
 ---

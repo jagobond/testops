@@ -20,7 +20,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-6 | The case page — an argument a developer can act on | F1 | done | 111 tests; PR #6 merged as fecfb6e after a PASS review |
 | TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | Unblocked by T5/T17; waits on F2 direction. The suite a real team would keep |
 | TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | blocked | Reviewer concern 3 on TESTOPS-2: `test_packaging` imports via sys.path, so a broken `package-data` stays green |
-| TESTOPS-9 | Stale claim vocabulary — the schema and the docstrings describe verdicts that were abandoned | F1 | ready | Unblocked by the Product Owner; a schema comment that lies misleads every reader, including the next agent |
+| TESTOPS-9 | Stale claim vocabulary — the schema and the docstrings describe verdicts that were abandoned | F1 | done | 514 tests; three places corrected, test bites both ways; PR #36 |
 | TESTOPS-10 | Classification coverage — half the real corpus is unclassifiable | F1 | done | 48 → 0 unplaced, gaps unchanged; PR #4 merged after a PASS review |
 | TESTOPS-11 | Restraint — a claim is not checked because one of its words is familiar | F1 | done | 90 distinct / 1 unplaced / 1 gap / 2 review; PR #5 merged as 1c1fca3 after a PASS review |
 | TESTOPS-12 | Labels finish the job, and restraint stops being a be-verb pattern | F1 | done | Accumulated polish: eleven scenarios with mixed labels, be-verb restraint, every statement opening "This test", plus the TESTOPS-16 wording nit |
@@ -55,6 +55,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-42 | The tool reads one ecosystem, and says nothing when it does not | F2 | blocked | **From TESTOPS-39** — 0 of 44 cucumber-js bindings read, 43/43 claims unplaced, and a page telling the team its steps are unbound. Needs the Product Owner's decision: declare support, or make the binding layer pluggable |
 | TESTOPS-43 | A sentence that hides its own partial reads | F1 | ready | From the TESTOPS-41 review: aggregate totals hide a per-capability zero, a harmless skip renders nowhere, partial reads say "consulted" |
 | TESTOPS-44 | The secret guard errs in both directions, and the store upgrades without saying so | F2 | ready | From the TESTOPS-38 review: base64 key accepted because the guard exempts `/`, a real 32-char key refused, migration silent on open |
+| TESTOPS-45 | The store will accept any verdict string, and 128 rows still carry retired names | F2 | ready | From the TESTOPS-9 review: no verdict constraint exists — SQLite accepted `total_nonsense`; a trigger validates new writes without rewriting history |
 
 |----|-------|---------|--------|------|
 
