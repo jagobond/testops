@@ -36,3 +36,28 @@ reviewer re-read that sentence in all four verdicts.
 
 - The rule in AC1 must be written down in the code where it is applied, so the next person can disagree with it
   on the evidence rather than by guessing.
+
+## Addendum — the reviewer's probes found the hole this ticket exists to close
+
+The reviewer ran eight smuggling probes. Six tails survived; two vanished:
+
+| probe | result |
+|---|---|
+| `…; this should be split into two steps and the second deleted` | KEPT |
+| `…; move it and rename it` | KEPT |
+| `…; one copy to keep` | KEPT — fails open |
+| `…; keep it if the page does not need it` | KEPT |
+| `…; you should delete the second one` | KEPT — fails open |
+| `…; instead, delete the duplicate` | KEPT — fails open |
+| **`…; the second copy should be deleted`** | **DROPPED — a passive-voice order, silently lost** |
+| **`…; it is worth keeping one copy`** | **DROPPED — an inflected verb evades the stem list** |
+
+Both losses are morphology, not structure: the rule matches bare stems, so *deleted*, *keeping*,
+*removing*, *merged* walk past it. That is precisely the failure this ticket exists to prevent, so the
+ticket is not done until it passes its own probes.
+
+| id | criterion |
+|----|-----------|
+| AC7 | The eight probes above are tests, and every one is kept. Matching handles inflected forms (stems plus `-s`, `-ed`, `-ing`, `-es`, and irregulars the vocabulary actually contains) and passive constructions (`should be deleted`, `needs deleting`, `must be removed`, `worth keeping`) as instructions. |
+| AC8 | A tail is dropped only when the drop is proved: the clause opens with a word whose subject is the head clause AND contains no verb from the instruction vocabulary in any inflection, AND no modal or passive marker. The proof is in the test, not in the comment. |
+| AC9 | The 94 real tails that currently drop still drop — the fix must not turn every tail into a kept clause, or the corpus becomes noisy and the reader stops reading the second sentence. Report the before/after counts. |
