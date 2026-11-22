@@ -62,8 +62,8 @@ claim only reaches a page through a case, and this corpus raised none.
 The step-binding extractor read **nothing**. That is a refusal, not a crash: `parse_file` returns `[]`, the
 run continues, and the pipeline stats report `bindings: 0`.
 
-The corpus contains **44 cucumber-js bindings, all of the form `Then('…', () => { … })`, in the five
-`*.stepdef.js` files** of a 14-file JavaScript test tree. The extractor read 0 of them. `BINDING` is
+The corpus contains **44 cucumber-js bindings, of the form `Given|When|Then|And|But('…', () => { … })` — 13 of them `Then(` — in the five
+`*.stepdef.js` files** of a 15-file JavaScript test tree (corrected after review). The extractor read 0 of them. `BINDING` is
 `\[(Given|When|Then|And|But)\s*\(\s*"` (`testops/extract/stepbindings.py:24`) — a C#/Reqnroll attribute.
 Zero attribute-style bindings exist anywhere in this corpus, so the two counts cannot meet.
 
@@ -72,7 +72,7 @@ What it can read, and what it cannot:
 | binding style | present here | read |
 |---|---|---|
 | C#/Reqnroll `[Given("…")]` | 0 | yes (the only shape) |
-| cucumber-js `Given('…')` | 44 | no |
+| cucumber-js `Given('…')` (all five keywords; 13 `Then(`) | 44 | no |
 | cucumber-js `Given("…")` / `` Given(`…`) `` | 0 | no (same regex, wrong brackets) |
 | Python `@given("…")` | 0 | no |
 | Cypress custom commands (`Cypress.Commands.add('…')`) | several | no — they define no Gherkin step and are not looked for |
