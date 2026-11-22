@@ -412,10 +412,10 @@ def case_row(conn, case_id: str) -> dict | None:
                         WHERE c.id = ?""", (case_id,)).fetchone()
     if not r:
         return None
-    return {"id": r["id"], "project": r["project"], "analyser": r["analyser"],
-            "created_at": r["created_at"], "snapshot": r["snapshot_id"],
-            "summary": _json(r["summary"]), "state": cases.state_of(conn, case_id),
-            "versions": _json(r["artefact_versions"])}
+    return {"id": r["id"], "run_id": r["run_id"], "project": r["project"],
+            "analyser": r["analyser"], "created_at": r["created_at"],
+            "snapshot": r["snapshot_id"], "summary": _json(r["summary"]),
+            "state": cases.state_of(conn, case_id), "versions": _json(r["artefact_versions"])}
 
 
 def finding_rows(conn, case_id: str) -> list[dict]:
@@ -485,11 +485,35 @@ def run_analysis(conn, case_id: str) -> dict | None:
         " FROM case_ c LEFT JOIN run r ON r.id = c.run_id WHERE c.id = ?", (case_id,)).fetchone()
     if ctx is None:
         return None
-    snapshot = ctx["snapshot_id"]
     findings = conn.execute("SELECT COUNT(*) FROM finding WHERE case_id = ?",
                             (case_id,)).fetchone()[0]
-    record = {"run_id": ctx["run_id"], "analyser": ctx["analyser"], "snapshot": snapshot,
-              "finished_at": ctx["finished_at"], "findings": int(findings),
+    return _run_analysis(conn, ctx["run_id"], ctx["analyser"], ctx["snapshot_id"],
+                         ctx["finished_at"], ctx["status"], int(findings))
+
+
+def run_analysis_by_id(conn, run_id: str) -> dict | None:
+    """The same record as :func:`run_analysis`, for a run rather than one of its cases.
+
+    ``findings`` counts every finding the run raised - over all of its cases, not one - because a
+    run is the unit here. A run that raised nothing and a run whose findings were all closed by
+    decisions both reach this function; the counts and :func:`cases.list_cases` say which is which.
+    """
+    ctx = conn.execute(
+        "SELECT id, analyser, snapshot_id, finished_at, status FROM run WHERE id = ?",
+        (run_id,)).fetchone()
+    if ctx is None:
+        return None
+    findings = conn.execute(
+        "SELECT COUNT(*) FROM finding f JOIN case_ c ON c.id = f.case_id WHERE c.run_id = ?",
+        (run_id,)).fetchone()[0]
+    return _run_analysis(conn, ctx["id"], ctx["analyser"], ctx["snapshot_id"],
+                         ctx["finished_at"], ctx["status"], int(findings))
+
+
+def _run_analysis(conn, run_id: str, analyser: str | None, snapshot: str | None,
+                  finished_at: str | None, status: str | None, findings: int) -> dict:
+    record = {"run_id": run_id, "analyser": analyser, "snapshot": snapshot,
+              "finished_at": finished_at, "status": status, "findings": findings,
               # None = this store cannot support a count, which is not a count of zero.
               "claims": None, "features": None, "scenarios": None, "dormant": None,
               "feature_files": None, "patterns": None, "project_files": [],
@@ -499,7 +523,7 @@ def run_analysis(conn, case_id: str) -> dict | None:
         return record
 
     record["claims"] = int(conn.execute("SELECT COUNT(*) FROM claim WHERE run_id = ?",
-                                       (ctx["run_id"],)).fetchone()[0])
+                                        (run_id,)).fetchone()[0])
 
     features: list[tuple[int, str]] = []
     projects: list[tuple[str, str | None]] = []
@@ -541,32 +565,122 @@ def run_analysis(conn, case_id: str) -> dict | None:
                          " WHERE artefact_id = ? AND key LIKE 'scenario:%'",
                          (artefact_id,)).fetchone()[0] for artefact_id in active))
 
-    meta = _snapshot_meta(conn, ctx["run_id"])
-    stored = meta.get("sources") if isinstance(meta, dict) else None
-    record["registry_recorded"] = isinstance(stored, dict)
-    if record["registry_recorded"]:
-        assessment = sources.assessment_for(meta, ctx["analyser"])
-        consulted = sources.consulted_for(meta, ctx["analyser"])
-        record["assessment_recorded"] = assessment is not None or consulted is not None
-        if assessment is not None:
-            view = assessment.record()
-            view["sentence"] = assessment.sentence()
-            record["assessment"] = view
-        spots: list[dict] = []
-        named: set[tuple[str, str]] = set()
-        for found in (assessment, consulted):
-            if found is None:
-                continue
-            for spot in found.blind_spots:
-                key = (spot.source, spot.title)
-                if key in named:
-                    continue
-                named.add(key)
-                spots.append({"source": spot.source, "title": spot.title, "state": spot.state,
-                              "reason": spot.reason, "blocked_by": spot.blocked_by,
-                              "recorded": True})
-        record["blind_spots"] = spots
+    record.update(_source_facts(conn, run_id, analyser))
     return record
+
+
+def _source_facts(conn, run_id: str, analyser: str | None) -> dict:
+    """What the run's snapshot recorded about its sources, and the assessment it supports.
+
+    One reader for the run page, the runs list and the case page, so no screen can derive a
+    different answer from the same recorded registry. ``registry_recorded`` is whether a registry
+    was written at all; ``assessment_recorded`` is whether the record says what *this* analyser
+    needed. They are separate because "no registry" and "a registry that does not mention this
+    analysis" are different absences.
+    """
+    meta = _snapshot_meta(conn, run_id)
+    stored = meta.get("sources") if isinstance(meta, dict) else None
+    facts = {"registry_recorded": isinstance(stored, dict), "assessment_recorded": False,
+             "blind_spots": [], "assessment": None}
+    if not facts["registry_recorded"]:
+        return facts
+    assessment = sources.assessment_for(meta, analyser or "")
+    consulted = sources.consulted_for(meta, analyser or "")
+    facts["assessment_recorded"] = assessment is not None or consulted is not None
+    if assessment is not None:
+        view = assessment.record()
+        view["sentence"] = assessment.sentence()
+        facts["assessment"] = view
+    spots: list[dict] = []
+    named: set[tuple[str, str]] = set()
+    for found in (assessment, consulted):
+        if found is None:
+            continue
+        for spot in found.blind_spots:
+            key = (spot.source, spot.title)
+            if key in named:
+                continue
+            named.add(key)
+            spots.append({"source": spot.source, "title": spot.title, "state": spot.state,
+                          "reason": spot.reason, "blocked_by": spot.blocked_by,
+                          "recorded": True})
+    facts["blind_spots"] = spots
+    return facts
+
+
+def cases_for_run(conn, run_id: str) -> list[dict]:
+    """The cases a run raised, newest first. A run that raised nothing has none."""
+    return cases.list_cases(conn, run_id=run_id, limit=200)
+
+
+def run_read(conn, run_id: str) -> dict | None:
+    """Everything the run's page needs, or ``None`` when the store holds no such run.
+
+    ``versions`` is the commit record the snapshot stored - what the run looked at - and is never
+    re-read from a live source. ``cases`` is the list query, so a run whose only ``case_`` row raised
+    nothing reports no cases, which is the fact.
+    """
+    row = conn.execute(
+        "SELECT r.id, r.project, r.analyser, r.status, r.started_at, r.finished_at, r.snapshot_id,"
+        " s.artefact_versions FROM run r LEFT JOIN snapshot s ON s.id = r.snapshot_id"
+        " WHERE r.id = ?", (run_id,)).fetchone()
+    if row is None:
+        return None
+    record = run_analysis_by_id(conn, run_id)
+    if record is None:
+        return None
+    raised = cases_for_run(conn, run_id)
+    record.update({"id": run_id, "project": row["project"], "started_at": row["started_at"],
+                   "status": row["status"], "versions": _json(row["artefact_versions"]),
+                   "cases": raised, "case_count": len(raised),
+                   "decided_cases": sum(1 for case in raised
+                                        if case["state"] in cases.TERMINAL)})
+    return record
+
+
+def list_runs(conn, project: str | None = None, limit: int = 40) -> list[dict]:
+    """Every run in the store, newest first, with the counts the store can prove.
+
+    A run whose analyser this build cannot run is skipped for the same reason the dashboard skips
+    its case (TESTOPS-35): nothing here could have produced it. The counts are cheap - claims, the
+    cases that carry a finding, and those findings - so the list can afford one query per row for
+    the source facts without reading a single artefact.
+    """
+    terminals = ",".join("?" * len(cases.TERMINAL))
+    sql = ("SELECT r.id, r.project, r.analyser, r.status, r.started_at, r.finished_at,"
+           "       s.artefact_versions,"
+           "       (SELECT COUNT(*) FROM claim c WHERE c.run_id = r.id) AS claims,"
+           "       (SELECT COUNT(*) FROM case_ k WHERE k.run_id = r.id"
+           "          AND EXISTS (SELECT 1 FROM finding f WHERE f.case_id = k.id)) AS case_count,"
+           "       (SELECT COUNT(*) FROM case_ k WHERE k.run_id = r.id"
+           "          AND EXISTS (SELECT 1 FROM finding f WHERE f.case_id = k.id)"
+           "          AND (SELECT st.state FROM case_state st WHERE st.case_id = k.id"
+           "                ORDER BY st.id DESC LIMIT 1) IN (" + terminals + "))"
+           "         AS decided_cases,"
+           "       (SELECT COUNT(*) FROM finding f JOIN case_ k ON k.id = f.case_id"
+           "         WHERE k.run_id = r.id) AS findings"
+           "  FROM run r LEFT JOIN snapshot s ON s.id = r.snapshot_id")
+    args: tuple = tuple(cases.TERMINAL)
+    if project:
+        sql += " WHERE r.project = ?"
+        args += (project,)
+    sql += " ORDER BY COALESCE(r.finished_at, r.started_at) DESC, r.id DESC LIMIT ?"
+    rows = conn.execute(sql, args + (200,)).fetchall()
+    out: list[dict] = []
+    for row in rows:
+        if not is_registered(row["analyser"]):
+            continue
+        record = {"id": row["id"], "project": row["project"], "analyser": row["analyser"],
+                  "status": row["status"], "started_at": row["started_at"],
+                  "finished_at": row["finished_at"], "claims": int(row["claims"]),
+                  "case_count": int(row["case_count"]), "decided_cases": int(row["decided_cases"]),
+                  "findings": int(row["findings"]),
+                  "versions": _json(row["artefact_versions"])}
+        record.update(_source_facts(conn, row["id"], row["analyser"]))
+        out.append(record)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def evidence_for_claim(conn, claim: dict) -> list[dict] | None:

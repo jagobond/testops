@@ -22,16 +22,31 @@ def _store(tmp_path):
     db.upsert_snapshot(conn, SNAP, "fixture", TS, {"o/test": "c" * 40}, schema_version=2)
     for run_id in ("run-real", "run-fixture"):
         db.start_run(conn, run_id, "fixture", SNAP, "level_fitness", TS)
-    db.add_claim(conn, "run-fixture", "x", "0", "scenario:f.feature#fixture", "fixture", "gap", 0.5,
-                 [], schema_version=1)
+    fixture_claim = db.add_claim(conn, "run-fixture", "x", "0", "scenario:f.feature#fixture",
+                                 "fixture", "gap", 0.5, [], schema_version=1)
+    # Both cases carry a finding. Since TESTOPS-34 a row with no finding is not a case and no list
+    # returns it, so a control without one would prove nothing about the unregistered-analyser rule.
+    real_claim = db.add_claim(
+        conn, "run-real", "level_fitness", "0.8.0", "scenario:features/panel.feature#the panel",
+        "The panel is asserted over HTTP, and nothing runs a browser.", "gap", 0.5, [],
+        schema_version=2, assertion_text="the panel is served",
+        assertion_path="features/panel.feature", assertion_line=3, assertion_commit="c" * 40,
+        interaction_label="needs a browser", interaction_code="I4", span=["api"],
+        established_by="asserts a property the browser computes",
+        sources_assessed=True, sources_missing=[], proposed_action="Run it in a browser.")
     conn.execute("INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at,"
                  " summary) VALUES (?,?,?,?,?,?,?)",
                  (REAL_CASE, "run-real", "fixture", "level_fitness", SNAP, TS, "{}"))
+    conn.execute("INSERT INTO finding (case_id, title, severity, fingerprint, claim_ids)"
+                 " VALUES (?,?,?,?,?)", (REAL_CASE, "gap", "high", "e" * 32, db.j([real_claim])))
     # Created later, so it would be the newest case in its project and appear on the dashboard.
     conn.execute("INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at,"
                  " summary) VALUES (?,?,?,?,?,?,?)",
                  (FIXTURE_CASE, "run-fixture", "review", "x", SNAP,
                   "2026-11-22T12:00:00+00:00", "{}"))
+    conn.execute("INSERT INTO finding (case_id, title, severity, fingerprint, claim_ids)"
+                 " VALUES (?,?,?,?,?)",
+                 (FIXTURE_CASE, "fixture", "high", "d" * 32, db.j([fixture_claim])))
     conn.commit()
     return conn
 
@@ -57,7 +72,8 @@ def test_registered_case_still_renders(tmp_path):
     try:
         body, status = app.case_response(conn, REAL_CASE)
         assert status == 200
-        assert b"No findings in this run" in body
+        # It renders its finding: the control for the test above is a case that carries one.
+        assert b"the panel is served" in body
     finally:
         conn.close()
 

@@ -68,6 +68,24 @@ def cmd_cases(args) -> int:
     return 0
 
 
+def cmd_runs(args) -> int:
+    """Every run, with what it raised. A run that raised nothing is listed and says so."""
+    from . import queries
+
+    conn = db.connect()
+    try:
+        rows = queries.list_runs(conn, args.project, args.limit)
+    finally:
+        conn.close()
+    if not rows:
+        print("no runs")
+        return 0
+    for r in rows:
+        print(f"{r['id']:44} {r['status']:8} claims={r['claims']:<4} "
+              f"findings={r['findings']:<4} cases={r['case_count']:<3} {r['analyser']}")
+    return 0
+
+
 def cmd_case_set(args) -> int:
     conn = db.connect()
     cases.set_state(conn, args.case, args.state, args.actor, args.note or "")
@@ -264,6 +282,11 @@ def main(argv=None) -> int:
     cs.add_argument("--project", default=None)
     cs.add_argument("--limit", type=int, default=40)
     cs.set_defaults(func=cmd_cases)
+
+    rn = sub.add_parser("runs", help="list runs, including runs that raised no finding")
+    rn.add_argument("--project", default=None)
+    rn.add_argument("--limit", type=int, default=40)
+    rn.set_defaults(func=cmd_runs)
 
     st = sub.add_parser("case-set", help="record a human decision on a case")
     st.add_argument("case")
