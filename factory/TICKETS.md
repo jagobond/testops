@@ -29,7 +29,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-15 | Make the floor real: the suite runs on 3.11 in CI, not just on a machine where someone remembers | F1 | done | Proven fail-capable (run 44962212770): 3.11 leg red, 3.12 green; PR #10 merged |
 | TESTOPS-16 | Say which kind of nothing it is: "not recorded" vs "nothing bears on it" | F1 | done | 140 tests; PR #12 merged after a PASS review |
 | TESTOPS-17 | A clean bill requires having looked: no registry, no verdict | F1 | done | schema v3, 1005 old claims demoted to not-assessed; PR #14 merged after a PASS review |
-| TESTOPS-19 | The case page opens with the answer, and shows the code inline | F1 | ready | **Product Owner review** — summary block with finding + action, and code snippets rendered in the page |
+| TESTOPS-19 | The case page opens with the answer, and shows the code inline | F1 | done | 210 tests; snippets verified against commit bytes; PR #16 merged after a PASS review |
 | TESTOPS-21 | The duplication analyser still writes v1 claims, so its cases say nothing | F1 | ready | **Product Owner review** — 18 findings that look identical and present no finding |
 | TESTOPS-22 | A quiet run is not a resolved case | F1 | ready | **Product Owner review** — "is this resolved because of a test?" A zero-finding run is not a decision |
 | TESTOPS-24 | Retention: keep every run explainable without keeping every byte four times | F1 | ready | Product Owner approved dedupe-by-hash; growth to be measured, not estimated |

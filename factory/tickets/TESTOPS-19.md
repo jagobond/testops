@@ -2,7 +2,7 @@
 id: TESTOPS-19
 title: The case page opens with the answer, and shows the code
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-18
 ---
