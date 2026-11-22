@@ -1,0 +1,29 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-24 against its acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-24-retention`, tree clean.
+Ticket:     factory/tickets/TESTOPS-24.md
+Diff:       git diff feature/f1..HEAD
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Test the destructive path on a copy, never the real store.** Copy data/ to a scratch directory, point the
+  command at the copy, and try to delete something it must refuse: a snapshot a decided case references, the
+  newest run per analyser, a snapshot whose blob is shared with a surviving snapshot. Report what it actually
+  did, with the before/after row counts.
+- **Verify the growth numbers yourself** by measuring a run's before/after db bytes and blob bytes on the copy.
+  If a claimed figure does not reproduce, say so.
+- **Try to orphan a blob.** Prune a snapshot whose blob is shared and confirm the shared blob survives and the
+  surviving snapshot still renders. Then try to delete a blob that only the pruned snapshot referenced.
+- Confirm the default is report-only (no writes without --yes), and that no cron or schedule exists anywhere.
+- Confirm verdicts 94/90/1/1/2 and that pruning does not change any surviving case page's bytes.
+- Do not edit product code, tests or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-24-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC8 HOLDS / WEAK / NOT MET.
+  ## Refusals — each protection, what you did, what happened.
+  ## Growth — measured by you, against the claimed table.
+  ## Three sharpest concerns.
+
+Then reply with the verdict and a summary under 300 words.
