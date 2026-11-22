@@ -12,6 +12,9 @@ Three checks belong to the scan block:
   * one argument - no clause of six or more words repeated inside the block
   * one quote style - typographic quotes in prose, with code spans keeping their own characters
 
+One more belongs to the page as a whole: a code span's punctuation follows it directly, with no
+space between, so a comma never reads as detached from the word it follows (AC10).
+
 ``reader_text`` is also the one place markup becomes the reader's words, so the tests and the corpus
 script agree on what a sentence is.
 """
@@ -112,6 +115,18 @@ def straight_quotes(html: str) -> list[str]:
     return sorted({quote for quote in ('"', "'") if quote in text})
 
 
+# A code span ends where its identifier ends, so punctuation written against it must follow it
+# directly. A space here renders as "…both loads , but…", with the comma reading as detached from
+# the word it qualifies (AC10).
+DETACHED_PUNCTUATION = re.compile(r"</code>[ \t\r\n]+([,.;:!?])")
+
+
+def detached_punctuation(html: str) -> list[str]:
+    """Code spans with a space, and then a mark, between them and their punctuation (AC10)."""
+    return [f"a space between a code span and {match.group(1)!r}"
+            for match in DETACHED_PUNCTUATION.finditer(html)]
+
+
 def bare_identifiers(html: str, step: str | None = None) -> list[str]:
     """Identifiers a reader meets as prose instead of monospace (AC4)."""
     outside = re.sub(r"<pre.*?</pre>", " ", html, flags=re.S)
@@ -137,4 +152,5 @@ def lint(html: str, step: str | None = None) -> list[str]:
         problems.append(f"a straight {quote!r} survives in prose; the page uses one quote style")
     for name in bare_identifiers(html, step):
         problems.append(f"identifier {name!r} is prose, not monospace")
+    problems.extend(detached_punctuation(html))
     return problems

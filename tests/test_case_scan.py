@@ -235,6 +235,53 @@ def test_every_verdict_renders_an_action_line(tmp_path, monkeypatch, verdict):
         assert "No change" in text
 
 
+# --------------------------------------------------------------------------- AC10
+
+def test_punctuation_follows_a_code_span_with_no_space_between(tmp_path, monkeypatch):
+    conn, _ = _seed(tmp_path, monkeypatch)
+    try:
+        html = _render(conn)
+    finally:
+        conn.close()
+
+    assert '</code> ,' not in html
+    assert '</code> .' not in html
+    assert english.detached_punctuation(html) == []
+    # The page does put the comma straight after the quoted step, which is the sentence AC10 saw.
+    assert 'the panel is served</code>, but' in html
+
+
+def test_the_punctuation_check_catches_a_detached_comma():
+    problems = english.detached_punctuation('<p>The ids are stable</code> , but the page differs.</p>')
+    assert problems == ["a space between a code span and ','"]
+
+
+def _em_values(declaration: str) -> list[float]:
+    """``padding:.05em .25em`` as four numbers, expanded the way CSS expands a shorthand."""
+    values = [float(value.removesuffix("em")) for value in declaration.split()]
+    if len(values) == 2:
+        return [values[0], values[1], values[0], values[1]]
+    return values
+
+
+def test_the_code_span_paints_no_space_between_it_and_that_punctuation():
+    """AC10 is a defect of the painted page: the span's horizontal padding was the gap.
+
+    The markup never held a space, so the punctuation check alone would have passed on the broken
+    page. This is the other half: whatever horizontal padding the span paints is cancelled by an
+    equal negative margin, so a comma written against the span sits against its last glyph.
+    """
+    rule = re.search(r"code\.ident \{(.*?)\}", app.CSS, re.S)
+    assert rule is not None
+    padding = re.search(r"padding:([^;]+);", rule.group(1))
+    margin = re.search(r"margin:([^;]+);", rule.group(1))
+    assert padding is not None and margin is not None, rule.group(1)
+    p_right, p_left = _em_values(padding.group(1))[1::2]
+    m_right, m_left = _em_values(margin.group(1))[1::2]
+    assert p_right == -m_right != 0, (p_right, m_right)
+    assert p_left == -m_left != 0, (p_left, m_left)
+
+
 # --------------------------------------------------------------------------- AC6
 
 @pytest.mark.parametrize("word", sorted(english.BANNED))

@@ -128,12 +128,17 @@ p.judgement { margin:0 0 .5rem; }
 p.judgement strong.verdict { font-size:1.32rem; font-weight:700; line-height:1.25; }
 p.judgement strong.verdict.hot { color:var(--bad); }
 p.wrong { margin:0 0 .85rem; font-size:1.06rem; line-height:1.6; }
-p.action { margin:0; padding:.6rem .8rem; background:#f6f4f0; border-radius:5px;
+/* The font puts more of its line box above the baseline than below, so equal padding leaves the
+   descenders closer to the box's bottom edge. The half-leading is paid on the bottom instead, so
+   the space a reader sees above and below the text is the same (AC11). */
+p.action { margin:0; padding:.51rem .8rem .69rem; background:#f6f4f0; border-radius:5px;
            font-weight:600; line-height:1.5; }
 p.action .act { display:inline-block; margin-right:.55rem; font-size:.72rem; font-weight:700;
                 letter-spacing:.09em; text-transform:uppercase; color:var(--accent); }
+/* A code span ends where its identifier ends: the padding is cancelled by an equal negative margin,
+   so a comma written against the span sits against the word it follows, not a gap away (AC10). */
 code.ident { font-family: ui-monospace, Consolas, monospace; font-size:.9em; background:#f3f1ec;
-             padding:.05em .25em; border-radius:3px; white-space:nowrap; }
+             padding:.05em .25em; margin:0 -.25em; border-radius:3px; white-space:nowrap; }
 p.provenance { margin:0 0 1rem; }
 p.provenance .fn { font-weight:600; color:var(--ink); }
 ul.context { margin:.35rem 0 0; padding-left:1.1rem; color:var(--dim); }
