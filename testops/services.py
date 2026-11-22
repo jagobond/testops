@@ -66,12 +66,34 @@ _TOKEN_PREFIXES = (
     "AKIA",             # AWS access key ID
     "ASIA",             # AWS temporary access key ID
     "ghp_", "gho_", "ghu_", "ghs_",   # GitHub personal / OAuth / user / server tokens
-    "github_pat_",      # GitHub fine-grained personal access token
     "xoxb-", "xoxp-",   # Slack bot / user tokens
     "glpat-",           # GitLab personal access token
-    "sk-",              # OpenAI-style secret key
     "eyJ",              # base64-encoded '{"' - the header of every JWT
     "-----BEGIN ",      # PEM private key (and any other PEM block)
+)
+
+# Two prefixes are also prefixes of ordinary identifiers - `sk-utils/tools` is a repository path and
+# `github_pat_docs` a documentation slug - so for these the prefix alone is not a shape. The rest of
+# the value has to look like the credential's own body, and only then is it refused.
+_SK_MIN = 32                    # an `sk-` key body is an unbroken run, never a short word
+_GITHUB_PAT = re.compile(r"^github_pat_[A-Za-z0-9]{22,}(?:_[A-Za-z0-9]+)*$")
+#                                          ^ 22+ base62: the documented `github_pat_` body, with or
+#                                            without the `_`-split suffix. `github_pat_docs` is 4.
+_WORD_CHAIN = re.compile(r"[a-z]+(?:-[a-z]+)+")     # `sk-utils-tools`: words, not a key
+_SK_BODY = re.compile(r"[A-Za-z0-9_\-]+")
+
+
+def _is_sk_key(value: str) -> bool:
+    """`sk-` and then a key body: 32+ characters, one unbroken run, no path separator, no words."""
+    body = value[len("sk-"):]
+    return (len(body) >= _SK_MIN
+            and _SK_BODY.fullmatch(body) is not None
+            and _WORD_CHAIN.fullmatch(body) is None)
+
+
+_QUALIFIED_TOKEN_PREFIXES = (
+    ("github_pat_", lambda value: _GITHUB_PAT.fullmatch(value) is not None),
+    ("sk-", _is_sk_key),
 )
 
 # What divides a structured key into readable parts. `COTW-PROJ-KEY-0123456789-ABCDEFG` and a UUID
@@ -117,6 +139,11 @@ def _looks_like_secret(value: str) -> str | None:
     # AWS key ID is 20 characters and would otherwise sit below `_BLOB_MIN`.
     for prefix in _TOKEN_PREFIXES:
         if plain.startswith(prefix):
+            return f"it begins with {prefix!r}, the prefix of a known credential format"
+    # `sk-` and `github_pat_` start ordinary identifiers too, so these are refused only when the
+    # body reads like the credential as well (`sk-utils/tools` and `github_pat_docs` are not keys).
+    for prefix, looks_qualified in _QUALIFIED_TOKEN_PREFIXES:
+        if plain.startswith(prefix) and looks_qualified(plain):
             return f"it begins with {prefix!r}, the prefix of a known credential format"
     # A long blob of one alphabet is a token shape, not a host, a path or a repository. URLs and
     # paths are exempt: they are what settings are for.

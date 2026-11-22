@@ -178,3 +178,49 @@ old rules accepted but no prefix matches behaves exactly as before.
   key vs path), which is still the ticket this build flagged and did not take.
 - The rule is a false-negative fix, not a proof. A credential with none of these prefixes and fewer
   than 32 characters still passes; the entropy floors remain the backstop they always were.
+
+## Fix round 2 — 22 Nov 2026 (from the round-2 review: two false positives)
+
+The round-2 verdict was NEEDS-FIX on two realistic values refused only by the unqualified `sk-` and
+`github_pat_` entries: `sk-utils/tools` (a repository path) and `github_pat_docs` (a documentation
+slug). Both entries are kept, qualified rather than deleted.
+
+### What changed (`testops/services.py`)
+
+- `_TOKEN_PREFIXES` now holds only the prefixes that *are* a shape: `AKIA`, `ASIA`, `ghp_`/`gho_`/
+  `ghu_`/`ghs_`, `xoxb-`/`xoxp-`, `glpat-`, `eyJ`, `-----BEGIN `. Matched at any length, as before.
+- New `_QUALIFIED_TOKEN_PREFIXES` holds the two that also begin ordinary identifiers, each with a
+  body test:
+  - `sk-`: the body must be 32+ characters, one unbroken run of `[A-Za-z0-9_-]`, with no `/` or `\`,
+    and must not be a lower-case hyphenated word chain (`sk-utils-tools`). So `sk-`+48 base62 is
+    refused and `sk-utils/tools` is accepted.
+  - `github_pat_`: the body must be 22+ base62 characters, optionally followed by the `_`-split
+    suffix the fine-grained format uses. `github_pat_docs` is 4 characters and fails.
+- Both loops run before the entropy floors, unchanged; `_BLOB_MIN`, `_BASE64`, `_BASE64_ENTROPY`, the
+  run-length thresholds and the credential-word list are untouched. The refusal message is the same
+  shape and still names only the prefix, never the value.
+- The two qualified entries were moved out of `PREFIXED_TOKENS` (which asserts every probe is under
+  32 characters) because their shortest real shapes are 22-32 characters of body, i.e. above the
+  floors; they are pinned by the new shape table instead.
+
+### Tests added (29 new; 480 → 509)
+
+- Accepted, pinned one by one and end-to-end through `/config/services`: `sk-utils/tools` (repo and
+  board), `github_pat_docs` (repo, board, and as `github_pat_docs.example.com` host),
+  `skipton-branch`, `task-akia-review`, `masking/x`, `SK-1234`, `sk-some-very-long-repository-name-here`.
+- Round-1's eleven values re-pinned as their own table.
+- Refused: `sk-`+48 base62, `github_pat_`+22 base62, `AKIA`+16, `ASIA`+16, `ghp_`+36, `xoxb-`+12,
+  `glpat-`+20, `eyJ`+20, `-----BEGIN RSA PRIVATE KEY-----` — each with the prefix named in the
+  refusal and the value absent from it.
+
+### Verification
+
+`env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
+.venv/Scripts/python.exe -m pytest -q` → **509 passed** in 78.40s.
+
+### Residual cost, stated plainly
+
+An `sk-` value with a 32+ character unbroken alphanumeric body and no path separator is refused even
+if it were innocent, and a `github_pat_` value with 22+ alnum characters likewise. Both are much
+narrower than the previous any-remainder match and neither refused value in the round-2 review now
+fires; the per-field rule remains the open idea, not this ticket.

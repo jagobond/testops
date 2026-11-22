@@ -105,21 +105,21 @@ def test_the_reviewers_aws_key_is_no_longer_stored(tmp_path):
 # The reviewer's second finding: an `AKIA` key ID is 20 characters, and the guard only judged values
 # of 32+. Each prefix is exercised at the shortest length a real credential of that kind is written,
 # and each probe here is deliberately under 32 characters, so a pass proves the prefix rule is doing
-# the work rather than the entropy floors behind it.
+# the work rather than the entropy floors behind it. `sk-` and `github_pat_` are not here: their
+# shortest real body is 22-32 characters, which puts the whole value over the floors, so they are
+# pinned by `REAL_SHAPED_REFUSALS` instead.
 PREFIXED_TOKENS = {
-    "AKIA2E0A8F3B244C9986": "AKIA",                         # AWS key ID, 20 chars
-    "ASIAY34FZKBOKMUTVV7A": "ASIA",                         # AWS temporary key ID, 20 chars
+    "AKIA2E0A8F3B244C9986": "AKIA",                          # AWS key ID, 20 chars
+    "ASIAY34FZKBOKMUTVV7A": "ASIA",                          # AWS temporary key ID, 20 chars
     "ghp_0123456789": "ghp_",                                # GitHub personal token
     "gho_0123456789": "gho_",                                # GitHub OAuth token
     "ghu_0123456789": "ghu_",                                # GitHub user-to-server token
     "ghs_0123456789": "ghs_",                                # GitHub server-to-server token
-    "github_pat_11ABCDEFG0123": "github_pat_",               # GitHub fine-grained PAT
     "xoxb-0123456789-0123456789": "xoxb-",                   # Slack bot token
     "xoxp-0123456789-0123456789": "xoxp-",                   # Slack user token
     "glpat-0123456789abcd": "glpat-",                        # GitLab PAT
-    "sk-0123456789abcdef": "sk-",                            # OpenAI-style key
-    "eyJhbGciOiJIUzI1NiJ9": "eyJ",                            # JWT header
-    "-----BEGIN RSA PRIVATE KEY-----": "-----BEGIN ",         # PEM private key
+    "eyJhbGciOiJIUzI1NiJ9": "eyJ",                           # JWT header
+    "-----BEGIN RSA PRIVATE KEY-----": "-----BEGIN ",        # PEM private key
 }
 
 # Values that merely *contain* a credential's letters mid-word: real configuration, must be stored.
@@ -209,6 +209,112 @@ def test_the_configuration_page_still_accepts_a_branch_named_like_a_prefix(tmp_p
             == ["skipton-branch"]
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------- AC2, fix round 2
+
+# The round-2 review's finding, in the other direction: `sk-` and `github_pat_` are also the start of
+# ordinary identifiers, and the unqualified entries refused `sk-utils/tools` (a repository path) and
+# `github_pat_docs` (a documentation slug). Both are configuration and both must be stored.
+FALSE_POSITIVES = {
+    "repo": "sk-utils/tools",
+    "board": "sk-utils/tools",
+    "repo_pat": "github_pat_docs",
+    "board_pat": "github_pat_docs",
+    "host": "github_pat_docs.example.com",
+    "branch": "skipton-branch",
+    "label": "task-akia-review",
+    "repo_alt": "masking/x",
+    "project": "SK-1234",
+    "repo_words": "sk-some-very-long-repository-name-here",
+}
+
+# Round 1's eleven accepted values, re-pinned so a further tightening cannot break them.
+ROUND_ONE_ACCEPTED = {
+    "repo": "owner/repo",
+    "host": "https://jira.example.com",
+    "build": "https://dev.azure.com/org/project/_build?definitionId=2",
+    "path": "C:/work/repos/cotw",
+    "project": "PROJ",
+    "board": "COTW-PROJ-KEY-0123456789-ABCDEFG",
+    "correlation_id": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+    "branch": "main",
+    "ref": "refs/heads/feature/x",
+    "label": "pipeline #2",
+    "name": "thunderstorm",
+}
+
+# The qualified rule keeps the credentials caught: the two bodies are written at the real format's
+# shape (32+ characters with no path separator, and 22 base62 after `github_pat_`).
+REAL_SHAPED_REFUSALS = {
+    "sk-" + "a1B2" * 12: "sk-",                     # 48 base62 characters after the prefix
+    "github_pat_" + "a1B2c3D4e5F6g7H8i9J0k1": "github_pat_",      # 22 base62 characters
+    "AKIA" + "ABCDEFGHIJKLMNOP": "AKIA",
+    "ASIA" + "Y34FZKBOKMUTVV7A": "ASIA",
+    "ghp_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2z": "ghp_",
+    "xoxb-" + "0123456789ab": "xoxb-",
+    "glpat-" + "a1B2c3D4e5F6g7H8i9J0": "glpat-",
+    "eyJ" + "a1B2c3D4e5F6g7H8i9J0": "eyJ",
+    "-----BEGIN RSA PRIVATE KEY-----": "-----BEGIN ",
+}
+
+
+@pytest.mark.parametrize("field,value", sorted(FALSE_POSITIVES.items()))
+def test_a_prefix_that_begins_an_ordinary_identifier_is_accepted(field, value):
+    """Fix round 2: a repository path and a docs slug are not keys, whatever letters they start with."""
+    reason = services._looks_like_secret(value)
+    assert reason is None, f"{field} was read as a secret: {reason}"
+    assert services.validate_settings({field: value}) == {field: value}
+
+
+@pytest.mark.parametrize("field,value", sorted(ROUND_ONE_ACCEPTED.items()))
+def test_round_one_configuration_is_still_accepted(field, value):
+    reason = services._looks_like_secret(value)
+    assert reason is None, f"{field} regressed: {reason}"
+    assert services.validate_settings({field: value}) == {field: value}
+
+
+@pytest.mark.parametrize("token,prefix", sorted(REAL_SHAPED_REFUSALS.items()),
+                         ids=[f"{token[:12]}-real-shape" for token in
+                              sorted(REAL_SHAPED_REFUSALS)])
+def test_a_real_shaped_token_is_still_refused(token, prefix):
+    """Qualifying the two entries must not open the door: the credential shapes are still refused."""
+    assert token.startswith(prefix)
+    with pytest.raises(services.ConfigError) as refused:
+        services.validate_settings({"board": token})
+
+    message = str(refused.value)
+    assert prefix in message, "the refusal should name the prefix it matched"
+    assert token not in message, "refusing a secret must not print the secret"
+
+
+def test_the_two_false_positives_are_stored_from_the_configuration_page(tmp_path, monkeypatch):
+    """End to end, the way the review posted them: `sk-utils/tools` as a repo, `github_pat_docs` as
+    a board and as a host."""
+    path = tmp_path / "paths.db"
+    httpd, base = _server(monkeypatch, path)
+    try:
+        _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
+        status, page = _post(f"{base}/config/services",
+                             {"project": "team", "type": "git_repo", "role": "product",
+                              "name": "utils", "repo": "sk-utils/tools"})
+        assert status == 200, page
+        status, page = _post(f"{base}/config/services",
+                             {"project": "team", "type": "jira_board", "role": "",
+                              "name": "docs", "board": "github_pat_docs",
+                              "host": "github_pat_docs.example.com"})
+        assert status == 200, page
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    conn = db.connect(path)
+    try:
+        stored = [s.settings for s in services.list_services(conn, "team")]
+    finally:
+        conn.close()
+    assert {"repo": "sk-utils/tools"} in stored
+    assert {"board": "github_pat_docs", "host": "github_pat_docs.example.com"} in stored
 
 
 # --------------------------------------------------------------------------- AC2
