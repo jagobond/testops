@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from . import blobs
+from . import blobs, sources
 from .analysers import level_fitness
 from .extract import csproj, gherkin, stepbindings
 from .links import GITHUB
@@ -44,6 +44,9 @@ class Snapshot:
     test_commit: str
     product_commit: str
     sources_missing: list[str]
+    # The registry's verdict for this analyser's needed capabilities, rebuilt from the snapshot's
+    # own record. ``None`` means the snapshot predates the registry, not "nothing was missing".
+    assessment: sources.Assessment | None = None
     test_files: dict[str, tuple[str, str]] = field(default_factory=dict)  # path -> (blob_sha, kind)
     product_texts: dict[str, str] = field(default_factory=dict)           # path -> text
     support_index: dict[tuple[str, str, str], int] = field(default_factory=dict)
@@ -89,6 +92,11 @@ def load(conn, snapshot_id: str) -> Snapshot:
         raise SnapshotNotSelfContained(
             f"snapshot {snapshot_id} does not record which sources the run could not consult. "
             "Rebuilding it would print a clean bill of health the original run never gave.")
+    if ("sources" in meta) != ("analysers" in meta):
+        raise SnapshotNotSelfContained(
+            f"snapshot {snapshot_id} records half of the source registry: a rebuild could see the "
+            "declared sources but not what the analyser needed, or the reverse, and would have to "
+            "guess the assessment the original run made.")
 
     test_commit, product_commit = versions.get(test_slug), versions.get(product_slug)
     if not (test_commit and product_commit):
@@ -98,7 +106,8 @@ def load(conn, snapshot_id: str) -> Snapshot:
     snap = Snapshot(id=snapshot_id, project=row["project"], created_at=row["created_at"],
                     test_slug=test_slug, product_slug=product_slug,
                     test_commit=test_commit, product_commit=product_commit,
-                    sources_missing=list(meta["sources_missing"]))
+                    sources_missing=list(meta["sources_missing"]),
+                    assessment=sources.assessment_for(meta, level_fitness.name))
 
     stepdef_artefacts: list[tuple[int, str]] = []
     for art in conn.execute("SELECT id, uri, kind, blob_sha FROM artefact WHERE snapshot_id = ?"
@@ -163,8 +172,8 @@ def rebuild(conn, snapshot_id: str) -> tuple[list, dict, Snapshot]:
         features, bindings, surfaces,
         lambda path: f"github:{snap.test_slug}@{snap.test_commit}:{path}",
         {"calls": 0, "tokens_in": 0, "tokens_out": 0},
-        sources_missing=snap.sources_missing, commit=snap.test_commit,
-        support_index=snap.support_index,
+        sources_missing=snap.sources_missing, assessment=snap.assessment,
+        commit=snap.test_commit, support_index=snap.support_index,
     )
     stats = {"features": len(features), "bindings": len(bindings),
              "scenarios": sum(len(f.scenarios) for f in features),

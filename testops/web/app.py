@@ -30,7 +30,7 @@ import re
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .. import cases, queries
+from .. import cases, queries, sources
 from ..extract.stepbindings import LAYER_ORDER
 from ..store import db
 
@@ -349,18 +349,51 @@ def section_why(c: dict) -> list[str]:
 
 
 def section_unchecked(c: dict) -> list[str]:
-    """5. What could not be checked. Absence is a state, never a blank and never a zero."""
+    """5. What could not be checked. Absence is a state, never a blank and never a zero.
+
+    The recorded registry is the source of truth here, not the claim's list alone: the list names
+    the source, and the registry says why it was not consulted and who decided. A snapshot that
+    predates the registry keeps the older sentence, which names the source and says plainly that it
+    was never consulted - it just cannot give a reason it never recorded.
+    """
     missing = c["sources_missing"]
     if missing is None:
         return ['<p class="quiet">Whether any source needed for this claim was missing was not '
                 'recorded.</p>']
-    if not missing:
+
+    notes = c.get("source_notes") or []
+    recorded = [note for note in notes if note.get("recorded")]
+    if not missing and not recorded:
         return ['<p>Every source needed for this claim was available.</p>']
+
+    if recorded:
+        out = ['<p>Not connected when this claim was checked:</p>']
+        for note in notes:
+            out.append(f'<p>{esc(_blind_spot_sentence(note))}</p>')
+        out.append('<p>They were never consulted, so nothing here says they were clean '
+                   '\u2014 only that this claim was never checked against them.</p>')
+        return out
+
     names = [SOURCE_NAME.get(m, m) for m in missing]
     listed = ", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0]
     return [f'<p>Not connected when this claim was checked: <strong>{esc(listed)}</strong>. '
             f'They were never consulted, so nothing here says they were clean \u2014 only that this '
             f'claim was never checked against them.</p>']
+
+
+def _blind_spot_sentence(note: dict) -> str:
+    """One blind spot as a reader's sentence: the source, its state, the reason and who decided."""
+    title = note.get("title") or note.get("source") or "a source"
+    if not note.get("recorded"):
+        return f"{title} \u2014 this run did not record why it was not connected."
+    state = note.get("state")
+    reason = (note.get("reason") or "").strip().rstrip(".")
+    if state == sources.BLOCKED:
+        by = f" by {note['blocked_by']}" if note.get("blocked_by") else ""
+        return f"{title} \u2014 blocked{by}: {reason}." if reason else f"{title} \u2014 blocked{by}."
+    if state == sources.ABSENT:
+        return f"{title} \u2014 absent: {reason}." if reason else f"{title} \u2014 absent."
+    return f"{title} \u2014 {state}: {reason}." if state and reason else f"{title}."
 
 
 def section_action(c: dict) -> list[str]:
@@ -373,11 +406,23 @@ def section_action(c: dict) -> list[str]:
 def claim_sections(c: dict) -> list[str]:
     out: list[str] = []
     # The verdict in English before the argument: a reader deciding in one pass needs to know what
-    # kind of shortfall this is before reading why.
-    verdict_label = LABEL.get(c["verdict"])
-    if verdict_label:
-        hot = " hot" if c["verdict"] in ("gap", "review", "duplicate") else ""
-        out.append(f'<p><span class="badge{hot}">{esc(verdict_label)}</span></p>')
+    # kind of shortfall this is before reading why. When the registry says the claim cannot be
+    # assessed at all, that is the headline - a level verdict about a claim whose needed source
+    # nobody could consult would be a conclusion the run was not entitled to draw.
+    assessment = c.get("assessment")
+    assessment_state = (assessment or {}).get("state")
+    if assessment_state == sources.NOT_ASSESSABLE:
+        out.append('<p><span class="badge hot">Cannot assess</span></p>')
+        out.append(f'<p>{esc((assessment or {}).get("sentence") or "")}</p>')
+    else:
+        verdict_label = LABEL.get(c["verdict"])
+        if verdict_label:
+            hot = " hot" if c["verdict"] in ("gap", "review", "duplicate") else ""
+            out.append(f'<p><span class="badge{hot}">{esc(verdict_label)}</span></p>')
+        # A zero and an unrecorded count are facts about the sources, not about the test: say them
+        # once, plainly. "Found" is already evident from the evidence list and would be noise.
+        if assessment_state in (sources.ZERO, sources.NOT_RECORDED):
+            out.append(f'<p>{esc((assessment or {}).get("sentence") or "")}</p>')
     for heading, parts in (
             ("1. What is asserted", section_asserted(c)),
             ("2. Where the name came from", section_name(c)),

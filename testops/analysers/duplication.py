@@ -10,12 +10,19 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from .. import sources
 from ..extract import gherkin, stepbindings
 from .base import Claim, Evidence
 
 name = "duplication"
-version = "1.0.0"
+version = "1.1.0"
 uses_model = False
+
+# Duplication is a question about test code, so test code is what its verdict rests on. Requirements
+# are consulted for context and recorded as a blind spot when they cannot be read - the same
+# capability declaration as the level analyser, and no knowledge of which source provides either.
+NEEDS = frozenset({sources.TEST_CODE})
+CONSULTS = frozenset({sources.REQUIREMENTS})
 
 
 def _scenario_ref(feature_path: str, scenario: gherkin.Scenario) -> str:
@@ -29,8 +36,14 @@ def _suite(path: str) -> str:
 
 
 def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding],
-            uri_for_path) -> list[Claim]:
-    """Group scenarios by normalised step signature and judge the surplus copies."""
+            uri_for_path, *, sources_missing=None, assessment=None) -> list[Claim]:
+    """Group scenarios by normalised step signature and judge the surplus copies.
+
+    ``sources_missing`` and ``assessment`` are the caller's registry-derived records, copied onto
+    every claim exactly as the level analyser does. The analyser never names a source itself.
+    """
+    missing = [] if sources_missing is None else list(sources_missing)
+    assessment_record = None if assessment is None else assessment.record()
     groups: dict[str, list[tuple[gherkin.Feature, gherkin.Scenario, str]]] = defaultdict(list)
 
     # Each suite defines its own step bindings for the same step text. Matching globally meant every step
@@ -76,7 +89,8 @@ def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding
                                  + [Evidence(uri=uri_for_path(o[0].path), line=o[1].line,
                                              note=f"{o[1].name} ({cheapest})") for o in others],
                         detail={"signature": signature, "layer": layer, "cheapest": cheapest,
-                                "group_size": len(members)},
+                                "group_size": len(members),
+                                "sources_missing": list(missing), "assessment": assessment_record},
                     ))
                 else:
                     # A repeat *at* the cheapest layer is waste too, and the earlier code dropped it
@@ -92,7 +106,9 @@ def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding
                             evidence=[Evidence(uri=uri_for_path(feat.path), line=sc.line, note=sc.name),
                                       Evidence(uri=uri_for_path(first[0].path), line=first[1].line,
                                                note=first[1].name)],
-                            detail={"signature": signature, "layer": layer, "intra_level": True},
+                            detail={"signature": signature, "layer": layer, "intra_level": True,
+                                    "sources_missing": list(missing),
+                                    "assessment": assessment_record},
                         ))
         elif len(members) > 1:
             # Same level, same steps: duplication inside one layer. Still waste, different fix.
@@ -106,6 +122,7 @@ def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding
                     evidence=[Evidence(uri=uri_for_path(feat.path), line=sc.line, note=sc.name),
                               Evidence(uri=uri_for_path(first[0].path), line=first[1].line,
                                        note=first[1].name)],
-                    detail={"signature": signature, "layer": layer, "intra_level": True},
+                    detail={"signature": signature, "layer": layer, "intra_level": True,
+                            "sources_missing": list(missing), "assessment": assessment_record},
                 ))
     return claims

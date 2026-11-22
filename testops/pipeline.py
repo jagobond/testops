@@ -11,7 +11,7 @@ from .surfaces import discover as surface_discovery
 from .collectors import github, jira
 from .config import Project, load_env
 from .extract import csproj, gherkin, stepbindings
-from . import cases
+from . import cases, sources
 from .store import db
 
 
@@ -48,19 +48,24 @@ def _fingerprint(analyser_name: str, claim) -> str:
                              or claim.verdict)
 
 
-def _missing_sources(project: Project) -> list[str]:
-    """Sources this run never consulted, named rather than assumed clean.
+def _declared(project: Project, registry: sources.Registry | None) -> sources.Registry:
+    """The sources this run may consult: the caller's registry, or the deployment's declaration.
 
-    Jira and ADO are absent at Quilter by policy. A level-fitness run reads the test repository and
-    the product repository only, so every claim records which requirement sources it could not
-    check against. "Nothing was found" is never what a missing source means.
+    A caller may hand in a registry (a test, or a future deployment with different policy). The
+    pipeline never consults a source that is not in it, and never names a source itself.
     """
-    missing: list[str] = []
-    if getattr(project, "jira_key", ""):
-        missing.append("jira")
-    if getattr(project, "ado_org", None):
-        missing.append("ado")
-    return missing
+    return sources.registry(project) if registry is None else registry
+
+
+def _analyser_record(analyser) -> dict:
+    """What the analyser needed, stored beside the registry so a read can rebuild its assessment.
+
+    The capabilities live here rather than in the claim because they are a property of the analysis,
+    not of one assertion. A reader reconstructing a snapshot gets the same answer the run got, with
+    no live source and no knowledge of today's analyser code.
+    """
+    return {analyser.name: {"needs": sorted(analyser.NEEDS),
+                            "consults": sorted(analyser.CONSULTS)}}
 
 
 def _new_snapshot_id(conn, base: str) -> str:
@@ -102,21 +107,37 @@ def _emit(conn, case_id: str, analyser_name: str, claim, severity: str = "medium
     return True
 
 
-def run_duplication(project: Project, token: str) -> RunResult:
+def run_duplication(project: Project, token: str,
+                    registry: sources.Registry | None = None) -> RunResult:
     env = load_env()
     conn = db.connect()
+    declared = _declared(project, registry)
 
-    # 1. collect
-    test_repo = github.collect(project.test, token, role="test")
+    # 1. collect. A source declared available that fails here stops the run (SourceFailed); a source
+    # declared blocked is refused before it is touched (SourceNotAvailable). Neither becomes "absent".
+    test_repo = declared.use(sources.GITHUB,
+                             lambda: github.collect(project.test, token, role="test"), role="test")
     product = None
     if project.product.slug != project.test.slug:
-        product = github.collect(project.product, token, role="product")
+        product = declared.use(sources.GITHUB,
+                               lambda: github.collect(project.product, token, role="product"),
+                               role="product")
+    declared = declared.with_observed({sources.GITHUB: len(test_repo.files)
+                                       + (len(product.files) if product else 0)})
+    missing_sources = declared.missing(duplication.NEEDS | duplication.CONSULTS)
+    assessment = declared.assess(duplication.NEEDS)
 
     snapshot_id = _new_snapshot_id(conn, f"{project.key}-{dt.date.today():%Y%m%d}-{test_repo.commit[:8]}")
     versions = {project.test.slug: test_repo.commit}
     if product:
         versions[project.product.slug] = product.commit
-    db.upsert_snapshot(conn, snapshot_id, project.key, _now(), versions)
+    # The registry is recorded with the snapshot, so a reader can reconstruct what this run could
+    # and could not consult without probing anything. No "arms" here: a duplication snapshot is not
+    # a level-fitness rebuild, and recording arms would invite one to be attempted.
+    db.upsert_snapshot(conn, snapshot_id, project.key, _now(), versions,
+                       meta={"sources_missing": missing_sources,
+                             "sources": declared.record(),
+                             "analysers": _analyser_record(duplication)})
 
     # 2. artefacts + observations
     texts = {}
@@ -155,11 +176,17 @@ def run_duplication(project: Project, token: str) -> RunResult:
         elif kind == "stepdef":
             bindings.extend(stepbindings.parse_file(path, text, driver_map))
 
-    # 3. optional requirements
-    jira_count = 0
-    if project.jira_key:
+    # 3. optional requirements. Jira is declared blocked wherever a project names it, so in the
+    # Quilter deployment this branch is never taken and jira_count stays None - "not consulted",
+    # which is not zero issues. If a later deployment declares Jira available, this is the seam that
+    # uses it; a failure there stops the run like any other available source.
+    jira_count = None
+    jira_kind = declared.get(sources.JIRA)
+    if jira_kind is not None and jira_kind.state.available:
         site = env.get("JIRA_SITE", "")
-        issues = jira.collect(site, env["JIRA_EMAIL"], env["JIRA_API_TOKEN"], project.jira_key)
+        issues = declared.use(
+            sources.JIRA,
+            lambda: jira.collect(site, env["JIRA_EMAIL"], env["JIRA_API_TOKEN"], project.jira_key))
         for key, sha in issues.items():
             db.add_artefact(conn, snapshot_id, f"jira:{key}", "issue", sha,
                             jira.summary_of(sha))
@@ -169,7 +196,8 @@ def run_duplication(project: Project, token: str) -> RunResult:
     def uri_for_path(path: str) -> str:
         return f"github:{project.test.slug}@{test_repo.commit}:{path}"
 
-    claims = duplication.analyse(features, bindings, uri_for_path)
+    claims = duplication.analyse(features, bindings, uri_for_path,
+                                 sources_missing=missing_sources, assessment=assessment)
 
     # 5. persist
     run_id = f"{project.key}-dup-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%S}"
@@ -186,7 +214,8 @@ def run_duplication(project: Project, token: str) -> RunResult:
     emitted = 0
     for c in claims:
         cid = db.add_claim(conn, run_id, duplication.name, duplication.version, c.subject_ref,
-                           c.statement, c.verdict, c.confidence, [])
+                           c.statement, c.verdict, c.confidence, [],
+                           sources_missing=c.detail.get("sources_missing"))
         c.claim_id = cid
         emitted += _emit(conn, case_id, duplication.name, c)
     db.finish_run(conn, run_id, "ok", _now(), budget={"model_calls": 0})
@@ -200,7 +229,8 @@ def run_duplication(project: Project, token: str) -> RunResult:
                             "excludes": excludes})
 
 
-def run_level_fitness(project: Project, token: str) -> RunResult:
+def run_level_fitness(project: Project, token: str,
+                      registry: sources.Registry | None = None) -> RunResult:
     """Collect both arms, record both as artefacts, and judge each scenario's level.
 
     A levels run is the run that has to be able to rebuild itself. The test arm's features and step
@@ -208,22 +238,34 @@ def run_level_fitness(project: Project, token: str) -> RunResult:
     snapshot - not borrowed from a duplication snapshot taken at the same commit. The scenario and
     step-binding observations are recorded too, and each claim carries the ids of the binding rows
     its verdict rests on, so a case page has something to show at the claim's coordinates.
+
+    The source registry is consulted, not assumed: it says which sources this run may use, which it
+    could not, and why. Both the registry and the capabilities the analyser needed are written into
+    the snapshot, so a reader can reconstruct the assessment without probing anything.
     """
-    env = load_env()
     conn = db.connect()
-    test_repo = github.collect(project.test, token, role="test")
-    product = github.collect(project.product, token, role="product")
+    declared = _declared(project, registry)
+    test_repo = declared.use(sources.GITHUB,
+                             lambda: github.collect(project.test, token, role="test"), role="test")
+    product = declared.use(sources.GITHUB,
+                           lambda: github.collect(project.product, token, role="product"),
+                           role="product")
+    declared = declared.with_observed({sources.GITHUB: len(test_repo.files) + len(product.files)})
+    missing_sources = declared.missing(level_fitness.NEEDS | level_fitness.CONSULTS)
+    assessment = declared.assess(level_fitness.NEEDS)
 
     snapshot_id = _new_snapshot_id(
         conn, f"{project.key}-levels-{dt.date.today():%Y%m%d}-{test_repo.commit[:8]}")
-    missing_sources = _missing_sources(project)
     db.upsert_snapshot(conn, snapshot_id, project.key, _now(),
                        {project.test.slug: test_repo.commit, project.product.slug: product.commit},
                        schema_version=2,
-                       # What a rebuild needs and an artefact cannot say. Both are recorded now, so
-                       # rebuilding from this snapshot alone cannot invent a clean bill of health.
+                       # What a rebuild needs and an artefact cannot say. All of it is recorded now,
+                       # so rebuilding from this snapshot alone cannot invent a clean bill of health
+                       # and cannot invent a source state the run did not have.
                        meta={"sources_missing": missing_sources,
-                             "arms": {"test": project.test.slug, "product": project.product.slug}})
+                             "arms": {"test": project.test.slug, "product": project.product.slug},
+                             "sources": declared.record(),
+                             "analysers": _analyser_record(level_fitness)})
 
     texts, product_texts = {}, {}
     artefact_ids: dict[str, int] = {}
@@ -279,6 +321,7 @@ def run_level_fitness(project: Project, token: str) -> RunResult:
     budget = {"calls": 0, "tokens_in": 0, "tokens_out": 0}
     claims = level_fitness.analyse(features, bindings, surfaces, uri_for_path, budget,
                                    sources_missing=missing_sources,
+                                   assessment=assessment,
                                    commit=test_repo.commit,
                                    support_index=support_index)
 

@@ -28,6 +28,19 @@ The suite is deliberately small. It pins the invariants later tickets depend on:
   `claim` table is shaped like a new one (`test_migration_v1.py`, fixture in `v1_store.py`);
 - the database itself refuses a v2 claim without its assertion coordinates, including when the
   INSERT is written by hand (`test_claim_constraint.py`);
+- every source declares its identity, capabilities and state, and Jira/ADO are `blocked` with the
+  Quilter policy reason (`test_source_registry.py`);
+- a source declared `available` that fails at use stops the run, and a `blocked` source is refused
+  rather than returning an empty result (`test_source_registry.py`);
+- every run records the registry in its snapshot, and a claim's `sources_missing` is derived from it
+  (a fake absent source flows into the claims without an analyser naming it)
+  (`test_source_registry.py`);
+- an absent source and an empty source produce different verdicts, different sentences and
+  different pages, read back from stored rows in both directions (`test_source_registry.py`);
+- the case page's "what could not be checked" section names the reason and who blocked it, not just
+  the source (`test_source_registry.py`);
+- no source needs a credential to be declared, and a run writes no credential into the snapshot
+  (`test_source_registry.py`);
 - an empty `sources_missing` list stays distinguishable from NULL on read (`test_sources_missing.py`);
 - the read model returns statement, provenance and blind spots in one call
   (`test_read_model.py`);

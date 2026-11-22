@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 
-from . import cases
+from . import cases, sources
 from .extract import stepbindings
 from .links import GITHUB, blob_permalink, permalink, short_location
 
@@ -58,6 +58,7 @@ def claim_view(row, repo: str | None = None) -> dict:
     return {
         "id": row["id"],
         "run_id": row["run_id"],
+        "analyser": row["analyser"],
         "schema_version": row["schema_version"],
         "verdict": row["verdict"],
         "statement": row["statement"],
@@ -87,7 +88,7 @@ def claim_read(conn, claim_id: int) -> dict | None:
     project = _project_of_run(conn, row["run_id"])
     claim = claim_view(row, repo=_repo_for_coordinates(conn, project, row["assertion_commit"],
                                                        row["assertion_path"]))
-    return _attach_evidence(conn, claim)
+    return _attach_sources(conn, _attach_evidence(conn, claim))
 
 
 def _attach_evidence(conn, claim: dict) -> dict:
@@ -116,6 +117,71 @@ def observations_in_snapshot(conn, claim: dict) -> int | None:
         """SELECT COUNT(*) FROM observation o JOIN artefact a ON a.id = o.artefact_id
             WHERE a.snapshot_id = ?""", (run["snapshot_id"],)).fetchone()[0]
     return int(total)
+
+
+def _attach_sources(conn, claim: dict) -> dict:
+    """Attach what the run recorded about its sources, and the assessment they support.
+
+    Three keys, all read from the claim's own snapshot:
+
+    - ``sources``: the registry record, or ``None`` when the snapshot predates the registry. It is
+      the record itself, not a re-probe: a reader sees what the run could see, not what today's
+      configuration would see.
+    - ``assessment``: the registry's verdict for the capabilities this analyser needed, with the
+      sentence derived at read time. ``None`` means not recorded, which is not ``not_assessable``.
+    - ``source_notes``: for each name in ``sources_missing``, the reason the run recorded, so the
+      page can name the reason rather than only the source. A name the record does not explain is
+      marked ``recorded: False``; the page says so instead of borrowing a reason.
+    """
+    meta = _snapshot_meta(conn, claim["run_id"])
+    record = meta.get("sources") if isinstance(meta, dict) else None
+    claim["sources"] = record if isinstance(record, dict) else None
+    assessment = sources.assessment_for(meta, claim.get("analyser") or "")
+    if assessment is None:
+        claim["assessment"] = None
+    else:
+        view = assessment.record()
+        view["sentence"] = assessment.sentence()
+        claim["assessment"] = view
+    notes = sources.notes(record, claim.get("sources_missing") or [])
+    # What the run needed, and what it only consulted, are different questions. A needed capability
+    # with no declared source has a blind spot but no source id, so it cannot appear in
+    # ``sources_missing``; the same is true of a consulted capability. Both belong in section 5:
+    # otherwise the page could say "every source was available" beside a "cannot assess" headline,
+    # or stay silent about requirements the run never looked at.
+    named = {(note["source"], note["title"]) for note in notes}
+    for found in (assessment, sources.consulted_for(meta, claim.get("analyser") or "")):
+        if found is None:
+            continue
+        for spot in found.blind_spots:
+            key = (spot.source, spot.title)
+            if key not in named:
+                named.add(key)
+                notes.append({"source": spot.source, "title": spot.title, "state": spot.state,
+                              "reason": spot.reason, "blocked_by": spot.blocked_by,
+                              "recorded": True})
+    claim["source_notes"] = notes
+    return claim
+
+
+def _snapshot_meta(conn, run_id: str) -> dict | None:
+    """The snapshot meta for a claim's run, or ``None`` when there is no snapshot to read.
+
+    Unparseable JSON raises: a corrupt record of what a run could see must not read back as "nothing
+    was recorded", which is a truthful answer to a different question.
+    """
+    row = conn.execute(
+        "SELECT s.meta FROM run r JOIN snapshot s ON s.id = r.snapshot_id WHERE r.id = ?",
+        (run_id,)).fetchone()
+    if row is None or not row["meta"]:
+        return None
+    try:
+        value = json.loads(row["meta"])
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"snapshot.meta holds unparseable JSON: {row['meta']!r}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"snapshot.meta should hold a JSON object, found {value!r}")
+    return value
 
 
 def _project_of_run(conn, run_id: str) -> str | None:
@@ -175,7 +241,7 @@ def finding_rows(conn, case_id: str) -> list[dict]:
             detail = _json(inf["output"]) if inf else {}
             claim = claim_view(c, repo=_repo_for_coordinates(conn, project, c["assertion_commit"],
                                                              c["assertion_path"]))
-            claim = _attach_evidence(conn, claim)
+            claim = _attach_sources(conn, _attach_evidence(conn, claim))
             claim.update({"used_model": bool(detail.get("model") and detail.get("model") != "none"),
                           "detail": detail})
             claims.append(claim)
