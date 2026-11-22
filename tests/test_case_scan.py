@@ -27,6 +27,9 @@ from testops.web import lint as english
 
 ROOT = Path(__file__).resolve().parents[1]
 STORED = ROOT / "data" / "testops.db"
+# The run the ticket names, pinned by id rather than picked by a query: a re-run of the analyser
+# must not move what these tests measure (TESTOPS-28 AC3, AC6).
+PINNED_RUN = "cotw-levels-20261122T011316"
 STEPS = "Steps/PanelSteps.cs"
 
 TS = "2020-01-01T00:00:00+00:00"
@@ -341,114 +344,65 @@ def test_plain_english_lint_over_every_claim_of_a_real_pipeline_run(tmp_path, mo
 
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
-def test_no_action_on_the_real_run_is_cut_into_a_stub():
-    """TESTOPS-27 AC4: no action is truncated below 40 characters unless the whole action was.
+def test_no_action_on_the_real_run_is_cut():
+    """TESTOPS-28 AC1 and AC3: every stored action reaches the page whole, on the real run.
 
-    What is measured is the cut. The stored string is the corpus, and the cut is what the page does
-    to it, so the floor is on the part of the stored action the page keeps: a cut that leaves
-    "Move the step." or "Keep it." gives the reader half an instruction, and that is the failure
-    the ticket exists for. The 94-claim run keeps 53 to 175 characters in every case, and
-    never fewer than 40.
+    What is measured is the cut, and now the answer must be that there is none. The stored string
+    is the corpus; the page's line is the whole of it, split at its semicolons into sentences,
+    with the step's own words referred to as "this step" because the block has already quoted the
+    step directly above. That reference is the only shortening allowed here: the line is the stored
+    action with the step's words swapped out, sentence by sentence, and every other word intact.
 
-    The page also refers to the step as "this step", because the step itself is quoted directly
-    above the action. That is a reference, not a truncation: the assertion below shows the line the
-    reader gets is the whole kept head with the step's own words swapped for the reference, so the
-    shortening is exactly the length of the step. That is why 90 of the 94 actions read "No change:
-    keep this step where it is." - 38 characters, all of them the stored head. Where the page did
-    not shorten by reference, the floor is applied to the reader's own text as well.
-
-    The run is the one the neighbouring test pins, so a re-run of the analyser cannot move it.
+    The 94 restatement tails the old rule dropped ("this level is the cheapest one that
+    establishes it") are on the page now. That makes the action wordy, which is the intended
+    trade: a dropped clause is invisible, a kept one is merely repetitive.
     """
     conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        run = conn.execute(
-            "SELECT run_id FROM claim WHERE analyser = 'level_fitness'"
-            " GROUP BY run_id ORDER BY COUNT(*) DESC, run_id DESC LIMIT 1").fetchone()["run_id"]
+        run = PINNED_RUN
+        assert conn.execute("SELECT COUNT(*) FROM claim WHERE run_id = ?",
+                            (run,)).fetchone()[0], f"the pinned run {run} is not in the store"
         checked = 0
         for row in conn.execute("SELECT id FROM claim WHERE run_id = ? ORDER BY id", (run,)):
             claim = queries.claim_read(conn, row["id"]) or {}
             whole = (claim.get("proposed_action") or "").strip()
             if not whole:
                 continue
-            kept = whole.partition("; ")[0].strip()
+            step = (claim.get("provenance") or {}).get("assertion_text") or ""
+            expected = whole
+            for form in (f'the step "{step}"', f'step "{step}"', f'"{step}"'):
+                if step and form in expected:
+                    expected = expected.replace(form, "this step", 1)
+                    break
+            expected = " ".join(
+                (clause := part.strip().rstrip("."))[:1].upper() + clause[1:] + "."
+                for part in expected.split("; ") if part.strip())
             visible = app.action_line(claim, app.quoted_assertion(claim))
             where = f"{claim.get('assertion_text')!r} in run {run}"
-            assert len(whole) < 40 or len(kept) >= 40, (
-                f"the action was cut to {len(kept)} characters: kept {kept!r} out of {whole!r} "
-                f"({where})")
-            # Where the page shortened by reference, prove the reference is the only shortening:
-            # the reader's line is the whole kept head with the step's own words swapped out.
-            if "this step" in visible:
-                step = (claim.get("provenance") or {}).get("assertion_text") or ""
-                quoted = 'the step "%s"' % step
-                assert quoted in kept, (
-                    f"the page referred away a step the head does not quote: {kept!r}")
-                assert visible == kept.replace(quoted, "this step").rstrip(".") + ".", (
-                    f"the page shortened more than the step's own words: {visible!r} from {kept!r}")
-            # An action the page did not shorten by reference is held to the floor as the reader
-            # meets it, too.
-            else:
-                assert len(visible) >= 40, (
-                    f"the reader's action is {len(visible)} characters: {visible!r} ({where})")
+            assert visible == expected, (
+                f"the page did not render the whole action ({where}): stored {whole!r}, "
+                f"rendered {visible!r}")
+            assert ";" not in visible, (where, visible)
             checked += 1
     finally:
         conn.close()
-    assert checked >= 90, f"the corpus held only {checked} actions"
+    assert checked == 94, f"the corpus held only {checked} actions"
 
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
-def test_the_real_tails_still_drop_before_and_after_the_morphology_fix():
-    """TESTOPS-27 AC9: the morphology fix must not turn the real corpus into kept noise.
-
-    Measured on the pinned 94-claim run: every stored action has a tail after ``"; "``, and every
-    one of those tails is a restatement. The test runs two rules over the same 94 strings - the
-    bare-stem rule that was there before this change (``_bare_stem_drop``, kept here as the
-    before) and the rule the page uses now (the after) - and demands the same count from both. The
-    vocabulary in the stored tails is real: ``is being used`` and ``cannot be checked`` are
-    participles of instruction verbs, and a rule that counted any inflection anywhere would keep
-    them. Under that rule the drop count falls; under this one it does not, and the verdicts stay
-    94 claims / 90 distinct / 1 unplaced / 1 gap / 2 review.
-    """
-    def _bare_stem_drop(tail: str) -> bool:
-        words = app._words(tail)
-        if not words:
-            return True
-        if words[0] not in app.CONTINUATION_OPENERS:
-            return False
-        return not any(word in app.INSTRUCTION_VERBS for word in words[1:])
-
+def test_the_pinned_run_keeps_its_verdicts():
+    """TESTOPS-28 AC6: the same store, the same verdict counts - the renderer never judged one."""
     conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        run = conn.execute(
-            "SELECT run_id FROM claim WHERE analyser = 'level_fitness'"
-            " GROUP BY run_id ORDER BY COUNT(*) DESC, run_id DESC LIMIT 1").fetchone()["run_id"]
         counts = {row["verdict"]: row["n"] for row in conn.execute(
-            "SELECT verdict, COUNT(*) AS n FROM claim WHERE run_id = ? GROUP BY verdict", (run,))}
-        tails, before, after, kept_any = [], 0, 0, []
-        for row in conn.execute("SELECT id FROM claim WHERE run_id = ? ORDER BY id", (run,)):
-            claim = queries.claim_read(conn, row["id"]) or {}
-            whole = (claim.get("proposed_action") or "").strip()
-            head, sep, tail = whole.partition("; ")
-            if not sep or not tail.strip():
-                continue
-            tail = tail.strip()
-            tails.append(tail)
-            before += _bare_stem_drop(tail)
-            if app.second_half_is_instruction(tail):
-                kept_any.append(tail)
-            else:
-                after += 1
+            "SELECT verdict, COUNT(*) AS n FROM claim WHERE run_id = ? GROUP BY verdict",
+            (PINNED_RUN,))}
     finally:
         conn.close()
-
-    assert len(tails) == 94, f"the pinned run holds {len(tails)} tails, not 94"
-    assert (before, after) == (94, 94), (
-        f"drop counts moved with the morphology fix: before {before} dropped, after {after}; "
-        f"kept tails were {sorted(set(kept_any))!r}")
-    assert not kept_any, f"the fix kept {len(kept_any)} real tails: {sorted(set(kept_any))!r}"
     assert counts == {"distinct": 90, "unplaced": 1, "gap": 1, "review": 2}, counts
+    assert sum(counts.values()) == 94, counts
 
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
@@ -461,15 +415,13 @@ def test_the_stored_cotw_corpus_keeps_its_verdicts_and_passes_the_lint(tmp_path,
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     try:
-        run = conn.execute(
-            "SELECT run_id FROM claim WHERE analyser = 'level_fitness'"
-            " GROUP BY run_id ORDER BY COUNT(*) DESC, run_id DESC LIMIT 1").fetchone()["run_id"]
         counts = {row["verdict"]: row["n"] for row in conn.execute(
-            "SELECT verdict, COUNT(*) AS n FROM claim WHERE run_id = ? GROUP BY verdict", (run,))}
-        assert counts == {"distinct": 90, "unplaced": 1, "gap": 1, "review": 2}, (run, counts)
+            "SELECT verdict, COUNT(*) AS n FROM claim WHERE run_id = ? GROUP BY verdict",
+            (PINNED_RUN,))}
+        assert counts == {"distinct": 90, "unplaced": 1, "gap": 1, "review": 2}, (PINNED_RUN, counts)
 
         for i, row in enumerate(conn.execute(
-                "SELECT id FROM claim WHERE run_id = ? ORDER BY id", (run,))):
+                "SELECT id FROM claim WHERE run_id = ? ORDER BY id", (PINNED_RUN,))):
             case_id = f"probe-{row['id']}"
             context = conn.execute(
                 "SELECT c.run_id, c.analyser, r.snapshot_id FROM claim c"

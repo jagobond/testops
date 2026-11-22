@@ -407,139 +407,27 @@ def _without_step(action: str, step: str | None) -> str:
     return action
 
 
-# The rule that decides whether the clause after a semicolon is a second instruction, stated here
-# so the next person can disagree with it on evidence rather than guess (TESTOPS-27, AC1).
+# The page shows the whole stored action (TESTOPS-28).
 #
-# A stored action is one string, and it may hold two halves: an instruction, then - after a
-# semicolon - something else. The page gives the reader the instruction. Whether the second half
-# is another instruction cannot be settled by trusting the analyser: today's tails are reasons,
-# but an action that says "Rewrite the step ... ; call the HTTP client first" carries an order
-# the cut would silently swallow, and the reader cannot detect a missing order.
+# A stored action is one string, and it may hold more than one clause: an instruction, then -
+# after a semicolon - a second order ("keep one"), or the reason for the first ("this level is the
+# cheapest one that establishes it"). The page cannot tell which, and does not try. Two review
+# passes read that tail's grammar to decide, and between them lost three orders - "the duplicate
+# is deletable", "the second one can go", "the copy would be deleted by whoever owns it" - each one
+# a different shape. A word list is the wrong tool for a judgement about a reader's reading.
 #
-#   1. A clause is a second instruction when it gives an order: an instruction verb in any
-#      inflection, either bare ("keep one", "move the step ...", "delete it") or carried by an
-#      obligation - "the second copy should be deleted", "it needs deleting", "it is worth
-#      keeping one copy". The reader can act on it alone, so it stays.
-#   2. A clause is a restatement - the reason for the clause before it - when it opens with a
-#      word that ties it back to that clause ("this level is the cheapest one that establishes
-#      it", "at this level nothing establishes what it asserts", "a judgement with no comparison
-#      in it cannot be checked") AND holds no order anywhere: no instruction verb in any
-#      inflection, and no obligation cue. Its subject is the sentence before it; on its own it
-#      names no one to act.
-#   3. Anything else is KEPT. The rule fails open on purpose. Dropping half an instruction is a
-#      loss a reader cannot see, and this product may not afford it; keeping an explanatory
-#      clause is untidy, and the reader can see it and skip it. The evidence to overrule the
-#      rule is a stored tail whose verb it does not recognise here.
+# The asymmetry decides it: a clause cut from a stored action is invisible, and the reader holds
+# half an instruction without knowing it; a clause kept is merely wordy, and the reader can see it
+# and skip it. So nothing is removed here. The whole stored action is rendered, split at its
+# semicolons into sentences so that two clauses never run together.
 #
-# Morphology matters here (AC7). Matching bare stems alone lost "should be deleted" and "worth
-# keeping": both are orders, and both walked past a stem list. So every stem in
-# INSTRUCTION_VERBS is expanded into its inflections - -s, -es, -ed, -d, -ing, a doubled final
-# consonant, and the irregulars this vocabulary actually uses - and a form is read as an order
-# unless it is the participle of a passive that states a fact and asks nothing: "the browser is
-# being used for ...", "cannot be checked at any level". Such a participle describes the head's
-# world; it names no one to act, which is the same reason a restatement is dropped. A passive
-# under an obligation ("should be deleted", "gets deleted") is an order, and ORDER_CUES makes
-# that distinction rather than the presence of a be-auxiliary.
-#
-# The sets are closed and short because they are the analysers' own vocabulary. A new
-# instruction verb an analyser writes belongs in INSTRUCTION_VERBS when it is added there.
-INSTRUCTION_VERBS = frozenset("""
-    add bind call change check delete drop fix keep make merge move remove rename replace
-    restore rewrite run split stop swap undo update use write
-""".split())
-# Obligation: a modal or a periphrasis that turns the verb after it into an order. These are what
-# make a passive or a gerund an instruction rather than a description.
-ORDER_CUES = frozenset("""
-    should must ought shall need needs needed require requires required worth supposed
-    gets get got have has had
-""".split())
-CONTINUATION_OPENERS = frozenset("""
-    a an the this that these those there it they them their its which who whom whose
-    at in on for with by from as because since so rather although though if when while
-    none nothing no
-""".split())
-# Forms no suffix rule reaches, in the vocabulary above.
-IRREGULAR_FORMS = {
-    "bind": {"bound"},
-    "keep": {"kept"},
-    "make": {"made"},
-    "run": {"ran"},
-    "write": {"wrote", "written"},
-}
-_BE = frozenset("is are was were am be been being".split())
-_VOWELS = frozenset("aeiou")
-_WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
+# Redundancy belongs to the analyser that writes the action. If a tail repeats the argument, that
+# is the analyser's copy to fix, not something the renderer may delete (TESTOPS-28, AC4).
 
 
-def _inflections(stem: str) -> set[str]:
-    """Every written form of a stem: -s, -es, -ed, -d, -ing, doubled consonant, irregulars."""
-    forms = {stem, stem + "s", stem + "es", stem + "ed", stem + "ing"}
-    if stem.endswith("e"):
-        forms |= {stem + "d", stem[:-1] + "ing"}
-    if (len(stem) > 2 and stem[-1] not in _VOWELS | {"w", "y"}
-            and stem[-2] in _VOWELS and stem[-3] not in _VOWELS):
-        forms |= {stem + stem[-1] + "ed", stem + stem[-1] + "ing"}
-    return forms | IRREGULAR_FORMS.get(stem, set())
-
-
-# Form -> the stem it belongs to, so the rule can name the verb it matched.
-INSTRUCTION_FORMS = {form: stem
-                     for stem in INSTRUCTION_VERBS
-                     for form in _inflections(stem)}
-
-
-def _words(text: str) -> list[str]:
-    return [w.lower() for w in _WORD.findall(text)]
-
-
-def _passive_without_obligation(words: list[str], i: int) -> bool:
-    """Whether ``words[i]`` is the participle of a passive that describes rather than orders."""
-    if any(word in ORDER_CUES for word in words):
-        return False
-    return i > 0 and words[i - 1] in _BE
-
-
-def instruction_hits(text: str) -> list[str]:
-    """The instruction verbs the text uses to give an order, named by their stems.
-
-    A bare stem is an imperative wherever it stands. An inflected form is an order too, except
-    where it is the participle of a be-passive carrying no obligation - that describes the
-    sentence before it and asks the reader for nothing.
-    """
-    words = _words(text)
-    hits = []
-    for i, word in enumerate(words):
-        stem = INSTRUCTION_FORMS.get(word)
-        if stem is None:
-            continue
-        if word == stem or not _passive_without_obligation(words, i):
-            hits.append(stem)
-    return hits
-
-
-def descriptive_participles(text: str) -> list[str]:
-    """Instruction-verb forms the text uses descriptively: the participles a drop relies on."""
-    words = _words(text)
-    return [word for i, word in enumerate(words)
-            if word in INSTRUCTION_FORMS and word != INSTRUCTION_FORMS[word]
-            and _passive_without_obligation(words, i)]
-
-
-def order_cues(text: str) -> list[str]:
-    """The obligation words in the text, whether or not a verb of this vocabulary follows."""
-    return [word for word in _words(text) if word in ORDER_CUES]
-
-
-def second_half_is_instruction(tail: str) -> bool:
-    """Whether the clause after a semicolon tells the reader to do something (the rule above)."""
-    words = _words(tail)
-    if not words:
-        return False
-    if words[0] not in CONTINUATION_OPENERS:
-        return True
-    if any(word in ORDER_CUES for word in words):
-        return True
-    return bool(instruction_hits(tail))
+def _sentences(text: str) -> list[str]:
+    """The stored action's clauses, split at its semicolons and nowhere else."""
+    return [part.strip() for part in re.split(r";\s*", text) if part.strip()]
 
 
 def _as_sentence(text: str) -> str:
@@ -551,25 +439,20 @@ def _as_sentence(text: str) -> str:
 
 
 def action_line(claim: dict, step: str | None) -> str:
-    """The action as the reader can act on it: one instruction, or two when both instruct.
+    """The whole stored action, rendered as sentences: nothing classified, nothing cut.
 
-    The store keeps one string. The half after the first semicolon is restated only when
-    ``second_half_is_instruction`` proves it is a reason; when it is a second order it is kept,
-    rendered as its own sentence so the action never reads as a run-on (TESTOPS-27, AC1, AC3).
-    "No change" is an action: a distinct claim says plainly that nothing needs doing.
+    The store keeps one string and may hold two clauses; the page shows both, as two sentences
+    with one full stop each, so the action reads as an instruction and never as a run-on
+    (TESTOPS-28, AC1, AC5). "No change" is an action: a distinct claim says plainly that nothing
+    needs doing.
     """
     action = (claim.get("proposed_action") or "").strip()
     if not action:
         return "No proposed action was recorded for this claim."
     raw_step = (claim.get("provenance") or {}).get("assertion_text") or step
     action = _without_step(action, raw_step)
-    head, sep, tail = action.partition("; ")
-    first = _as_sentence(head)
-    if sep and second_half_is_instruction(tail):
-        second = _as_sentence(tail)
-        if second:
-            return f"{first} {second}"
-    return first
+    sentences = (_as_sentence(part) for part in _sentences(action))
+    return " ".join(sentence for sentence in sentences if sentence)
 
 
 def wrong_sentence(claim: dict, quote: str | None) -> str:

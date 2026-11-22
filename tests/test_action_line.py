@@ -1,20 +1,17 @@
-"""TESTOPS-27: the action line keeps a second instruction and drops only a restatement.
+"""TESTOPS-28: the action line is the whole stored action, rendered as sentences.
 
-The rule under test is ``app.second_half_is_instruction``, written where it is applied
-(``testops/web/app.py``) so it can be argued with on evidence. Every case below is a shape of that
-evidence:
+TESTOPS-27 tried to decide, from the words after a semicolon, whether the tail was a second order
+or a restatement. Two review passes found three orders it silently lost - "the duplicate is
+deletable", "the second one can go", "the copy would be deleted by whoever owns it" - each one a
+different grammatical shape. The decision this module pins is that the renderer no longer decides:
+``action_line`` returns the whole stored action, split at its semicolons into sentences, and cuts
+nothing (AC1, AC5).
 
-  * a tail that gives the reason for the clause before it - dropped, and the test names both
-    strings and shows why the tail cannot be acted on alone (AC2, AC8)
-  * a tail that gives a second order - kept, and the action reads as two sentences, not a run-on
-    (AC1, AC3)
-  * the eight orders the reviewer smuggled past a bare-stem rule, two of which were lost to
-    morphology: ``should be deleted`` and ``worth keeping`` (AC7)
-  * every inflection of every instruction verb, and the irregulars the vocabulary uses (AC7)
-  * the same two shapes as the page renders them (AC3)
+What that buys is a property a word list cannot give: every word the analyser stored reaches the
+reader. The reviewer's probes are the corpus of that property below, and the real run's corpus is
+in ``test_case_scan.py``.
 
-AC4, the corpus floor, lives with the real run it measures: ``test_case_scan.py``. So does AC9,
-the before/after drop count over that run.
+There is no test of a classification here, because there is no classification to test.
 """
 from __future__ import annotations
 
@@ -26,262 +23,233 @@ from testops.web import app
 
 STEP = "the panel is served"
 
-
-# --------------------------------------------------------------------------- the rule itself
-
-INSTRUCTION_TAILS = [
-    "keep one",                                            # the duplicate claims' own tail
-    "call the HTTP client first, then delete the browser step",
-    "delete it if the page does not need it",
-    "then re-run",                                         # "then" does not make it a reason
-    "move the step into a test that drives a browser",
-]
-RESTATEMENT_TAILS = [
-    "this level is the cheapest one that establishes it",   # the distinct claims' own tail
-    "at this level nothing establishes what it asserts",    # the gap claims' own tail
-    "a judgement with no comparison in it cannot be checked at any level",
-    "the response decides everything the browser is being used for",
-]
-
-
-@pytest.mark.parametrize("tail", INSTRUCTION_TAILS)
-def test_a_tail_that_opens_with_an_instruction_is_kept(tail):
-    """AC1: a second order stays, so a reader is never given half an instruction."""
-    assert app.second_half_is_instruction(tail) is True
-
-
-@pytest.mark.parametrize("tail", RESTATEMENT_TAILS)
-def test_a_tail_whose_only_subject_is_the_clause_before_it_is_a_restatement(tail):
-    """AC1: a reason continues the head's sentence; it names no one to act and no new order."""
-    assert app.second_half_is_instruction(tail) is False
-
-
-def test_the_rule_fails_open_on_a_word_it_does_not_know():
-    """A tail the rule cannot read is kept: a lost instruction is invisible, a stray reason is not."""
-    tail = "whoever wrote that step was right"
-    assert "whoever" not in app.CONTINUATION_OPENERS
-    assert app.second_half_is_instruction(tail) is True
-
-
-# --------------------------------------------------------------- AC7: the reviewer's eight probes
-
-PROBES = [
+# The reviewer's 15 probes, read off the two review passes
+# (factory/reports/2026-11-22/TESTOPS-27-review.md and TESTOPS-27-review-2.md). The first eight
+# came from the first pass; the rest are the shapes the second pass attacked, three of which the
+# word list dropped. They are the corpus of the property below.
+REVIEWER_PROBES = [
+    # first pass
     "this should be split into two steps and the second deleted",
     "move it and rename it",
     "one copy to keep",
     "keep it if the page does not need it",
     "you should delete the second one",
     "instead, delete the duplicate",
-    "the second copy should be deleted",     # lost to a bare-stem rule: passive voice
-    "it is worth keeping one copy",          # lost to a bare-stem rule: inflected verb
+    "the second copy should be deleted",
+    "it is worth keeping one copy",
+    # second pass
+    "the duplicate is deletable",                                # dropped by the word list
+    "the second one can go",                                     # dropped by the word list
+    "the copy would be deleted by whoever owns it",              # dropped by the word list
+    "removal of the copy is advisable",
+    "ought to be removed",
+    "would be better gone",
+    "it must not be kept",
 ]
 
+# Shapes the same two passes recorded beyond the mandated list. They cost nothing to keep in the
+# corpus and they are the sort of tail an analyser will write next.
+EXTRA_PROBES = [
+    "there is no need for this copy",
+    "both copies are unnecessary",
+    "one of the copies should go",
+    "getting rid of the duplicate is advisable",
+    "it requires deleting",
+    "is supposed to be removed",
+    "had better be merged",
+    "is bound to merge",
+]
 
-@pytest.mark.parametrize("tail", PROBES)
-def test_every_probe_the_reviewer_smuggled_reaches_the_reader(tail):
-    """AC7: all eight orders the reviewer put after a semicolon are on the page, none dropped.
+# Function words carry no instruction, so the property is stated on content words: the nouns,
+# verbs and modifiers the analyser chose must all survive. "should", "must", "go" and "deletable"
+# are deliberately content here - they are exactly what a word list mislaid.
+STOPWORDS = frozenset("""
+    a an the this that these those it its they them their there here and or but nor so if then
+    than as of to in on at for with by from into over under about is are was were be been being
+    am do does did has have had
+""".split())
 
-    Two of these were lost before the morphology fix - the passive "should be deleted" and the
-    inflected "keeping". Both are orders, and both are kept now. The assertion is on the rendered
-    action, not only on the rule, because a kept tail the page still cuts is the same loss.
+WORD = re.compile(r"[a-z0-9]+(?:['-][a-z0-9]+)*")
+
+
+def _words(text: str) -> list[str]:
+    return WORD.findall(text.lower())
+
+
+def _content(text: str) -> list[str]:
+    return [word for word in _words(text) if word not in STOPWORDS]
+
+
+def _subsequence(needle: list[str], haystack: list[str]) -> bool:
+    """Whether ``needle`` appears in ``haystack`` in order, with words only added between."""
+    it = iter(haystack)
+    return all(word in it for word in needle)
+
+
+def _stored(probe: str,
+            head: str = "Raise this with the team: this copy repeats an assertion") -> str:
+    return f"{head}; {probe}."
+
+
+def _claim(probe: str) -> dict:
+    return {"proposed_action": _stored(probe), "provenance": {"assertion_text": STEP}}
+
+
+# ------------------------------------------------------------------- AC1: no word is removed
+
+
+@pytest.mark.parametrize("probe", REVIEWER_PROBES + EXTRA_PROBES)
+def test_every_content_word_of_the_stored_action_reaches_the_page(probe):
+    """AC1: the property, over the reviewer's 15 probes and the shapes both passes recorded.
+
+    The stored action is the input; the rendered line is the output. Every content word of the
+    input appears in the output, in the order it was written, so no clause - and no order inside a
+    clause - can be lost without this failing.
     """
-    claim = {"proposed_action": f"Raise this with the team: this copy repeats an assertion; "
-                                f"{tail}.", "provenance": {"assertion_text": STEP}}
+    stored = _stored(probe)
+    visible = app.action_line(_claim(probe), STEP)
+    missing = [word for word in _content(stored) if word not in _words(visible)]
+    assert missing == [], (missing, visible)
+    assert _subsequence(_content(stored), _words(visible)), visible
+    assert ";" not in visible, visible
+    assert visible.endswith("."), visible
+
+
+@pytest.mark.parametrize("probe", [
+    "the duplicate is deletable",
+    "the second one can go",
+    "the copy would be deleted by whoever owns it",
+])
+def test_the_three_orders_the_word_list_dropped_are_on_the_page(probe):
+    """AC1 on the exact leaks this ticket exists for: named, rendered, whole."""
+    visible = app.action_line(_claim(probe), STEP)
+    assert visible.endswith(probe[:1].upper() + probe[1:] + "."), visible
+
+
+# ------------------------------------------------------------------- AC5: two sentences, not a run-on
+
+
+def test_a_stored_action_with_a_tail_renders_as_two_sentences():
+    """AC5: the semicolon becomes a full stop and a capital, so the action never runs on."""
+    visible = app.action_line(_claim("keep one"), STEP)
+    assert visible == ("Raise this with the team: this copy repeats an assertion. Keep one."), visible
+    assert visible.count(". ") == 1 and visible.endswith(".")
+    assert "; " not in visible
+
+
+def test_an_action_with_no_semicolon_is_untouched():
+    action = 'Call the HTTP client for the step "the panel is served" instead of the browser.'
+    assert app.action_line({"proposed_action": action, "provenance": {}}, None) == action
+
+
+def test_every_semicolon_is_a_sentence_boundary_and_nothing_is_merged():
+    """A three-clause action keeps all three clauses, one sentence each."""
+    claim = {"proposed_action": "Split this step; move the browser call into its own step; "
+                                "delete the duplicate.",
+             "provenance": {}}
+    visible = app.action_line(claim, None)
+    assert visible == ("Split this step. Move the browser call into its own step. "
+                       "Delete the duplicate."), visible
+
+
+def test_an_action_with_nothing_stored_still_says_something():
+    assert app.action_line({"proposed_action": "", "provenance": {}}, None) == (
+        "No proposed action was recorded for this claim.")
+
+
+# ---------------------------------------------------- the step reference is the only shortening
+
+
+def test_the_step_is_referred_to_rather_than_quoted_twice_and_nothing_else_is_shortened():
+    """The one shortening the page may make is the step's own words, quoted above the action."""
+    claim = {"proposed_action": 'Rewrite the step "the panel is served" to call the HTTP client; '
+                                'keep the rest of the scenario as it is.',
+             "provenance": {"assertion_text": STEP}}
     visible = app.action_line(claim, STEP)
-    assert app.second_half_is_instruction(tail) is True, tail
-    assert tail[:1].upper() + tail[1:] + "." in visible, (tail, visible)
-    assert "; " not in visible, visible
-    assert visible.endswith(".") and visible.count(". ") == 1, visible
+    assert visible == ("Rewrite this step to call the HTTP client. Keep the rest of the scenario "
+                       "as it is."), visible
+    assert "the panel is served" not in visible
 
 
-@pytest.mark.parametrize("form,stem", [
-    ("deletes", "delete"), ("deleted", "delete"), ("deleting", "delete"),
-    ("removes", "remove"), ("removed", "remove"), ("removing", "remove"),
-    ("merges", "merge"), ("merged", "merge"),
-    ("renames", "rename"), ("renamed", "rename"), ("renaming", "rename"),
-    ("checks", "check"), ("checked", "check"), ("checking", "check"),
-    ("changes", "change"), ("changed", "change"), ("changing", "change"),
-    ("drops", "drop"), ("dropped", "drop"), ("dropping", "drop"),
-    ("stops", "stop"), ("stopped", "stop"), ("stopping", "stop"),
-    ("swaps", "swap"), ("swapped", "swap"), ("swapping", "swap"),
-    ("splits", "split"), ("split", "split"), ("splitting", "split"),
-    ("kept", "keep"), ("keeps", "keep"),
-    ("made", "make"), ("ran", "run"), ("bound", "bind"), ("written", "write"),
-])
-def test_an_instruction_verb_is_recognised_in_every_inflection(form, stem):
-    """AC7: -s, -es, -ed, -d, -ing, a doubled consonant and the vocabulary's irregulars."""
-    assert app.INSTRUCTION_FORMS.get(form) == stem
+# ------------------------------------------------------------------- the real analyser's shapes
 
-
-@pytest.mark.parametrize("tail", [
-    "the second copy should be deleted",
-    "the second copy needs deleting",
-    "the second copy must be removed",
-    "it is worth keeping one copy",
-    "the copies get merged",
-])
-def test_a_passive_or_modal_order_is_an_instruction(tail):
-    """AC7: an obligation carries the order, so a passive is not read as a description."""
-    assert app.order_cues(tail), tail
-    assert app.instruction_hits(tail), tail
-    assert app.second_half_is_instruction(tail) is True
-
-
-def test_a_passive_with_no_obligation_describes_and_asks_nothing():
-    """The distinction the rule turns on: "is being used" states a fact, "should be used" orders."""
-    descriptive = "the response decides everything the browser is being used for."
-    ordering = "the response should be used instead of the browser."
-    assert app.descriptive_participles(descriptive) == ["used"]
-    assert app.instruction_hits(descriptive) == []
-    assert app.second_half_is_instruction(descriptive) is False
-    assert app.descriptive_participles(ordering) == []
-    assert app.instruction_hits(ordering) == ["use"]
-    assert app.second_half_is_instruction(ordering) is True
-
-
-# --------------------------------------------------------------------------- AC2: the dropped tail
-
-def _claims(text=None, bindings=None, path=None):
-    if text is None:
-        return fixtures.analyse_fact_sheet()
-    return fixtures.analyse_text(text, bindings, path=path or fixtures.FEATURE_PATH)
-
-
-def _stored(claim) -> str:
-    return claim.detail["proposed_action"]
-
-
-def _visible(claim) -> str:
-    return app.action_line({"proposed_action": _stored(claim),
-                            "provenance": {"assertion_text": claim.detail["assertion_text"]}},
-                           claim.detail["assertion_text"])
-
-
-def _proved_head(claim, head: str) -> str:
-    """The head the page must show: the stored head, with the step referred to as "this step"."""
-    step = claim.detail["assertion_text"]
-    return head.replace(f'the step "{step}"', "this step").rstrip(".") + "."
-
-
-def _split(stored: str) -> tuple[str, str]:
-    head, _, tail = stored.partition("; ")
-    assert tail, f"this action has no tail to prove anything about: {stored!r}"
-    return head.strip(), tail.strip()
-
-
-def test_a_dropped_tail_is_proved_a_restatement_by_showing_it_cannot_stand_alone():
-    """AC2 and AC8: the test names the head and the tail and proves each condition of the drop.
-
-    Three real analyser tails, one per verdict that writes one. Each is dropped, and the proof is
-    AC8's three conditions, asserted here on the strings rather than trusted from a comment: the
-    tail opens with a word whose subject is the head, it holds no instruction verb in any
-    inflection, and it holds no modal or passive order. Where the vocabulary does appear - "being
-    used", "cannot be checked" - the test names it as a descriptive participle, so the drop is
-    shown to be a judgement about that word and not an oversight. If an analyser ever writes a
-    second order after a semicolon, the probe test above is what keeps it, and the corpus floor in
-    ``test_case_scan.py`` is what says no page lost characters it kept.
-    """
-    verdicts = {}
-    for claim in _claims():
-        verdicts.setdefault(claim.verdict, claim)
-
-    assert set(verdicts) >= {"distinct", "gap"}, sorted(verdicts)
-    checked = 0
-    for verdict in ("distinct", "gap"):
-        claim = verdicts[verdict]
-        stored, visible = _stored(claim), _visible(claim)
-        head, tail = _split(stored)
-
-        match = re.match(r"[A-Za-z]+", tail)
-        assert match is not None, f"the {verdict} tail opens with no word at all: {tail!r}"
-        opener = match.group(0).lower()
-
-        # AC8, condition 1: the tail opens with a word whose subject is the head clause.
-        assert opener in app.CONTINUATION_OPENERS, (
-            f"the {verdict} tail is not proved a restatement: {head!r} / {tail!r} - it opens with "
-            f"{opener!r}, which is not a word that points back at the head")
-        # AC8, condition 2: no instruction verb in any inflection.
-        assert app.instruction_hits(tail) == [], (
-            f"the {verdict} tail carries an instruction ({app.instruction_hits(tail)}) that "
-            f"dropping would lose: {head!r} / {tail!r}")
-        # AC8, condition 3: no modal or passive order. A participle here is descriptive, and the
-        # test names it so a future change to the passive rule fails here rather than in silence.
-        assert app.order_cues(tail) == [], (
-            f"the {verdict} tail carries a modal ({app.order_cues(tail)}): {head!r} / {tail!r}")
-        for participle in app.descriptive_participles(tail):
-            assert participle in app.INSTRUCTION_FORMS and participle not in app.INSTRUCTION_VERBS
-            assert participle in tail.lower()
-
-        assert tail not in visible, (
-            f"the {verdict} tail was proved a restatement and is still on the page: {visible!r}")
-        assert visible == _proved_head(claim, head), (
-            f"the {verdict} page kept something other than the proved head: {visible!r} from "
-            f"{stored!r}")
-        checked += 1
-    assert checked == 2
-
-
-def test_an_unplaced_claim_that_judges_without_a_comparison_drops_its_reason_too():
-    """The third analyser tail in the store, from the run the ticket's corpus came from."""
-    text = ("Feature: counts\n"
-            "  Scenario: the count is reported\n"
-            "    Then that count is correct for the store it was run against\n")
-    claims = fixtures.analyse_text(text, fixtures.api_bindings())
-    assert len(claims) == 1 and claims[0].verdict == "unplaced", claims[0].verdict
-    stored = _stored(claims[0])
-    head, tail = _split(stored)
-    assert tail == "a judgement with no comparison in it cannot be checked at any level."
-    assert app.second_half_is_instruction(tail) is False
-    assert _visible(claims[0]) == _proved_head(claims[0], head)
-
-
-# --------------------------------------------------------------------------- AC1, AC3: kept tails
 
 DUPLICATE = ("Raise this with the team: this copy calls the HTTP client to establish what "
              "ReqOverflow.Specs.Controller/Features/Home.feature:7 settles in-process; keep one.")
 
 
-def test_a_second_order_after_the_semicolon_reaches_the_reader():
-    """AC1 on the shape the store already holds: the duplicate claims' own action."""
-    claim = {"proposed_action": DUPLICATE, "provenance": {}}
-    visible = app.action_line(claim, None)
-    assert visible.endswith(". Keep one."), visible
-    # The first half is unchanged by the rule: the reader reads the same instruction, plus one.
-    assert visible.startswith("Raise this with the team: this copy calls the HTTP client")
+def test_the_duplicate_claims_own_action_reaches_the_reader_whole():
+    visible = app.action_line({"proposed_action": DUPLICATE, "provenance": {}}, None)
+    assert visible == ("Raise this with the team: this copy calls the HTTP client to establish what "
+                       "ReqOverflow.Specs.Controller/Features/Home.feature:7 settles in-process. "
+                       "Keep one."), visible
 
 
-def test_a_kept_tail_renders_as_two_sentences_and_never_as_a_run_on():
-    """AC3, kept shape: two clauses reach the page as two sentences with one full stop each."""
-    claim = {"proposed_action": 'Rewrite the step "the panel is served" to call the HTTP '
-                                'client; call the HTTP client first, before the browser.',
-             "provenance": {"assertion_text": STEP}}
-    visible = app.action_line(claim, STEP)
-    assert visible == ("Rewrite this step to call the HTTP client. Call the HTTP client first, "
-                       "before the browser."), visible
-    assert "; " not in visible
-    assert visible.count(". ") == 1 and visible.endswith(".")
+def _claims(text=None):
+    if text is None:
+        return fixtures.analyse_fact_sheet()
+    return fixtures.analyse_text(text, fixtures.api_bindings(), path=fixtures.FEATURE_PATH)
 
 
-def test_a_dropped_tail_renders_as_one_sentence_and_never_as_a_run_on():
-    """AC3, dropped shape: the page says one thing, in one sentence, with no dangling semicolon."""
-    claim = {"proposed_action": 'No change: keep the step "the page is served with stable fact '
-                                'anchors" where it is; this level is the cheapest one that '
-                                'establishes it.',
-             "provenance": {"assertion_text": "the page is served with stable fact anchors"}}
-    visible = app.action_line(claim, "the page is served with stable fact anchors")
-    assert visible == "No change: keep this step where it is.", visible
-    assert "; " not in visible and visible.endswith(".")
+def _visible(claim) -> str:
+    return app.action_line({"proposed_action": claim.detail["proposed_action"],
+                            "provenance": {"assertion_text": claim.detail["assertion_text"]}},
+                           claim.detail["assertion_text"])
 
 
-def test_the_page_renders_the_kept_second_order():
+def _referred(stored: str, step: str) -> str:
+    """The stored action with its quoted copy of the step referred to as "this step".
+
+    That reference is the only shortening the page makes, because the block has already quoted the
+    step directly above the action. Everything else must survive, which is what the property
+    asserts.
+    """
+    if not step:
+        return stored
+    for form in (f'the step "{step}"', f'step "{step}"', f'"{step}"'):
+        if form in stored:
+            return stored.replace(form, "this step", 1)
+    return stored
+
+
+@pytest.mark.parametrize("verdict", ["distinct", "gap"])
+def test_a_real_analyser_tail_is_on_the_page_now(verdict):
+    """AC3 on the analyser's own strings: the restatement tails the old rule dropped are kept.
+
+    Each verdict's stored action has a tail after ``"; "``. The page now shows that tail as its own
+    sentence, and every content word of the stored action survives - the analyser's redundancy is
+    visible to the reader rather than tidied away by the renderer.
+    """
+    claims = {claim.verdict: claim for claim in _claims()}
+    assert verdict in claims, sorted(claims)
+    claim = claims[verdict]
+    stored, visible = claim.detail["proposed_action"], _visible(claim)
+    head, sep, tail = stored.partition("; ")
+    assert sep and tail.strip()
+    tail = tail.strip()
+    assert visible.endswith(tail[:1].upper() + tail[1:]), (stored, visible)
+    source = _referred(stored, claim.detail["assertion_text"])
+    missing = [word for word in _content(source) if word not in _words(visible)]
+    assert missing == [], (missing, stored, visible)
+
+
+def test_an_unplaced_claim_keeps_its_reason_too():
+    text = ("Feature: counts\n"
+            "  Scenario: the count is reported\n"
+            "    Then that count is correct for the store it was run against\n")
+    claims = fixtures.analyse_text(text, fixtures.api_bindings())
+    assert len(claims) == 1 and claims[0].verdict == "unplaced", claims[0].verdict
+    assert claims[0].detail["proposed_action"].endswith(
+        "a judgement with no comparison in it cannot be checked at any level.")
+    visible = _visible(claims[0])
+    assert visible.endswith(
+        "A judgement with no comparison in it cannot be checked at any level."), visible
+
+
+def test_the_page_renders_the_wordy_action():
     """AC3 through the block the reader meets, not only through the helper."""
     claim = {"proposed_action": DUPLICATE, "verdict": "review", "assessment": {},
              "provenance": {}}
     block = " ".join(app.argument_block(claim))
     assert "Keep one." in block
     assert "&quot;keep one&quot;" not in block
-
-
-def test_an_action_with_no_semicolon_is_untouched():
-    action = 'Call the HTTP client for the step "the panel is served" instead of the browser.'
-    assert app.action_line({"proposed_action": action, "provenance": {}}, None) == action
