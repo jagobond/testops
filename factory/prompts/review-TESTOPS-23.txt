@@ -1,0 +1,35 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-23 and TESTOPS-26 together — they are one change
+to the reader's experience, split into two tickets.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-23-copy`, tree clean.
+Tickets:    factory/tickets/TESTOPS-23.md, factory/tickets/TESTOPS-26.md
+Diff:       git diff feature/f1..HEAD
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Read the copy as a reader, not as a reviewer.** Take four cases from a real run — one of each verdict — and
+  read each opening block aloud. Fail it if any sentence needs the footnote to be understood, if the argument
+  contradicts the action, or if the judgement is a category rather than a statement about the test.
+- **Verify the lint bites.** Seed a violation: put "dearer" in a claim statement, and a six-word clause repeated
+  in an opening block, and confirm the tests fail. A lint nobody has seen fail is not a fence.
+- **Check what the lint may have broken.** A word list invites mangling: look for statements that became
+  ungrammatical or evasive to pass the lint ("uses" → awkward synonym), and for charges of the same information
+  spread over more sentences to dodge the 45-word limit.
+- **Check the four verdicts all carry an action.** AC7 of T26: a `distinct` claim must still say what to do, or
+  say plainly that nothing needs doing. Report the exact line for each of the four.
+- Confirm AC1-AC9 of T23 that survived the recast (no "the words", no fragment headings, one actor, context
+  separated), the typography addendum (AC10, AC11), and verdicts 94/90/1/1/2.
+- Do not edit product code, tests or the tickets. You may write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-23-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — T23 AC1..AC10, T26 AC1..AC11 as HOLDS / WEAK / NOT MET.
+  ## Four cases, read aloud — the opening block of each, and your judgement as a reader.
+  ## The lint — what you seeded, what failed, and what the lint broke.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 400 words.
+
+ANTI-REPETITION: never repeat a sentence verbatim. Stop when the points are made.

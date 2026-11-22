@@ -1,0 +1,5 @@
+
+# The board and the ticket files are authored on main; when a feature branch merges
+# main, take the incoming version rather than a conflict nobody needs to resolve.
+factory/TICKETS.md merge=board
+factory/tickets/*.md merge=board

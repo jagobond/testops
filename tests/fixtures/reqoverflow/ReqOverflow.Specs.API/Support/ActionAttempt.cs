@@ -1,0 +1,111 @@
+// This file is a copy of ReqOverflow.Specs.Controller/Support/ActionAttempt.cs.
+// It has been copied for the sake of the demonstration. So that the different 
+// automation targets can be studied independently.
+
+using System;
+using Reqnroll.BoDi;
+using AwesomeAssertions;
+using AwesomeAssertions.Execution;
+using Reqnroll.Infrastructure;
+
+// ReSharper disable once CheckNamespace
+namespace ReqOverflow.Specs.Support;
+
+public class ActionAttempt<TInput, TResult>: IContainerDependentObject
+{
+    protected ErrorMessageProvider ErrorMessageProvider;
+    protected TestLogger TestLogger;
+    private readonly Func<TInput, TResult> _action;
+    public Exception Error { get; private set; }
+    public bool WasPerformed { get; private set; }
+    public TInput LastInput { get; private set; }
+
+    public bool WasSuccessful
+    {
+        get
+        {
+            using (new AssertionScope($"{ActionName} attempt performed"))
+                WasPerformed.Should().BeTrue("the action should have been performed");
+            return Error == null;
+        }
+    }
+
+    public string ErrorMessage => Error?.Message;
+    public string ActionName { get; }
+
+    public ActionAttempt(Func<TInput, TResult> action, string actionName = null)
+    {
+        _action = action;
+        ActionName = actionName ?? GetType().Name.Replace("Driver", "");
+    }
+
+    public ActionAttempt()
+    {
+        _action = DoAction;
+        ActionName = GetType().Name.Replace("Driver", "");
+    }
+
+    protected virtual TResult DoAction(TInput input)
+    {
+        throw new NotSupportedException();
+    }
+
+    // SpecFlow calls this method when the object is created, so you can get
+    // additional dependencies without passing them through the derived ctor
+    void IContainerDependentObject.SetObjectContainer(IObjectContainer container)
+    {
+        ErrorMessageProvider = container.Resolve<ErrorMessageProvider>();
+        TestLogger = container.Resolve<TestLogger>();
+    }
+
+    public TResult Perform(TInput input, bool attemptOnly = false)
+    {
+        WasPerformed = true;
+        LastInput = input;
+        try
+        {
+            TestLogger.LogPerformAction(ActionName, input);
+            return _action(input);
+        }
+        catch (Exception e)
+        {
+            Error = e;
+            TestLogger.LogPerformActionFailed(ActionName, e);
+            if (!attemptOnly)
+                throw;
+        }
+
+        return default;
+    }
+
+    public void ShouldBeSuccessful()
+    {
+        using (new AssertionScope($"{ActionName} attempt successful"))
+            WasSuccessful.Should().BeTrue(ErrorMessage);
+    }
+
+    public void ShouldFailWithError(string expectedErrorMessageKey)
+    {
+        var expectedErrorMessage = ErrorMessageProvider.GetExpectedErrorMessage(expectedErrorMessageKey);
+
+        var wasSuccessful = WasSuccessful;
+        using (new AssertionScope($"{ActionName} attempt successful"))
+            wasSuccessful.Should().BeFalse("the attempt should fail");
+
+        using (new AssertionScope($"{ActionName} error message"))
+            Error.Message.Should().ContainEquivalentOf(expectedErrorMessage);
+    }
+}
+
+public class ActionAttemptFactory(IObjectContainer container)
+{
+    public ActionAttempt<TInput, TResult> Create<TInput, TResult>(string name, Func<TInput, TResult> action)
+    {
+        if (name == null) throw new ArgumentNullException(nameof(name));
+        if (action == null) throw new ArgumentNullException(nameof(action));
+
+        var result = new ActionAttempt<TInput, TResult>(action, name);
+        ((IContainerDependentObject)result).SetObjectContainer(container);
+        return result;
+    }
+}

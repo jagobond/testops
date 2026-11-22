@@ -49,3 +49,20 @@ and records no observation rows for them.
   can say what it shows. The existing `observation` table and `_shows` renderer are the seam.
 - If recording the test arm explodes the store size, say so with numbers rather than trimming
   silently.
+
+## Addendum at review time (Lead, after rendering the page)
+
+AC3 and AC4 were met by volume, not by relevance. The page for
+`case-cotw-levels-20261121T230858-01` now shows, under "Evidence recorded at this claim's own
+coordinates in this run:", six scenarios from `canon_query_api.feature` — lines 22, 29, 34, 41, 48,
+55 — each described as starting at that line with 2–4 steps. The claim is the step at **line 59**.
+None of those six lines is the claim. A reader is invited to conclude the claim rests on six
+scenarios it has nothing to do with.
+
+Showing everything that shares a file is not evidence; it is noise wearing evidence's clothes.
+
+| id | criterion |
+|----|-----------|
+| AC8 | A claim's evidence contains only observations that bear on that claim: the binding for the asserting step, and the scenario that contains it. A test proves a claim at line 59 shows no observation from another scenario in the same file. |
+| AC9 | The asserting step is listed first and named as such ("the step that is asserted", at its line), before any surrounding context. |
+| AC10 | Observation count per claim is a consequence of relevance, not a quota: if only one observation bears on a claim, one row is rendered. |

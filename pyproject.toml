@@ -5,10 +5,21 @@ description = "Evidence-backed analysis of a repository pair"
 requires-python = ">=3.11"
 dependencies = []
 
+# Development install (documented in tests/README.md):
+#   pip install -e ".[dev]"
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
 [tool.setuptools]
+# Every entry must be a package that exists on disk. `testops.cases` is a module (testops/cases.py),
+# not a package, and naming it here made an editable install import-fail; `testops.web` and
+# `testops.scripts` are packages and must be named or the UI is absent from the install.
 packages = ["testops", "testops.store", "testops.collectors", "testops.extract",
             "testops.surfaces", "testops.analysers", "testops.judgement",
-            "testops.cases", "testops.score"]
+            "testops.score", "testops.web", "testops.scripts"]
 
 [tool.setuptools.package-data]
 "testops" = ["store/schema.sql", "judgement/prompts/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

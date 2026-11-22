@@ -15,7 +15,21 @@ def permalink(uri: str, line: int | None = None) -> str | None:
     m = GITHUB.match(uri or "")
     if not m:
         return None
-    url = (f"https://github.com/{m['owner']}/{m['repo']}/blob/{m['sha']}/{m['path']}")
+    return blob_permalink(f"{m['owner']}/{m['repo']}", m["sha"], m["path"], line)
+
+
+def blob_permalink(repo: str | None, commit: str | None, path: str | None,
+                   line: int | None = None) -> str | None:
+    """A claim's assertion as a GitHub URL at the commit it was read at.
+
+    The commit is passed in, never inferred from the repository's current state: a link to HEAD
+    would show the reader whatever the file says today, which is not what the claim was made from.
+    A missing commit or path is a claim without coordinates, and returns None rather than a URL
+    that would point at a branch.
+    """
+    if not (repo and commit and path):
+        return None
+    url = f"https://github.com/{repo}/blob/{commit}/{path}"
     return f"{url}#L{line}" if line else url
 
 

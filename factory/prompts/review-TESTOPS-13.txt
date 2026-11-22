@@ -1,0 +1,32 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-13 against its acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-13-python-floor`, tree clean.
+Ticket:     factory/tickets/TESTOPS-13.md
+Diff:       git diff feature/f1..HEAD
+
+HARD RULES
+- Verify both interpreters yourself. 3.11 has no packages installed, so use the builder's scratch
+  venv (C:/Users/Chester/AppData/Local/hermes/profiles/builder/cache/scratch/venv311) or make your
+  own. Report both counts.
+    env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+    env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 <venv311>/Scripts/python.exe -m pytest -q
+- **Try to defeat the guard.** Put a backslash inside an f-string expression in a scratch module and
+  confirm both interpreters' guards fail. Then try a construct the guard would *not* catch (a
+  3.12-only API used at runtime, e.g. itertools.batched) and say plainly whether AC3's promise is
+  narrower than it sounds. That is the interesting question, not whether the suite is green.
+- Check AC5 with bytes, not words: render a page with the pre-fix module (git show feature/f1:...)
+  and with the fix against the same DB copy, and compare.
+- Check the 4 skips are genuinely 3.12-only self-tests and not product tests hiding.
+- Do not edit product code, tests or the ticket. You may write exactly one file:
+  factory/reports/2026-11-21/TESTOPS-13-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC6 HOLDS / WEAK / NOT MET with evidence.
+  ## Defeating the guard — what you tried, what happened, and what the guard does not cover.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 400 words.
+
+ANTI-REPETITION: never repeat a sentence verbatim. Stop when the points are made.

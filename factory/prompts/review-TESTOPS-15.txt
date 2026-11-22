@@ -1,0 +1,30 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-15 against its acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-15-ci-floor`.
+Ticket:     factory/tickets/TESTOPS-15.md
+Diff:       git diff feature/f1..HEAD
+CI:         gh run list --repo jagobond/testops --branch factory/testops-15-ci-floor
+
+HARD RULES
+- Read the workflow, then verify the claims with `gh`: the runs must be real, green, and on this branch.
+- **Prove the workflow can fail.** On a throwaway branch, break something that only 3.11 would catch
+  (e.g. add `from itertools import batched` used at import time in a module the render check imports),
+  push it, and confirm CI goes red on the right leg and green on the other. Report the run URL and the
+  annotation. Delete the branch afterwards. A CI that cannot fail is decoration.
+- Check nothing is `continue-on-error`, that both legs run the *full* suite (no `-k`, no deselect), and
+  that the render job really serves a page rather than asserting a file exists.
+- Check AC5's cost claim against a real run's timing and billed minutes, and say whether the number is
+  honest.
+- Do not edit product code, tests, the ticket or the workflow. You may write exactly one file:
+  factory/reports/2026-11-21/TESTOPS-15-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC7 HOLDS / WEAK / NOT MET with evidence.
+  ## Can it fail? — the run you made go red, what broke, what stayed green, and the URL.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 400 words.
+
+ANTI-REPETITION: never repeat a sentence verbatim. Stop when the points are made.

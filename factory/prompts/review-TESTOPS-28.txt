@@ -1,0 +1,32 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-28 (which supersedes TESTOPS-27).
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-27-action-line`, tree clean.
+Ticket:     factory/tickets/TESTOPS-28.md
+Diff:       git diff ab3c436..HEAD  (the T27 addendum commits below it are superseded; judge HEAD)
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Prove nothing is lost.** For every one of the 15 probes from the two earlier reviews (they are in
+  factory/reports/2026-11-22/TESTOPS-27-review.md and -review-2.md), render the action and confirm every
+  content word of the stored action reaches the page. Then invent five more shapes of your own; if any content
+  word disappears, that is NEEDS-FIX.
+- **Confirm the dead code is gone.** `git grep` for INSTRUCTION_VERBS, CONTINUATION_OPENERS and
+  second_half_is_instruction must return nothing. A dormant classifier that a future builder switches back on
+  is the bug returning.
+- **Judge the cost.** The page is now wordier: for case-cotw-levels-20261122T011316-03 the action box reads
+  "Rewrite this step to call the HTTP client instead of the browser. The response decides everything the
+  browser is being used for." — the second sentence restates the argument. Say plainly whether that trade is
+  worth it, and count how many of the 94 real actions now repeat content that appears elsewhere in the same
+  block. That count is the follow-up ticket's size.
+- Confirm verdicts 94/90/1/1/2 and that the T26 no-repeat lint has not been weakened to accommodate the tails.
+- Do not edit product code, tests or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-28-review.md
+
+WRITE it with:
+  ## Verdict — PASS / NEEDS-FIX, one sentence why.
+  ## Criteria — AC1..AC6 HOLDS / WEAK / NOT MET.
+  ## Nothing lost — the 15 probes and your 5, each result.
+  ## The cost — how many of 94 actions now repeat, and whether the trade is worth it.
+  ## Residual risk.
+
+Then reply with the verdict and a summary under 300 words.

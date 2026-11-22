@@ -1,0 +1,34 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-22 against its acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-22-quiet-run`, tree clean (one untracked
+.gitignore edit the Lead made; ignore it).
+Ticket:     factory/tickets/TESTOPS-22.md
+Diff:       git diff feature/f1..HEAD
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Verify the counts against the store, not against the page.** The quiet page claims 6 feature files, 41
+  scenarios, 17 exclusion patterns from CotwBdd.csproj, 21 of 27 stored feature files outside the build. Check
+  each against the snapshot's own artefact rows. A count nobody can derive is the same defect as a claim nobody
+  can settle.
+- **Test the AC4 rule adversarially.** The page must read what the run could not consult from the *recorded*
+  registry state, not from config at render time. Prove it: render a historical run whose snapshot has no
+  registry while the current config has one, and confirm the page reports the run's own state.
+- **Prove the two states cannot share wording.** Build a case with zero findings that ALSO has a resolved
+  case_state row, and see what the page says. That combination is the trap: the run raised nothing and a person
+  still decided something. Report the actual rendering.
+- Confirm verdicts 94/90/1/1/2 and that the resolved page names actor, time and note.
+- Do not edit product code, tests or the ticket. You may write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-22-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC8 HOLDS / WEAK / NOT MET.
+  ## The counts — each claim on the quiet page, traced to a stored row.
+  ## The trap — zero findings plus a resolved decision, and what rendered.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 400 words.
+
+ANTI-REPETITION: never repeat a sentence verbatim. Stop when the points are made.

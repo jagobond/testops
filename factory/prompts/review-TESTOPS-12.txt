@@ -1,0 +1,33 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-12 against its acceptance criteria.
+
+Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-12-labels`.
+Ticket:     factory/tickets/TESTOPS-12.md
+Diff:       git diff feature/f1..HEAD
+
+HARD RULES
+- Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
+- **Judge the prose as a reader, from the corpus, not from the diff.** Print at least six real statements
+  with their labels. Say which read well, which read like machine output, and which say something a careful
+  reader would challenge.
+- **The open question, answer it directly:** an I1 claim (about data as stored) judged `distinct` because an
+  HTTP response reports it — is "so the assertion is checked" honest, or does it upgrade "the API reports X"
+  into "the store contains X"? The sentence discloses the inference. Say whether disclosure is sufficient,
+  and if not, what the sentence should say instead. This is the most important judgement in this review.
+- Check AC1 on the corpus: every scenario's claims carry one label per verification pass, or the page says
+  why not. Count them yourself.
+- Check AC3 with the sentence "that number comes out right" and check the corpus still holds at ≤3 unplaced.
+- Confirm verdicts are 94/90/1/1/2 and no test was weakened to get the prose into shape.
+- Do not edit product code, tests or the ticket. You may write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-12-review.md
+
+WRITE that file with, in order:
+  ## Verdict — PASS / NEEDS-FIX / NEEDS-HUMAN, one sentence why.
+  ## Criteria — AC1..AC6, AC-b HOLDS / WEAK / NOT MET.
+  ## The prose — six statements verbatim, and your blunt judgement of each.
+  ## The open question — your ruling on I1-judged-by-response, and the wording you would use.
+  ## Three sharpest concerns.
+  ## Demo — The problem / What changed / How we know it works / What it does not solve / Where to look.
+
+Then reply with the verdict and a summary under 400 words.
+
+ANTI-REPETITION: never repeat a sentence verbatim. Stop when the points are made.
