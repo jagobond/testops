@@ -2,7 +2,7 @@
 id: TESTOPS-23
 title: The page narrates the analyser instead of telling the reader one story
 feature: F1
-status: blocked
+status: done
 autonomy: build
 depends_on: TESTOPS-19
 ---
