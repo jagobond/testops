@@ -36,6 +36,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-25 | The fixture is somebody else's MIT code, and we are not carrying its licence | F1 | done | 108 files verified against upstream blobs; PR #20 merged after a PASS review |
 | TESTOPS-26 | The summary is there, but the reader has to dig it out of a paragraph | F1 | done | Three-part scan block; plain-English lint proven to bite; reviewed with T23 |
 | TESTOPS-27 | The action line drops anything after a semicolon, and trusts that it was redundant | F1 | ready | Reviewer finding on T23/26: a truncated action is the one thing a reader cannot detect |
+| TESTOPS-29 | The analyser's action strings repeat the argument, and the reader now sees it | F1 | blocked | Sized by the T28 review's repetition count; the renderer is right, the analyser is wordy |
 
 Feature F1 = "a claim a developer can act on". F0 is scaffolding and carries no product outcome.
 
