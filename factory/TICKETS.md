@@ -32,6 +32,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-19 | The case page opens with the answer, and shows the code inline | F1 | ready | **Product Owner review** — summary block with finding + action, and code snippets rendered in the page |
 | TESTOPS-21 | The duplication analyser still writes v1 claims, so its cases say nothing | F1 | ready | **Product Owner review** — 18 findings that look identical and present no finding |
 | TESTOPS-22 | A quiet run is not a resolved case | F1 | ready | **Product Owner review** — "is this resolved because of a test?" A zero-finding run is not a decision |
+| TESTOPS-23 | The page narrates the analyser instead of telling the reader one story | F1 | blocked | **Product Owner review** "verbiage is still not right" — seven named faults, with the diagnosis written out |
 | TESTOPS-24 | Retention: keep every run explainable without keeping every byte four times | F1 | ready | Product Owner approved dedupe-by-hash; growth to be measured, not estimated |
 
 Feature F1 = "a claim a developer can act on". F0 is scaffolding and carries no product outcome.
