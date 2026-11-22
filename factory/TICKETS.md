@@ -51,8 +51,9 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-38 | A project is a group of services, and a user sets it up without touching code | F2 | ready | **Product Owner** — repos + Jira board + ADO pipelines grouped as the CotW project; configurable, and container-ready for Azure/Foundry |
 | TESTOPS-39 | A second specimen of a different shape, to find out whether the analyses generalise | F2 | ready | JS/Cypress+Cucumber tests against a Java multi-service platform — different ecosystem, different bindings, separate repos |
 | TESTOPS-40 | Say what a decision covers, and stop a shifted twin from silencing one | F1 | ready | From the TESTOPS-37 review: commit and data-table blindness undocumented; a shifted identical-twin index silences a decision with no notice |
-| TESTOPS-41 | Files the collector cannot read are silently dropped, and the page then says they were read | F1 | ready | **From TESTOPS-39** — 142 `.java` files never fetched, then a page claiming `code` was consulted. Absence reported as zero, one level down |
+| TESTOPS-41 | Files the collector cannot read are silently dropped, and the page then says they were read | F1 | done | 428 tests; three capability states; kind list is data; PR #33 |
 | TESTOPS-42 | The tool reads one ecosystem, and says nothing when it does not | F2 | blocked | **From TESTOPS-39** — 0 of 44 cucumber-js bindings read, 43/43 claims unplaced, and a page telling the team its steps are unbound. Needs the Product Owner's decision: declare support, or make the binding layer pluggable |
+| TESTOPS-43 | A sentence that hides its own partial reads | F1 | ready | From the TESTOPS-41 review: aggregate totals hide a per-capability zero, a harmless skip renders nowhere, partial reads say "consulted" |
 
 |----|-------|---------|--------|------|
 

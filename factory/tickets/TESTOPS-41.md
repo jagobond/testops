@@ -2,7 +2,7 @@
 id: TESTOPS-41
 title: Files the collector cannot read are silently dropped, and the page then says they were read
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-39
 ---
