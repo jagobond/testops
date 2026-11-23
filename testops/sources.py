@@ -752,7 +752,22 @@ def _stored_assessment(meta: dict | None, analyser: str, field: str) -> Assessme
     spec = analysers.get(analyser) if isinstance(analysers, dict) else None
     if not isinstance(record, dict) or not isinstance(spec, dict) or not spec.get(field):
         return None
-    return Registry.from_record(record).assess(spec[field])
+    assessment = Registry.from_record(record).assess(spec[field])
+    if field == "needs":
+        # TESTOPS-42A. A suite whose ecosystem this build cannot read is not assessable, whatever
+        # the sources said: the vocabulary that would read its steps does not exist here. The fact
+        # is reconstructed from the snapshot's own ecosystem record, so a page read months later
+        # reaches the answer the run reached - with no live repository and no today's-config guess.
+        # Imported here because `extract` is downstream of this module's capability vocabulary.
+        from .extract import ecosystems
+
+        spot = ecosystems.unsupported_spot(meta.get("ecosystems"))
+        if spot is not None:
+            assessment = replace(assessment, state=NOT_ASSESSABLE,
+                                 blind_spots=assessment.blind_spots + (BlindSpot(
+                                     spot["source"], spot["title"], spot["state"],
+                                     spot["reason"]),))
+    return assessment
 
 
 def notes(record: dict | None, names: Iterable[str]) -> list[dict]:
