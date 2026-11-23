@@ -1,0 +1,32 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-54 - navigation: a case must link to its run, and /config
+must be reachable from everywhere. Small ticket, but it is the first fix to come out of a blind author's reading of the
+product, so the bar is that the promise holds on every page, not on the three the tests pick.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t54 (branch `factory/testops-54-navigation`). Only here.
+Ticket: factory/tickets/TESTOPS-54.md ; Build: factory/reports/2026-11-24/TESTOPS-54-build.md
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Never write to the live store or contact port 8791. Copy `data/`, serve on an ephemeral/free port.
+- **Every page, not the sample:** crawl from `/` following links only, and assert for EVERY page you reach that the
+  footer nav exists and that every internal href returns 200. Report the number of pages crawled and any page that lacks
+  the nav - including error pages and refusal pages, which the build says share the wrapper. A nav that is missing on the
+  404 page or the config-refusal page is a finding.
+- **The case link:** verify on real cases from more than three projects and both analysers that the anchor text is
+  meaningful (not "back", not the run id alone with no context). Then check the promise fails honestly: does the case
+  page for a row that raised no finding also link its run (the build says it already did)?
+- **Round trip:** run -> case -> same run, programmatically, on at least two runs. Then try to find a case that breaks it
+  (an old case whose run no longer exists - the "stale case" page). What does that page say? If it links to a dead run,
+  that is a dead end and a finding.
+- **Goldens:** confirm visible-text diffs are only the new link labels and the nav line - nothing else moved. Report any
+  page where other text shifted.
+- **AC5:** run the contract suite against your copy with `TESTOPS_BASE` (53 has not landed on this branch, so the suite
+  still has its live default - do NOT run it bare). Expect 24 passed / 2 failed / 3 skipped, with both P05 tests passing
+  and P07/P10 still failing. Any other change is a regression.
+- **Wording:** the nav reads `← all cases · all runs · projects and services`. Judge it as a reader: does "projects and
+  services" tell someone who has never seen the tool that this is where configuration lives? If not, say so - this is a
+  small enough thing to fix here rather than in a follow-up.
+- Write exactly one file: factory/reports/2026-11-24/TESTOPS-54-review.md with: ## Verdict; ## The nav, on every page
+  (crawled N pages); ## The case-to-run link; ## Round trip and the stale case; ## Goldens; ## Contract suite;
+  ## The wording; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 250 words.
