@@ -42,7 +42,35 @@ CREATE_AT = "%Y-%m-%dT%H:%M:%S+00:00"
 
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
-_CREDENTIAL_WORDS = ("token", "password", "secret", "bearer")
+
+# TESTOPS-51. One screen, every field. Before this ticket the check was "does the value contain
+# token/password/secret/bearer anywhere", it was called only from :func:`validate_settings`, and the
+# service *name* - a free-text field with no format of its own - never called it at all, so
+# `name=password=hunter2` was stored and echoed. A per-field check is a check the next field skips;
+# the rules below are applied at the store boundary, to every settings value and every human-entered
+# name, so a field added tomorrow is covered by existing.
+#
+# A credential is a *shape*, not a word. Three shapes are recognised, in this order:
+#
+#   1. a `name=value` pair whose name is a credential word - `password=hunter2`,
+#      `Authorization: Bearer ...`, `api_key = "..."`. The name stands alone, so `tokens` is not
+#      `token` and `cotw-continuity` contains no credential name at all;
+#   2. an issued-token shape: a known prefix, a PEM block, a JWT, an `Authorization` scheme;
+#   3. a value that is one unbroken token containing a credential word (`my-password`,
+#      `an-api-token`). Prose is not one token, which is why "test password reset flow" is
+#      configuration and is stored.
+_CREDENTIAL_NAME = (r"(?:password|passwd|pwd|token|api[ _-]?key|apikey|secret|bearer|"
+                    r"authorization|private[ _-]?key|access[ _-]?key|client[ _-]?secret)")
+# The pair's name is followed by `=` or `:` and then something - the shape a secret is pasted in.
+_CREDENTIAL_PAIR = re.compile(rf"(?i)(?<![A-Za-z0-9])({_CREDENTIAL_NAME})[ \t]*[:=][ \t]*[^\s,;]")
+# A name on its own, used for the settings *key* and for the single-token rule.
+_CREDENTIAL_NAME_ALONE = re.compile(rf"(?i)(?:^|[^A-Za-z0-9]){_CREDENTIAL_NAME}(?:$|[^A-Za-z0-9])")
+# `Bearer abc123`, `Basic dXNlcjpwYXNz`: an authorization scheme and a value behind it.
+_AUTH_SCHEME = re.compile(r"(?i)^\s*(?:bearer|basic|digest|token)\s+[^\s,;]+")
+# A PEM private-key block, wherever it was pasted in a longer value.
+_PEM_BLOCK = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
+# A JWT: the base64 header, a payload and a signature, three dot-separated segments.
+_JWT = re.compile(r"^eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$")
 
 # TESTOPS-44. Base64 is the most common way a credential is written down, and its alphabet contains
 # `/` - the very character the separator exemption below used to read as proof of configuration. So
@@ -129,12 +157,38 @@ def _entropy(text: str) -> float:
 
 
 def _looks_like_secret(value: str) -> str | None:
-    """Why ``value`` reads as a credential, or ``None`` when it reads as configuration."""
-    lower = value.lower()
-    for word in _CREDENTIAL_WORDS:
-        if word in lower:
-            return f"it contains {word!r}"
-    plain = value.strip()
+    """Why ``value`` reads as a credential, or ``None`` when it reads as configuration.
+
+    The reason never contains the value: refusing a secret must not become the way it is printed.
+    Names and prefixes may be named, because they are what the reader has to change.
+    """
+    plain = (value or "").strip()
+    if not plain:
+        return None
+    # 1. A pasted `name=value` (or `name: value`) pair: the shape a credential arrives in.
+    pair = _CREDENTIAL_PAIR.search(plain)
+    if pair:
+        return (f"it reads as a credential: the name {pair.group(1)!r} is followed by '=' or ':' "
+                f"and a value")
+    # 2. Issued-token shapes. A PEM block, a JWT and an authorization scheme are refused wherever
+    #    they sit in the value, because a real one pasted into a longer string is still a secret.
+    if _PEM_BLOCK.search(plain):
+        return "it contains a PEM private-key block ('-----BEGIN ... PRIVATE KEY-----')"
+    if _JWT.fullmatch(plain):
+        return ("it is a JSON Web Token: three dot-separated segments beginning 'eyJ', the header "
+                "of every JWT")
+    if _AUTH_SCHEME.match(plain):
+        return ("it begins with an authorization scheme ('Bearer', 'Basic', 'Digest' or 'Token') "
+                "and a value")
+    # 3. One short unbroken identifier naming a credential: `my-password`, `an-api-token`. Two
+    #    boundaries keep real names out: prose (whitespace) is not a token, a repository coordinate
+    #    or path (a '/') is a coordinate, and a longer snake_cased label
+    #    (`test_password_reset_flow`) is a name, not a secret. The pair, prefix, PEM and JWT rules
+    #    above still catch a real credential written in any of those forms.
+    if not any(ch.isspace() for ch in plain) and "/" not in plain:
+        parts = [part for part in re.split(r"[^A-Za-z0-9]+", plain) if part]
+        if len(parts) <= 3 and _CREDENTIAL_NAME_ALONE.search(plain):
+            return "it is a short identifier containing a credential word"
     # A known credential prefix is refused at any length, before the floors: the shortest realistic
     # AWS key ID is 20 characters and would otherwise sit below `_BLOB_MIN`.
     for prefix in _TOKEN_PREFIXES:
@@ -178,7 +232,7 @@ def validate_settings(settings: dict) -> dict:
     for key, value in settings.items():
         if not isinstance(key, str) or not key.strip():
             raise ConfigError("every settings field needs a name")
-        if any(word in key.lower() for word in _CREDENTIAL_WORDS):
+        if _CREDENTIAL_NAME_ALONE.search(key.strip()):
             # AC3: the field name and the reason are logged; the value never is. A refusal that
             # printed the secret would be a second way to leak it.
             _LOG.warning("settings field %r refused: the field name reads as a credential", key)
@@ -198,6 +252,24 @@ def validate_settings(settings: dict) -> dict:
                 f"credential written here would leak through the store, the page and every backup. "
                 f"Resolve it from the environment when the connector runs.")
     return dict(settings)
+
+
+def refuse_credential_in(value: str, what: str) -> None:
+    """The one screen for a human-entered name, applied at the store boundary (TESTOPS-51 AC1).
+
+    A name is a label a reader sees, and it is stored and printed exactly like a settings value -
+    so it is screened by the same rules, through the same call. Every create/edit path calls this
+    rather than repeating the detection, which is what keeps a field added tomorrow covered.
+    """
+    reason = _looks_like_secret(value)
+    if reason is None:
+        return
+    _LOG.warning("%s refused: %s", what, reason)
+    raise ConfigError(
+        f"the {what} was refused: {reason}. A {what} is a label a reader sees, and it is written "
+        f"to the store and printed on the page - a credential written there would leak through "
+        f"both. Secrets resolve from the environment when the connector runs, so a credential "
+        f"must not be entered here.")
 
 
 # ---------------------------------------------------------------- projects
@@ -249,6 +321,10 @@ def add_project(conn, slug: str, name: str) -> dict:
     """Add a project. A slug is an identity: it may not be blank, re-used or decorative."""
     slug = (slug or "").strip()
     name = (name or "").strip() or slug
+    # TESTOPS-51: the screen runs before the format checks, so a credential-shaped value is refused
+    # with a reason that does not repeat it, whichever field it was typed into.
+    refuse_credential_in(slug, "project slug")
+    refuse_credential_in(name, "project name")
     if not _SLUG.fullmatch(slug):
         raise ConfigError(f"project slug {slug!r} must be lower-case letters, digits and hyphens, "
                           f"starting with a letter or digit (for example: cotw)")
@@ -260,8 +336,38 @@ def add_project(conn, slug: str, name: str) -> dict:
     return {"slug": slug, "name": name}
 
 
+def evidence_counts(conn, slug: str) -> dict:
+    """How much evidence a project holds: runs, snapshots and cases, counted, not assumed.
+
+    The three are counted separately because a reader asked to delete a project needs to know what
+    would be lost, and "it has evidence" is not a count.
+    """
+    return {
+        "runs": int(conn.execute("SELECT COUNT(*) FROM run WHERE project = ?", (slug,)).fetchone()[0]),
+        "snapshots": int(conn.execute("SELECT COUNT(*) FROM snapshot WHERE project = ?",
+                                      (slug,)).fetchone()[0]),
+        "cases": int(conn.execute("SELECT COUNT(*) FROM case_ WHERE project = ?",
+                                  (slug,)).fetchone()[0]),
+    }
+
+
 def remove_project(conn, slug: str) -> None:
-    """Remove a project with its services. Runs and cases keep their rows: evidence is not config."""
+    """Remove a project with its services, if it holds no evidence (TESTOPS-51 AC6).
+
+    Evidence is immutable: a configuration action removes configuration. A project that still holds
+    runs, snapshots or cases is refused, with the counts named, so nobody deletes the store's memory
+    from a page that says "configuration". A project with no evidence - the empty
+    ``contract-audit-*`` rows the contract suite leaves - is removed with its services.
+    """
+    require_project(conn, slug)
+    counts = evidence_counts(conn, slug)
+    if any(counts.values()):
+        held = ", ".join(f"{n} {name}" for name, n in counts.items())
+        _LOG.warning("project %r not deleted: it holds %s", slug, held)
+        raise ConfigError(
+            f"project {slug!r} was not deleted: it holds {held}. Runs, snapshots and cases are "
+            f"evidence and are never deleted by a configuration action; only a project with no "
+            f"evidence can be removed from this page.")
     conn.execute("DELETE FROM project WHERE slug = ?", (slug,))
     conn.commit()
 
@@ -302,6 +408,9 @@ def _check_service(conn, project: str, kind: str, role: str, name: str, settings
         raise ConfigError(f"a {kind} service has no role; leave it empty")
     if not (name or "").strip():
         raise ConfigError("a service needs a name a reader can see")
+    # TESTOPS-51: the name is a user-supplied value like any other. It was the field the blind
+    # author used, and the only reason it was accepted is that this screen was never applied here.
+    refuse_credential_in(name, "service name")
     validate_settings(settings)
     if kind == "git_repo":
         repo = str(settings.get("repo") or "")

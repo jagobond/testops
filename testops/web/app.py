@@ -2223,6 +2223,16 @@ def config_page(conn) -> bytes:
                         f'<button type="submit">Remove this service</button></form></details>')
         body.append('<h3>Add a service</h3>')
         body.extend(_service_form("/config/services", slug))
+        # TESTOPS-51 AC6: a project can be removed from the page that made it, but only while it
+        # holds no evidence. The control says what it removes; the store refuses otherwise, naming
+        # the counts, so the rule does not depend on this page rendering it.
+        counts = services.evidence_counts(conn, slug)
+        held = ", ".join(f"{n} {name}" for name, n in counts.items() if n)
+        held_note = f"; this project holds {esc(held)}" if held else ""
+        body.append(f'<form method="post" action="/config/project/{esc(slug)}/delete">'
+                    f'<button type="submit">Delete this project and its services</button> '
+                    f'<span class="quiet">Runs, snapshots and cases are never deleted here'
+                    f'{held_note}.</span></form>')
     return page("TestOps \u00b7 configuration", "".join(body))
 
 
@@ -2289,7 +2299,8 @@ class Handler(BaseHTTPRequestHandler):
         payload = urllib.parse.parse_qs(self.rfile.read(length).decode("utf-8"))
         if path == "/config/projects" or path == "/config/services" \
                 or re.fullmatch(r"/config/service/\d+", path) \
-                or re.fullmatch(r"/config/service/\d+/delete", path):
+                or re.fullmatch(r"/config/service/\d+/delete", path) \
+                or re.fullmatch(r"/config/project/[^/]+/delete", path):
             self._config_post(path, payload)
             return
         m = re.fullmatch(r"/case/([^/]+)/state", path)
@@ -2316,6 +2327,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/config/projects":
                 services.add_project(conn, _form(payload, "slug"), _form(payload, "name"))
+            elif re.fullmatch(r"/config/project/[^/]+/delete", path):
+                # TESTOPS-51 AC6. The slug is the identity in the path, so it is unquoted, not
+                # re-derived from a form field a caller could swap.
+                services.remove_project(
+                    conn, urllib.parse.unquote(path.split("/")[3]))
             elif path == "/config/services":
                 _service_from_payload(conn, payload)
             else:

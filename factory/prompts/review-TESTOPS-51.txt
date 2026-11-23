@@ -1,0 +1,36 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-51 - the credential screen applied to every field, plus a
+project delete route. This one is security-adjacent: it must stop a password being stored AND must not start refusing
+ordinary words, because a screen that cries wolf gets switched off.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t51 (branch `factory/testops-51-credential-screen`). Work only here.
+Ticket: factory/tickets/TESTOPS-51.md ; Build: factory/reports/2026-11-23/TESTOPS-51-build.md
+Evidence: factory/reports/2026-11-23/TESTOPS-7-author-report.md (the blind author's P23 finding)
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- **Never touch the live store** (`C:/Users/Chester/Projects/testops/data/testops.db`) or the live server on 8791. Copy
+  `data/`, set `TESTOPS_DATA` to the copy, serve on a free port, set `TESTOPS_BASE` for the contract suite.
+- **The screen is a shape, not a word list:** read `_looks_like_secret` and decide whether it is a shape you can reason
+  about, or a pile of special cases that will miss the next format. Say which.
+- **False positives are the main risk.** Verify by hand over HTTP on your copy - not from the build's table - that all of
+  these are accepted: `jagobond/cotw-continuity`, `Jira board COTW`, `RuckoldtAndRylander`, `cotw-continuity pipeline #2`,
+  `mwinteringham/restful-booker-platform`, `100.121.128.21`, `localhost:8791`, `https://github.com/org/repo.git`, `COTW`,
+  `TOPS`, `test password reset flow`. Then push on the boundary yourself with at least ten values of your own invention
+  that a real user might type - product names, a repo called `password-manager/tool`, a board called `secrets-service`, a
+  host named `vault.internal`, a description like `Bearer token rotation work`, a path like `docs/token-refresh.md`. For
+  each, say whether refusing it would be wrong, borderline or right. If any refusal would be wrong, that is a finding.
+- **Echo:** after a refusal, confirm the value appears **nowhere** - not in the error page, not in the listing, not in the
+  form, not in the server log. Grep the log file too.
+- **Bypass:** try to sneak a credential past the screen without editing code: a settings key nobody has used before, a
+  project name rather than a service name, a value in the repo field with leading whitespace or a trailing newline, a
+  URL-encoded value, mixed case in the credential word, a value split across two fields. Report which get through.
+- **AC6 delete route:** on your copy, delete an empty project (works, services cascade, nothing else changes) and attempt
+  to delete `cotw` (must refuse, naming the run/snapshot/case counts). Confirm it cannot be forced by POST, a malformed
+  slug or a second submit, and that no evidence row is ever removed by this route.
+- **AC7/AC8:** run the contract suite on your copy (`TESTOPS_BASE=http://127.0.0.1:<port>`) - expect 20 passed / 6 failed /
+  3 skipped on main's suite, with **P23 now passing** and the other five unchanged. Confirm no case-page golden moved.
+- **Live store untouched:** report `sha256sum` of the live db before and after your work.
+- Write exactly one file: factory/reports/2026-11-23/TESTOPS-51-review.md with: ## Verdict; ## The screen as a shape;
+  ## False positives (the table you produced); ## Echo and bypass; ## The delete route; ## Contract suite; ## Live store
+  untouched; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 300 words.
