@@ -2,7 +2,7 @@
 id: TESTOPS-58
 title: The disposable-store check is anchored to a root that can be moved
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-53
 ---

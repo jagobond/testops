@@ -73,7 +73,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-55 | The front page states no totals; the run page gives no per-kind read counts | F1 | ready | From T7 P7/P10: a reader cannot state what exists or what was read, and never sees an explicit zero |
 | TESTOPS-56 | The screen refuses `token-bucket-limiter` and any value starting `AKIA`/`xoxb-` | F1 | ready | From the T51 review: qualify prefix rules by body shape, scope the short-identifier rule deliberately, pin a 25-value false-positive table |
 | TESTOPS-57 | The 351 claims the tool could not place have no page of their own | F1 | ready | From the T52 review: `unplaced` never becomes a case, so the soft tone is rendered nowhere. A per-run section with anchors and the soft treatment |
-| TESTOPS-58 | `TMPDIR` can move the root the disposable-store check trusts | F2 | ready | From the T53 review: the refusal is structural but relative. Refuse an env temp root under the repo/home, pin the root, and state what is actually guaranteed |
+| TESTOPS-58 | `TMPDIR` can move the root the disposable-store check trusts | F2 | done | From the T53 review: the refusal is structural but relative. Refuse an env temp root under the repo/home, pin the root, and state what is actually guaranteed |
 
 |----|-------|---------|--------|------|
 
