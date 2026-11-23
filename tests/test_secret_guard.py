@@ -103,23 +103,20 @@ def test_the_reviewers_aws_key_is_no_longer_stored(tmp_path):
 # --------------------------------------------------------------------------- AC1, fix round
 
 # The reviewer's second finding: an `AKIA` key ID is 20 characters, and the guard only judged values
-# of 32+. Each prefix is exercised at the shortest length a real credential of that kind is written,
-# and each probe here is deliberately under 32 characters, so a pass proves the prefix rule is doing
-# the work rather than the entropy floors behind it. `sk-` and `github_pat_` are not here: their
-# shortest real body is 22-32 characters, which puts the whole value over the floors, so they are
-# pinned by `REAL_SHAPED_REFUSALS` instead.
+# of 32+. TESTOPS-59 AC4 corrects the first fix: each prefix is exercised at the body its format
+# really issues, so the rule refuses tokens by shape rather than by "these first characters". The
+# floor (`ghp_notes` is a name) and the search (`the key is ghp_...` is a token) are both pinned here.
 PREFIXED_TOKENS = {
-    "AKIA2E0A8F3B244C9986": "AKIA",                          # AWS key ID, 20 chars
-    "ASIAY34FZKBOKMUTVV7A": "ASIA",                          # AWS temporary key ID, 20 chars
-    "ghp_0123456789": "ghp_",                                # GitHub personal token
-    "gho_0123456789": "gho_",                                # GitHub OAuth token
-    "ghu_0123456789": "ghu_",                                # GitHub user-to-server token
-    "ghs_0123456789": "ghs_",                                # GitHub server-to-server token
-    "xoxb-0123456789-0123456789": "xoxb-",                   # Slack bot token
-    "xoxp-0123456789-0123456789": "xoxp-",                   # Slack user token
-    "glpat-0123456789abcd": "glpat-",                        # GitLab PAT
-    "eyJhbGciOiJIUzI1NiJ9": "eyJ",                           # JWT header
-    "-----BEGIN RSA PRIVATE KEY-----": "-----BEGIN ",        # PEM private key
+    "AKIA" + "ABCDEFGHIJKLMNOP": "AKIA",                      # AWS key ID, 20 characters
+    "ASIA" + "Y34FZKBOKMUTVV7A": "ASIA",                      # AWS temporary key ID, 20 characters
+    "ghp_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb": "ghp_",                                       # GitHub classic, 36 characters
+    "gho_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb": "gho_",
+    "ghu_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb": "ghu_",
+    "ghs_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb": "ghs_",
+    "xoxb-" + "012345678901-0123456789012-" + "aB3dE5fG7hJ9kL2mN4pQ6rS8": "xoxb-",
+    "xoxp-" + "012345678901-0123456789012-" + "aB3dE5fG7hJ9kL2mN4pQ6rS8": "xoxp-",
+    "glpat-" + "aB3dE5fG7hJ9kL2mN4pQ": "glpat-",              # GitLab PAT, 20 characters
+    "-----BEGIN RSA PRIVATE KEY-----": "-----BEGIN ",         # PEM private key
 }
 
 # Values that merely *contain* a credential's letters mid-word: real configuration, must be stored.
@@ -133,20 +130,30 @@ NOT_A_TOKEN = {
 
 
 @pytest.mark.parametrize("token,prefix", sorted(PREFIXED_TOKENS.items()),
-                         ids=[f"{token[:12]}-shortest" for token, _ in
+                         ids=[f"{token[:12]}-real-body" for token, _ in
                               sorted(PREFIXED_TOKENS.items())])
-def test_a_known_token_prefix_is_refused_at_any_length(token, prefix):
-    """The fix: a credential *shape* is refused even when it is too short for the entropy floors."""
-    assert len(token) < services._BLOB_MIN, \
-        "this probe must sit under the floors, or it proves nothing about the prefix rule"
-    assert token.startswith(prefix), "the probe must start with the prefix it claims"
+def test_a_real_shaped_token_is_refused_wherever_it_is_pasted(token, prefix):
+    """TESTOPS-59 AC1/AC4: the format's real body is refused, at position 0 or inside a sentence.
 
-    with pytest.raises(services.ConfigError) as refused:
-        services.validate_settings({"board": token})
+    TESTOPS-44 pinned this differently - "refused at any length", including `ghp_aaaaaaaaa` - and
+    TESTOPS-59 AC4 is the correction: a charset-only rule refused names for their first characters.
+    The floor is the format's real body, and the search is what closes the prose leak.
+    """
+    assert token.startswith(prefix)
 
-    message = str(refused.value)
-    assert prefix in message, "the refusal should name the prefix it matched"
-    assert token not in message, "refusing a secret must not print the secret"
+    for value in (token, "the key is " + token):
+        with pytest.raises(services.ConfigError) as refused:
+            services.validate_settings({"board": value})
+        message = str(refused.value)
+        assert prefix in message, "the refusal should name the prefix it matched"
+        assert token not in message, "refusing a secret must not print the secret"
+
+
+def test_a_jwt_is_refused_wherever_it_is_pasted():
+    body = "eyJ" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb"
+    token = body + "." + body + "." + body
+    assert services._looks_like_secret(token) is not None
+    assert services._looks_like_secret("the jwt is " + token) is not None
 
 
 @pytest.mark.parametrize("field,value", sorted(NOT_A_TOKEN.items()))
@@ -156,9 +163,11 @@ def test_a_value_merely_containing_the_letters_is_accepted(field, value):
     assert services.validate_settings({field: value}) == {field: value}
 
 
-def test_a_low_entropy_github_token_is_refused():
-    """The review's second probe: a degenerate `ghp_` token (entropy 0.62) was stored."""
-    assert services._looks_like_secret("ghp_aaaaaaaaa") is not None
+def test_a_github_body_below_the_floor_is_a_name_not_a_token():
+    """TESTOPS-59 AC4: `ghp_aaaaaaaaa` is five characters of body - a name, and now accepted."""
+    assert services._looks_like_secret("ghp_aaaaaaaaa") is None
+    assert services._looks_like_secret("ghp_" + "a" * 36) is not None, \
+        "a body at the real length is refused whatever its entropy"
 
 
 def test_the_short_aws_key_id_is_not_stored(tmp_path, monkeypatch, caplog):
@@ -247,14 +256,13 @@ ROUND_ONE_ACCEPTED = {
 # The qualified rule keeps the credentials caught: the two bodies are written at the real format's
 # shape (32+ characters with no path separator, and 22 base62 after `github_pat_`).
 REAL_SHAPED_REFUSALS = {
-    "sk-" + "a1B2" * 12: "sk-",                     # 48 base62 characters after the prefix
-    "github_pat_" + "a1B2c3D4e5F6g7H8i9J0k1": "github_pat_",      # 22 base62 characters
+    "sk-" + "a1B2" * 12: "sk-",                              # 48 characters after the prefix
+    "github_pat_" + "aB3dE5fG7hJ9kL2mN4pQAb" + "_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb" + "aB3dE5fG7hJ9kL2mN4pQ" + "abc": "github_pat_",
     "AKIA" + "ABCDEFGHIJKLMNOP": "AKIA",
     "ASIA" + "Y34FZKBOKMUTVV7A": "ASIA",
-    "ghp_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2z": "ghp_",
-    "xoxb-" + "0123456789ab": "xoxb-",
+    "ghp_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb": "ghp_",
+    "xoxb-" + "012345678901-0123456789012-" + "aB3dE5fG7hJ9kL2mN4pQ6rS8": "xoxb-",
     "glpat-" + "a1B2c3D4e5F6g7H8i9J0": "glpat-",
-    "eyJ" + "a1B2c3D4e5F6g7H8i9J0": "eyJ",
     "-----BEGIN RSA PRIVATE KEY-----": "-----BEGIN ",
 }
 

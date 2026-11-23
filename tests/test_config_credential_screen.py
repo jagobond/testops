@@ -99,15 +99,19 @@ CREDENTIAL_PAIRS = {
 
 # Issued-token shapes, each at something like the real format's body so the probe is a shape and
 # not an accident of length. None of these is a live credential.
+CLASSIC_BODY = "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb"          # 36: today's GitHub classic body
+FINE_BODY = "aB3dE5fG7hJ9kL2mN4pQAb"                            # 22: fine-grained, first segment
+FINE_TAIL = "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb" + "aB3dE5fG7hJ9kL2mN4pQ" + "abc"  # 59
+SLACK_TAIL = "aB3dE5fG7hJ9kL2mN4pQ6rS8"                        # 24: Slack secret segment
 ISSUED_TOKENS = {
-    "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8": "ghp_",
-    "gho_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8": "gho_",
-    "ghs_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8": "ghs_",
-    "github_pat_" + "a1B2c3D4e5F6g7H8i9J0k1": "github_pat_",
+    "ghp_" + CLASSIC_BODY: "ghp_",
+    "gho_" + CLASSIC_BODY: "gho_",
+    "ghs_" + CLASSIC_BODY: "ghs_",
+    "github_pat_" + FINE_BODY + "_" + FINE_TAIL: "github_pat_",
     "sk-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0": "sk-",
     "AKIA" + "ABCDEFGHIJKLMNOP": "AKIA",
-    "xoxb-" + "0123456789ab": "xoxb-",
-    "xoxp-" + "0123456789ab": "xoxp-",
+    "xoxb-" + "012345678901" + "-" + "0123456789012" + "-" + SLACK_TAIL: "xoxb-",
+    "xoxp-" + "012345678901" + "-" + "0123456789012" + "-" + SLACK_TAIL: "xoxp-",
 }
 
 PEM_BLOCK = ("-----BEGIN RSA PRIVATE KEY-----\n"
@@ -188,7 +192,7 @@ def test_a_service_named_in_ordinary_words_is_accepted(tmp_path):
 
 # --------------------------------------------------------------------------- AC1 one shared check
 
-@pytest.mark.parametrize("value", [PROBE, "ghp_" + "a1B2" * 12, PEM_BLOCK, JWT])
+@pytest.mark.parametrize("value", [PROBE, "ghp_" + CLASSIC_BODY, PEM_BLOCK, JWT])
 def test_a_settings_field_that_does_not_exist_yet_is_screened(value):
     """AC1: the check is on the way into the store, so a field added tomorrow cannot opt out."""
     with pytest.raises(services.ConfigError):
@@ -392,7 +396,7 @@ BOUNDARY = [
     ("test password reset flow", "accepted", "prose: whitespace, so not one identifier"),
     # --- the reviewer's fourteen
     ("password-manager/tool", "accepted", "a path; the '/' makes it a coordinate, not a name"),
-    ("secrets-service", "accepted", "'secrets' is not the credential word 'secret'"),
+    ("secrets-service", "accepted", "the credential word is not the head: a service name"),
     ("vault.internal", "accepted", "a hostname"),
     ("vault-prod", "accepted", "a hostname with a short compound part"),
     ("https://vault.internal:8200/v1/secret", "accepted", "a URL; a trailing 'secret' has no value"),
@@ -402,30 +406,61 @@ BOUNDARY = [
      "three parts whose last is not the credential word: a compound technical name"),
     ("my-password-manager", "accepted", "three parts, credential word in the middle: a tool name"),
     ("client_secret_manager", "accepted", "three parts, credential word in the middle: a module name"),
-    ("Bearer token rotation work", "refused",
-     "it begins with an authorization scheme; refused by shape, and called out in the report"),
+    ("Bearer token rotation work continues", "accepted",
+     "prose: the scheme is only a header when a single unbroken value is the whole remainder"),
     ("AKIA-reviews-team", "accepted", "the prefix needs a 16-character upper-case key body"),
-    ("xoxb-not-a-token", "accepted", "the prefix needs a digit-and-hyphen token body"),
+    ("«redacted:xox…»", "accepted", "the prefix needs digit segments and a 24-character tail"),
     ("ghp_only_a_document_path", "accepted",
      "a real ghp_ body is one unbroken base62 run; this carries underscores"),
-    # --- the boundary itself, in both directions
-    ("my-password", "refused", "two parts, the last a credential word: a credential named plainly"),
-    ("an-api-token", "refused", "the last part is the credential word itself"),
-    ("client-secret", "refused", "two parts, the last a credential word, the other no suffix"),
+    # --- TESTOPS-59 AC3: the boundary states itself by structure
+    ("my-password", "refused", "a determiner and a credential head: a particular credential"),
+    ("an-api-token", "refused", "a determiner and a credential head: a particular credential"),
+    ("the-secret", "refused", "a determiner and a credential head: a particular credential"),
     ("password", "refused", "a bare credential word names the thing itself"),
-    ("password-manager", "accepted", "'manager' is a technical suffix: the name of a tool"),
-    ("token-bucket", "accepted", "'bucket' is a technical suffix: the rate-limiting algorithm"),
+    ("passwords", "refused", "the plural names the things themselves"),
+    ("session-token", "accepted", "a compound naming a kind of token: the credential word is a head"),
+    ("vault-token", "accepted",
+     "the same grammatical shape as session-token; HashiCorp's own name for a Vault credential"),
+    ("client-secret", "accepted",
+     "a compound naming a kind of secret, like session-token; a determiner is what marks an instance"),
+    ("shhh-secret", "accepted", "a compound noun whose head is a credential word: a label"),
+    ("password-list", "accepted",
+     "a collection name; plural and singular credential words are matched alike"),
+    ("passwords-list", "accepted", "the same value as password-list, spelled with the plural"),
+    ("password-manager", "accepted", "the credential word is not the head: the name of a tool"),
+    ("token-bucket", "accepted", "the credential word is not the head: a rate-limiting algorithm"),
+    ("ghp_notes", "accepted",
+     "below the GitHub classic floor (36); the prefix alone is not a shape"),
+    ("github_pat_docs", "accepted", "below the fine-grained floor (82): a documentation name"),
+    ("glpat-migration-plan", "accepted", "a lowercase word chain, not a token body"),
+    # --- AC2: prose with ordinary words must still be accepted
+    ("the password reset flow is documented", "accepted", "prose"),
+    ("the api key rotation schedule is quarterly", "accepted", "prose"),
+    ("secret scanning runs on every pull request", "accepted", "prose"),
+    ("session tokens expire after thirty minutes", "accepted", "prose"),
+    ("our refresh token job runs nightly", "accepted", "prose"),
+    ("read the private key exchange note first", "accepted", "prose"),
+    ("passwords are rotated quarterly by the platform team", "accepted", "prose"),
+    ("client secrets live in the environment, not here", "accepted", "prose"),
+    ("vault-token-helper wrapper script", "accepted", "a command name in prose"),
+    ("auth token cache warming at startup", "accepted", "prose"),
+    ("leveraging the token budget is a management concern", "accepted", "prose"),
+    # --- the refusals the screen still owes
     ("password=hunter2", "refused", "a pasted name=value pair"),
-    ("ghp_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb", "refused",
-     "a real GitHub classic token: ghp_ and 36 base62 characters"),
+    ("ghp_" + CLASSIC_BODY, "refused",
+     "a real GitHub classic token: ghp_ and a 36-character base62 body"),
     ("AKIA" + "Q7FZ2K9M4T8X1B6N", "refused", "a real AWS key ID: AKIA and 16 upper-case characters"),
-    ("xoxb-" + "123456789012-1234567890123-Ab3dE5fG7hJ9", "refused",
-     "a real Slack token: xoxb-, digit segments and a base62 tail"),
+    ("xoxb-" + "012345678901-0123456789012-" + SLACK_TAIL, "refused",
+     "a real Slack token: xoxb-, two digit segments and a 24-character tail"),
     ("glpat-" + "aB3dE5fG7hJ9kL2mN4pQ", "refused", "a real GitLab PAT: glpat- and a 20-character run"),
     ("sk-" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAbAb3dE5fG", "refused",
-     "a real sk- key: sk- and an unbroken 32+ character run"),
-    ("github_pat_" + "aB3dE5fG7hJ9kL2mN4pQAb", "refused",
-     "a real fine-grained GitHub token"),
+     "a real sk- key: sk- and an unbroken 40-character run"),
+    ("github_pat_" + FINE_BODY + "_" + FINE_TAIL, "refused",
+     "a real fine-grained GitHub token: 22 characters, an underscore, 59 more"),
+    # --- and the leak this ticket closes: a real token inside a sentence
+    ("the key is " + "ghp_" + CLASSIC_BODY, "refused",
+     "a real token pasted in prose is still a token (TESTOPS-59 AC1)"),
+    ("aws id AKIA" + "Q7FZ2K9M4T8X1B6N", "refused", "a real AWS key ID inside a sentence"),
 ]
 
 
@@ -444,8 +479,9 @@ def test_the_false_positive_boundary_is_pinned(value, verdict, why):
             services.validate_settings({"name": value})
 
 
-def test_the_boundary_table_covers_both_verdicts_and_at_least_twenty_five_values():
-    assert len(BOUNDARY) >= 25
+def test_the_boundary_table_covers_both_verdicts_and_more_than_forty_values():
+    """TESTOPS-59 AC5: the table grows past 40 values and still argues both verdicts."""
+    assert len(BOUNDARY) > 40, f"the boundary table holds only {len(BOUNDARY)} values"
     assert {verdict for _v, verdict, _r in BOUNDARY} == {"accepted", "refused"}
 
 
@@ -457,17 +493,17 @@ def test_the_boundary_table_covers_both_verdicts_and_at_least_twenty_five_values
 REAL_TOKENS = [
     ("AKIA" + "Q7FZ2K9M4T8X1B6N", re.compile(r"AKIA[A-Z0-9]{16}"), "AKIA"),
     ("ASIA" + "Y34FZKBOKMUTVV7A", re.compile(r"ASIA[A-Z0-9]{16}"), "ASIA"),
-    ("ghp_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb", re.compile(r"ghp_[A-Za-z0-9]{36}"), "ghp_"),
-    ("gho_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb", re.compile(r"gho_[A-Za-z0-9]{36}"), "gho_"),
-    ("ghs_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb", re.compile(r"ghs_[A-Za-z0-9]{36}"), "ghs_"),
-    ("xoxb-" + "123456789012-1234567890123-Ab3dE5fG7hJ9",
-     re.compile(r"xoxb-[0-9]{12}-[0-9]{13}-[A-Za-z0-9]{12}"), "xoxb-"),
-    ("xoxp-" + "123456789012-1234567890123-Ab3dE5fG7hJ9",
-     re.compile(r"xoxp-[0-9]{12}-[0-9]{13}-[A-Za-z0-9]{12}"), "xoxp-"),
+    ("ghp_" + CLASSIC_BODY, re.compile(r"ghp_[A-Za-z0-9]{36}"), "ghp_"),
+    ("gho_" + CLASSIC_BODY, re.compile(r"gho_[A-Za-z0-9]{36}"), "gho_"),
+    ("ghs_" + CLASSIC_BODY, re.compile(r"ghs_[A-Za-z0-9]{36}"), "ghs_"),
+    ("ghp_" + CLASSIC_BODY + "Ab3d", re.compile(r"ghp_[A-Za-z0-9]{40}"), "ghp_"),
+    ("github_pat_" + FINE_BODY + "_" + FINE_TAIL,
+     re.compile(r"github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}"), "github_pat_"),
+    ("xoxb-" + "012345678901" + "-" + "0123456789012" + "-" + SLACK_TAIL,
+     re.compile(r"xoxb-[0-9]{12}-[0-9]{13}-[A-Za-z0-9]{24}"), "xoxb-"),
+    ("xoxp-" + "012345678901" + "-" + "0123456789012" + "-" + SLACK_TAIL,
+     re.compile(r"xoxp-[0-9]{12}-[0-9]{13}-[A-Za-z0-9]{24}"), "xoxp-"),
     ("glpat-" + "aB3dE5fG7hJ9kL2mN4pQ", re.compile(r"glpat-[A-Za-z0-9_-]{20}"), "glpat-"),
-    ("github_pat_" + "aB3dE5fG7hJ9kL2mN4pQAb",
-     re.compile(r"github_pat_[A-Za-z0-9]{22}"),
-     "github_pat_"),
     ("sk-" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAbAb3dE5fG",
      re.compile(r"sk-[A-Za-z0-9]{40,}"), "sk-"),
 ]
@@ -502,6 +538,91 @@ def test_a_prefix_followed_by_ordinary_words_is_not_a_refusal(value, prefix):
         f"{value!r} was refused for its first characters alone"
 
 
+# TESTOPS-59 AC1: detection is a **search**, not a prefix match. Each probe is a real format body
+# wrapped in the sentence a paste really arrives in, with the punctuation a paste carries.
+def test_a_real_token_pasted_inside_a_sentence_is_refused():
+    probes = [
+        ("the key is " + "ghp_" + CLASSIC_BODY, "ghp_"),
+        ("our bot token is " + "gho_" + CLASSIC_BODY + ", rotate it", "gho_"),
+        ("aws id AKIA" + "Q7FZ2K9M4T8X1B6N", "AKIA"),
+        ("the slack app uses xoxp-012345678901-0123456789012-" + SLACK_TAIL + " here", "xoxp-"),
+        ("the pat glpat-aB3dE5fG7hJ9kL2mN4pQ is in the vault", "glpat-"),
+        ("openai key sk-" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAbAb3dE5fG" + " was rotated",
+         "sk-"),
+        ("fine-grained " + "github_pat_" + FINE_BODY + "_" + FINE_TAIL + " rotated", "github_pat_"),
+        ("the key is " + "ghp_" + CLASSIC_BODY + ".", "ghp_"),
+    ]
+    for value, prefix in probes:
+        reason = services._looks_like_secret(value)
+        assert reason is not None, f"a token pasted in prose was accepted: {prefix}"
+        assert prefix in reason, "the refusal should name the format it found"
+        assert value not in reason, "refusing a token must not print it"
+
+    assert services._looks_like_secret("the jwt is " + JWT) is not None, \
+        "a JWT pasted inside a sentence was accepted"
+    assert services._looks_like_secret("paste this:\n" + PEM_BLOCK) is not None, \
+        "a PEM block pasted inside a value was accepted"
+    assert services._looks_like_secret("export token=«secret» then run it") is not None, \
+        "a name=value pair inside a sentence was accepted"
+
+
+def test_scanning_inside_a_string_does_not_refuse_ordinary_sentences():
+    """AC2: the other side of AC1 - prose that merely mentions a credential is accepted."""
+    for value in ("the key is in the vault", "the token is rotated monthly by CI",
+                  "ask the platform team for a key", "paste the token into the environment"):
+        assert services._looks_like_secret(value) is None, f"prose was refused: {value!r}"
+
+
+def test_a_prose_wrapped_token_is_refused_over_http(live):
+    """AC1 at the route a person uses: the repository field carries a sentence, not a coordinate."""
+    base, path = live
+    _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
+    wrapped = "the key is " + "ghp_" + CLASSIC_BODY
+    status, body = _post(f"{base}/config/services", _service_fields(name=wrapped))
+    assert status == 400, "a token pasted inside a sentence was stored"
+    assert "ghp_" in body and wrapped not in body
+    conn = db.connect(path)
+    try:
+        assert services.list_services(conn, "team") == []
+    finally:
+        conn.close()
+
+
+# TESTOPS-59 AC3: the identifier boundary is structural, and singular/plural are decided together.
+def test_the_identifier_boundary_is_structural_not_a_word_list():
+    assert services._looks_like_secret("session-token") is None, \
+        "a compound naming a kind of token was refused"
+    assert services._looks_like_secret("vault-token") is None, \
+        "the same grammatical shape as session-token was refused"
+    assert services._looks_like_secret("my-password") is not None, \
+        "a determiner plus a credential head was accepted"
+    assert services._looks_like_secret("my password") is None, \
+        "prose is not an identifier"
+
+
+def test_singular_and_plural_credential_words_are_decided_together():
+    assert services._looks_like_secret("password-list") is None
+    assert services._looks_like_secret("passwords-list") is None
+    assert services._looks_like_secret("passwords") is not None, \
+        "the plural of a bare credential word names the things themselves"
+    assert services._looks_like_secret("my-passwords") is not None
+
+
+# TESTOPS-59 AC4: every prefix has a floor and a ceiling from the format's real body.
+def test_every_prefix_carries_a_floor_and_a_ceiling():
+    for prefix, _pattern, floor, ceiling, _words in services._TOKEN_FORMATS:
+        assert 0 < floor <= ceiling, f"{prefix} has no usable body range"
+    # `ghp_notes` is below the classic floor and is a name; a truncated classic paste is a name too.
+    assert services._looks_like_secret("ghp_notes") is None
+    assert services._looks_like_secret("ghp_" + "aB3dE5fG7hJ9kL2mN4p") is None
+    # A fine-grained token is 82 body characters, not 22: a 22-character paste is a truncation.
+    assert services._looks_like_secret("github_pat_" + FINE_BODY) is None
+    assert services._looks_like_secret("github_pat_" + FINE_BODY + "_" + FINE_TAIL) is not None
+    # And a body past the ceiling is not the format's body.
+    assert services._looks_like_secret("ghp_" + "aB3d" * 11) is None
+    assert services._looks_like_secret("AKIA" + "Q7FZ2K9M4T8X1B6NEXTRA") is None
+
+
 # --------------------------------------------------------------------------- AC2 the scoped rule
 
 def test_the_short_identifier_rule_accepts_a_tool_name_and_refuses_a_credential_name():
@@ -510,7 +631,7 @@ def test_the_short_identifier_rule_accepts_a_tool_name_and_refuses_a_credential_
         "a rate-limiting algorithm is not a credential"
     reason = services._looks_like_secret("my-password")
     assert reason is not None, "a plain credential name was accepted"
-    assert "credential word" in reason
+    assert "credential" in reason
 
 
 def test_the_scoped_rule_over_http_stores_the_tool_and_refuses_the_credential(live):

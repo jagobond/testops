@@ -78,9 +78,14 @@ argued with.
 boundary table, and over HTTP
 (`test_the_scoped_rule_over_http_stores_the_tool_and_refuses_the_credential`: 200 then 400).
 
-Residual risk, stated: a 4+ part name ending in a credential word is accepted, and a two-part name
-ending in one whose other part is a technical suffix is accepted. Both are names a real user types;
-neither is a pasted credential, and every pasted credential still meets rules 1, 2, 4 and 5.
+Residual risk, stated (corrected by TESTOPS-59 AC6 - the earlier sentence here claimed "every pasted
+credential still meets rules 1, 2, 4 and 5", which was false for a token pasted inside a sentence,
+because rule 3 exempted whitespace, rule 4 matched only `startswith` and the blob rule required no
+whitespace; TESTOPS-59 closes that leak by searching the value at any position): a 4+ part name
+ending in a credential word is accepted, and a two-part name ending in one whose other part is a
+technical suffix is accepted. Both are names a real user types; neither is a pasted credential.
+What the screen still does not catch is stated in TESTOPS-59's report: an unrecognised format, a
+truncated paste below a format's real body, and a compound label whose head is a credential word.
 
 ## AC3 — the false-positive boundary is a table
 

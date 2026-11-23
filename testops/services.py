@@ -50,27 +50,39 @@ _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 # the rules below are applied at the store boundary, to every settings value and every human-entered
 # name, so a field added tomorrow is covered by existing.
 #
-# A credential is a *shape*, not a word. Three shapes are recognised, in this order:
+# A credential is a *shape*, not a word. Four shapes are recognised, in this order:
 #
-#   1. a `name=value` pair whose name is a credential word - `password=hunter2`,
-#      `Authorization: Bearer ...`, `api_key = "..."`. The name stands alone, so `tokens` is not
+#   1. a `name=value` pair whose name is a credential word, anywhere in the value - `password=hunter2`,
+#      `Authorization: Bearer ***`, `api_key = "..."`. The name stands alone, so `tokens` is not
 #      `token` and `cotw-continuity` contains no credential name at all;
-#   2. an issued-token shape: a known prefix, a PEM block, a JWT, an `Authorization` scheme;
-#   3. a value that is one unbroken token containing a credential word (`my-password`,
+#   2. an issued-token shape *searched anywhere* in the value, not only at position 0 - a PEM block,
+#      a JWT, an `Authorization` header, and (rule 4) a known prefix with its format's real body
+#      (TESTOPS-59 AC1: a real token pasted inside a sentence is still a token);
+#   3. a value that is one unbroken token naming a credential *instance* (`my-password`,
 #      `an-api-token`). Prose is not one token, which is why "test password reset flow" is
-#      configuration and is stored.
-_CREDENTIAL_NAME = (r"(?:password|passwd|pwd|token|api[ _-]?key|apikey|secret|bearer|"
-                    r"authorization|private[ _-]?key|access[ _-]?key|client[ _-]?secret)")
+#      configuration and is stored. TESTOPS-59 AC3 states the boundary structurally - see
+#      :func:`_names_a_credential` - rather than by a word list;
+#   4. a known credential prefix with the body that format really issues, at any position.
+#
+# Credential words are matched singular and plural alike, so `passwords-list` and `password-list` are
+# decided by the same rule instead of by an accident of spelling (TESTOPS-59 AC3).
+_CREDENTIAL_NAME = (r"(?:passwords?|passwd|pwd|tokens?|api[ _-]?keys?|apikeys?|secrets?|bearer|"
+                    r"authorizations?|private[ _-]?keys?|access[ _-]?keys?|client[ _-]?secrets?)")
 # The pair's name is followed by `=` or `:` and then something - the shape a secret is pasted in.
 _CREDENTIAL_PAIR = re.compile(rf"(?i)(?<![A-Za-z0-9])({_CREDENTIAL_NAME})[ \t]*[:=][ \t]*[^\s,;]")
 # A name on its own, used for the settings *key* and for the single-token rule.
 _CREDENTIAL_NAME_ALONE = re.compile(rf"(?i)(?:^|[^A-Za-z0-9]){_CREDENTIAL_NAME}(?:$|[^A-Za-z0-9])")
-# `Bearer abc123`, `Basic dXNlcjpwYXNz`: an authorization scheme and a value behind it.
-_AUTH_SCHEME = re.compile(r"(?i)^\s*(?:bearer|basic|digest|token)\s+[^\s,;]+")
+# `Bearer abc123`, `Basic dXNlcjpwYXNz`: an authorization scheme and exactly one unbroken value.
+# TESTOPS-59 AC1/AC2: the scheme is the shape only when the value is the whole remainder. A sentence
+# that happens to open with the word ("Bearer token rotation work continues") continues past the
+# first word, so it is prose, not a header - scanning prose must not turn into refusing sentences.
+_AUTH_SCHEME = re.compile(r"(?i)^\s*(?:bearer|basic|digest|token)\s+[^\s,;]+$")
 # A PEM private-key block, wherever it was pasted in a longer value.
 _PEM_BLOCK = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
-# A JWT: the base64 header, a payload and a signature, three dot-separated segments.
-_JWT = re.compile(r"^eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$")
+# A JWT: the base64 header, a payload and a signature, three dot-separated segments, searched
+# anywhere in the value (a JWT pasted after "the jwt is" is still a JWT).
+_JWT = re.compile(r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"
+                  r"(?![A-Za-z0-9_-])")
 
 # TESTOPS-44. Base64 is the most common way a credential is written down, and its alphabet contains
 # `/` - the very character the separator exemption below used to read as proof of configuration. So
@@ -83,106 +95,114 @@ _BLOB_MIN = 32
 _BASE64 = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
 _BASE64_ENTROPY = 4.3
 
-# TESTOPS-44 fix round. The entropy floors below only judge values of 32+ characters, so the
-# shortest AWS credential - an `AKIA` key ID at 20 characters - passed by being short. A known token
-# prefix is a shape, not a length, so this rule runs before the floors. Each entry is the literal
-# start of a published credential format and, since TESTOPS-56 AC1, its body shape as well: a prefix
-# alone is also how ordinary identifiers start (`AKIA-reviews-team`, `xoxb-not-a-token`,
-# `ghp_only_a_document_path`), and no reader of those would expect a credential refusal. Matching is
-# case-sensitive, because these prefixes are case-sensitive in the formats themselves and lower-case
-# lookalikes (`skipton-branch`, `masking/x`, `task-akia-review`) are real configuration. Only the
-# prefix is named in the refusal - never the value.
+# TESTOPS-44, TESTOPS-56, TESTOPS-59. A known token prefix is a shape **at any position** in the
+# value, not only at position 0 (TESTOPS-59 AC1: a real token pasted inside a sentence is still a
+# token). The entropy floors below only judge values of 32+ characters, so the shortest AWS
+# credential - an `AKIA` key ID at 20 characters - would pass by being short; this rule runs before
+# them. Each entry is the literal prefix a published format issues, the whole token's shape, and the
+# body length range that format really uses - a floor AND a ceiling (AC4), so `ghp_notes` (five
+# characters) is a word and an 82-character fine-grained paste truncated to 22 is not a token.
+# Matching is case-sensitive, because these prefixes are case-sensitive in the formats themselves and
+# lower-case lookalikes (`skipton-branch`, `masking/x`, `task-akia-review`) are real configuration.
+# The lookarounds stop a match inside a longer alphanumeric run (`xghp_...`, `ghp_..._suffix`). Only
+# the prefix is named in the refusal - never the value.
 #
-# The body shapes are the formats' own: a 20-character AWS key ID in upper-case base32; a GitHub
-# classic token as one unbroken base62 run after `ghp_`/`gho_`/`ghu_`/`ghs_`; a GitLab PAT as one
-# unbroken run after `glpat-`; a Slack token as digit-and-hyphen segments with a base62 tail; a JWT
-# header followed by base64url segments. `github_pat_` and `sk-` keep the qualification they were
-# given in TESTOPS-44, because their prefixes begin ordinary repository paths too.
-_AWS_KEY_ID = re.compile(r"A(?:KIA|SIA)[A-Z0-9]{16}")
-_GITHUB_CLASSIC = re.compile(r"gh[pous]_[A-Za-z0-9]+")
-_GITLAB_PAT = re.compile(r"glpat-[A-Za-z0-9_-]{14,}")
-_SLACK_TOKEN = re.compile(r"xox[bp]-[A-Za-z0-9-]{12,}")
-_JWT_HEAD = re.compile(r"eyJ[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]+)*")
-_PEM_KEY = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
-_SK_MIN = 32                    # an `sk-` key body is an unbroken run, never a short word
-_GITHUB_PAT = re.compile(r"^github_pat_[A-Za-z0-9]{22,}(?:_[A-Za-z0-9]+)*$")
-#                                          ^ 22+ base62: the documented `github_pat_` body, with or
-#                                            without the `_`-split suffix. `github_pat_docs` is 4.
+# The bodies are the formats' own:
+#
+#   AKIA / ASIA     a 20-character AWS key ID: 16 upper-case base32 characters
+#   ghp_ gho_ ghu_ ghs_
+#                   GitHub classic: one unbroken base62 body, 36 characters today and 40 in the
+#                   legacy format. `ghp_notes` is below the floor and is a name.
+#   github_pat_     GitHub fine-grained: 22 base62 characters, an underscore, then 59 more. A
+#                   22-character paste is a truncation, not a token.
+#   glpat-          GitLab PAT: 20 base62 characters, 27 for the routable form.
+#   xoxb- / xoxp-   Slack: two or three numeric segments and a 24-32 character base62 tail.
+#   sk-             API key: an unbroken 32-128 character run, never a chain of lowercase words.
 _WORD_CHAIN = re.compile(r"[a-z]+(?:-[a-z]+)+")     # `sk-and-words`: words, not a key
-_SK_BODY = re.compile(r"[A-Za-z0-9_\-]+")
-
-
-def _is_sk_key(value: str) -> bool:
-    """`sk-` and then a key body: 32+ characters, one unbroken run, no path separator, no words."""
-    body = value[len("sk-"):]
-    return (len(body) >= _SK_MIN
-            and _SK_BODY.fullmatch(body) is not None
-            and _WORD_CHAIN.fullmatch(body) is None)
-
-
-def _fullmatches(pattern: re.Pattern):
-    return lambda value: pattern.fullmatch(value) is not None
-
-
-def _is_unbroken_token(pattern: re.Pattern):
-    """The format's body, and not a chain of ordinary words joined by hyphens.
-
-    `glpat-migration-plan` and `xoxb-not-a-token` are names; a real token's body is a mixed-case run
-    with digits in it, which is never a lowercase word chain (TESTOPS-56 AC1).
-    """
-    return lambda value: (pattern.fullmatch(value) is not None
-                          and _WORD_CHAIN.fullmatch(value) is None)
-
-
-# TESTOPS-56 AC1: every prefix rule is qualified by body shape. The prefix says which format the
-# value claims to be; the body decides whether it is one.
-_PREFIXED_TOKENS = (
-    ("AKIA", _fullmatches(_AWS_KEY_ID)),
-    ("ASIA", _fullmatches(_AWS_KEY_ID)),
-    ("ghp_", _fullmatches(_GITHUB_CLASSIC)),
-    ("gho_", _fullmatches(_GITHUB_CLASSIC)),
-    ("ghu_", _fullmatches(_GITHUB_CLASSIC)),
-    ("ghs_", _fullmatches(_GITHUB_CLASSIC)),
-    ("xoxb-", _is_unbroken_token(_SLACK_TOKEN)),
-    ("xoxp-", _is_unbroken_token(_SLACK_TOKEN)),
-    ("glpat-", _is_unbroken_token(_GITLAB_PAT)),
-    ("eyJ", _fullmatches(_JWT_HEAD)),
-    ("-----BEGIN ", _fullmatches(_PEM_KEY)),
-    ("github_pat_", _fullmatches(_GITHUB_PAT)),
-    ("sk-", _is_sk_key),
+_TOKEN_FORMATS = (
+    ("AKIA", re.compile(r"(?<![A-Za-z0-9])AKIA[A-Z0-9]{16}(?![A-Za-z0-9])"), 16, 16, False),
+    ("ASIA", re.compile(r"(?<![A-Za-z0-9])ASIA[A-Z0-9]{16}(?![A-Za-z0-9])"), 16, 16, False),
+    ("ghp_", re.compile(r"(?<![A-Za-z0-9_])ghp_[A-Za-z0-9]{36,40}(?![A-Za-z0-9_])"), 36, 40, False),
+    ("gho_", re.compile(r"(?<![A-Za-z0-9_])gho_[A-Za-z0-9]{36,40}(?![A-Za-z0-9_])"), 36, 40, False),
+    ("ghu_", re.compile(r"(?<![A-Za-z0-9_])ghu_[A-Za-z0-9]{36,40}(?![A-Za-z0-9_])"), 36, 40, False),
+    ("ghs_", re.compile(r"(?<![A-Za-z0-9_])ghs_[A-Za-z0-9]{36,40}(?![A-Za-z0-9_])"), 36, 40, False),
+    ("github_pat_",
+     re.compile(r"(?<![A-Za-z0-9_])github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}(?![A-Za-z0-9_])"),
+     82, 82, False),
+    ("glpat-", re.compile(r"(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{20,27}(?![A-Za-z0-9_-])"),
+     20, 27, True),
+    ("xoxb-", re.compile(r"(?<![A-Za-z0-9])xoxb-(?:[0-9]{9,13}-){2,3}[A-Za-z0-9]{24,32}"
+                         r"(?![A-Za-z0-9])"), 44, 74, True),
+    ("xoxp-", re.compile(r"(?<![A-Za-z0-9])xoxp-(?:[0-9]{9,13}-){2,3}[A-Za-z0-9]{24,32}"
+                         r"(?![A-Za-z0-9])"), 44, 74, True),
+    ("sk-", re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{32,128}(?![A-Za-z0-9_-])"),
+     32, 128, True),
 )
 
-# TESTOPS-56 AC2: the parts a compound name may end with without the name reading as a credential.
-# `password-manager` and `token-bucket` are the names of tools and of a rate-limiting algorithm, and
-# they are what a person types. `my-password` is a credential name written plainly, and it has no such
-# part - which is exactly where the boundary is drawn.
-_TECHNICAL_SUFFIXES = frozenset({
-    "manager", "store", "storage", "service", "bucket", "policy", "rotation", "refresh", "reset",
-    "flow", "file", "path", "dialog", "prompt", "field", "input", "hint", "header", "label",
-    "name", "value", "length", "strength", "expiry", "provider", "plugin",
+
+def _issued_token_in(value: str) -> str | None:
+    """The prefix of a real-shaped credential found anywhere in ``value``, or ``None``.
+
+    A match is only a credential when its body sits inside the range that format really issues, and
+    (for the formats whose bodies can be hyphenated prose) when it is not a chain of lowercase words:
+    `glpat-only-a-document-path` is a name, not a token. TESTOPS-59 AC1/AC4.
+    """
+    for prefix, pattern, floor, ceiling, words_are_prose in _TOKEN_FORMATS:
+        for match in pattern.finditer(value):
+            body = match.group(0)[len(prefix):]
+            if not floor <= len(body) <= ceiling:
+                continue
+            if words_are_prose and _WORD_CHAIN.fullmatch(body):
+                continue
+            return prefix
+    return None
+
+
+# TESTOPS-59 AC3: the words that turn a compound into *a particular credential* rather than the name
+# of a type: `my-password` and `an-api-token` are instances, `session-token` is a kind of token.
+# This is a closed grammatical class (determiners and possessives), not a vocabulary of technical
+# terms, so the rule states itself: a bare credential word, or a name that opens with a determiner
+# and ends with the credential word, is refused. Every other compound is the name of a thing -
+# `session-token`, `vault-token`, `token-bucket-limiter`, `password-manager` - and is accepted.
+# `vault-token` is the deliberate part of that: it is HashiCorp's own name for the token a Vault
+# client presents, and refusing it while accepting `session-token` (the same grammatical shape)
+# would put the boundary back where TESTOPS-59 found it - in a word list.
+_DETERMINERS = frozenset({
+    "my", "your", "our", "their", "his", "her", "its", "the", "a", "an", "this", "that", "these",
+    "those", "some", "any", "another", "every", "each", "no",
 })
 _CREDENTIAL_WORD = re.compile(rf"(?i)^{_CREDENTIAL_NAME}$")
 
 
 def _names_a_credential(parts: list[str]) -> bool:
-    """Whether a short identifier, split into its parts, reads as *the name of a credential*.
+    """Whether a short identifier, split into its parts, names a *particular* credential.
 
-    TESTOPS-56 AC2 scopes this rule deliberately. A bare credential word is refused; so is a name of
-    up to three parts that **ends** in the credential word, which is how a credential is named out
-    loud (`my-password`, `an-api-token`). A two-part name whose other part is a known technical
-    suffix (`password-manager`, `token-bucket`) is the name of a tool, and a longer compound whose
-    last part is not the credential word - `token-bucket-limiter`, the rate-limiting algorithm, or
-    `xoxb-not-a-token`, a label about one - is a technical name. That is the whole of the decision,
-    and the boundary table in ``tests/test_config_credential_screen.py`` pins both sides of it.
+    TESTOPS-59 AC3 replaces the TESTOPS-56 "last part and at most three parts" rule, which refused
+    `session-token` while accepting `passwords-list` and would have refused `password-list` only
+    because its word match was singular. The rule now states itself:
+
+      * a bare credential word (`password`, `tokens`) names the thing itself - refused;
+      * a name that **ends** in a credential word and **opens with a determiner or possessive**
+        (`my-password`, `an-api-token`, `the-secret`) names a particular instance - refused;
+      * every other compound is a compound *noun* - a kind of thing or a tool, where the credential
+        word is the head (`session-token`, `vault-token`) or not the head at all
+        (`password-manager`, `token-bucket-limiter`) - and is accepted.
+
+    Singular and plural are matched alike, so `password-list` and `passwords-list` are decided
+    together: both are the name of a collection, and both are accepted.
+
+    The residual risk is stated rather than hidden: a compound whose head is a credential word but
+    which does not open with a determiner (`prod-db-password`) is accepted as a type name. It is a
+    label; a pasted credential is caught by rules 1, 2 and 4 wherever it sits in the value.
     """
     credential = [i for i, part in enumerate(parts) if _CREDENTIAL_WORD.fullmatch(part)]
     if not credential:
         return False
     if len(parts) == 1:
         return True                                   # `password` on its own names the thing
-    if len(parts) == 2 and parts[1 - credential[0]] in _TECHNICAL_SUFFIXES:
-        return False                                  # `password-manager`: a tool, not a secret
-    return len(parts) <= 3 and credential[-1] == len(parts) - 1   # `my-password`, `an-api-token`
+    if credential[-1] != len(parts) - 1:
+        return False                                  # the credential word is not the head
+    return parts[0].lower() in _DETERMINERS           # `my-password`, `an-api-token`
 
 
 # What divides a structured key into readable parts. `COTW-PROJ-KEY-0123456789-ABCDEFG` and a UUID
@@ -222,6 +242,15 @@ def _looks_like_secret(value: str) -> str | None:
 
     The reason never contains the value: refusing a secret must not become the way it is printed.
     Names and prefixes may be named, because they are what the reader has to change.
+
+    The value is scanned, not prefix-matched: a real token, pair, JWT or PEM block anywhere in the
+    string is a credential (TESTOPS-59 AC1). Residual risk, stated rather than implied: an
+    unrecognised format is not detected at all; a paste truncated below a covered format's real body
+    is indistinguishable from an identifier and is accepted (see ``_TOKEN_FORMATS``); a compound
+    label whose head is a credential word but which opens with no determiner
+    (``prod-db-password``) is accepted as a type name; and the base64/entropy floors are thresholds,
+    not proofs. TESTOPS-56's note claimed every pasted credential met the rules - that was false for
+    a sentence-wrapped token, which is the leak this ticket fixes.
     """
     plain = (value or "").strip()
     if not plain:
@@ -231,33 +260,32 @@ def _looks_like_secret(value: str) -> str | None:
     if pair:
         return (f"it reads as a credential: the name {pair.group(1)!r} is followed by '=' or ':' "
                 f"and a value")
-    # 2. Issued-token shapes. A PEM block, a JWT and an authorization scheme are refused wherever
-    #    they sit in the value, because a real one pasted into a longer string is still a secret.
+    # 2. Issued-token shapes, searched anywhere in the value (TESTOPS-59 AC1): a PEM block, a JWT
+    #    and a complete authorization header pasted into a longer string are still secrets.
     if _PEM_BLOCK.search(plain):
         return "it contains a PEM private-key block ('-----BEGIN ... PRIVATE KEY-----')"
-    if _JWT.fullmatch(plain):
-        return ("it is a JSON Web Token: three dot-separated segments beginning 'eyJ', the header "
-                "of every JWT")
+    if _JWT.search(plain):
+        return ("it contains a JSON Web Token: three dot-separated segments beginning 'eyJ', the "
+                "header of every JWT")
     if _AUTH_SCHEME.match(plain):
-        return ("it begins with an authorization scheme ('Bearer', 'Basic', 'Digest' or 'Token') "
-                "and a value")
-    # 3. One short unbroken identifier naming a credential: `my-password`, `client-secret`. Two
-    #    boundaries keep real names out: prose (whitespace) is not a token, a repository coordinate
-    #    or path (a '/') is a coordinate, and a longer snake_cased label
-    #    (`test_password_reset_flow`) is a name, not a secret. TESTOPS-56 AC2 scopes the rule itself
-    #    in :func:`_names_a_credential`, so a compound name is not a credential name. The pair,
-    #    prefix, PEM and JWT rules above still catch a real credential written in any of those forms.
+        return ("it is an authorization header: a scheme ('Bearer', 'Basic', 'Digest' or 'Token') "
+                "and one unbroken value")
+    # 3. One short unbroken identifier naming a credential instance: `my-password`, `an-api-token`.
+    #    Whitespace means prose is not a token, a repository coordinate or path (a '/') is a
+    #    coordinate, and a longer snake_cased label (`test_password_reset_flow`) is a name, not a
+    #    secret. TESTOPS-59 AC3 states the rule itself in :func:`_names_a_credential`. The pair,
+    #    PEM, JWT and prefix rules catch a real credential in any other form.
     if not any(ch.isspace() for ch in plain) and "/" not in plain:
         parts = [part for part in re.split(r"[^A-Za-z0-9]+", plain) if part]
         if _names_a_credential(parts):
-            return "it is a short identifier containing a credential word"
-    # TESTOPS-56 AC1: every known credential prefix is qualified by the body shape the format is
-    # issued with, so `AKIA-reviews-team` and `ghp_only_a_document_path` are names, not keys, while a
-    # real token of each format - written at that format's own length and charset - is still
-    # refused, before the entropy floors (the shortest AWS key ID is 20 characters).
-    for prefix, looks_issued in _PREFIXED_TOKENS:
-        if plain.startswith(prefix) and looks_issued(plain):
-            return f"it begins with {prefix!r}, the prefix of a known credential format"
+            return "it is a short identifier naming a credential"
+    # 4. A known credential prefix with its format's real body, anywhere in the value (TESTOPS-59
+    #    AC1/AC4): `the key is ghp_...` is a token pasted in a sentence, while `ghp_notes` (below the
+    #    floor) and `AKIA-reviews-team` (not the body) are names. Before the entropy floors, because
+    #    the shortest AWS key ID is 20 characters.
+    issued = _issued_token_in(plain)
+    if issued:
+        return f"it contains {issued!r}, the prefix of a known credential format"
     # A long blob of one alphabet is a token shape, not a host, a path or a repository. URLs and
     # paths are exempt: they are what settings are for.
     if len(plain) >= _BLOB_MIN and not any(ch.isspace() for ch in plain) \
