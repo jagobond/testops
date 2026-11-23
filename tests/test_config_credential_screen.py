@@ -12,6 +12,7 @@ refuses ordinary words is worse than none, because it gets switched off. Every v
 """
 from __future__ import annotations
 
+import re
 import threading
 import urllib.error
 import urllib.parse
@@ -368,3 +369,273 @@ def test_remove_project_names_an_unknown_project(tmp_path):
             services.remove_project(conn, "no-such-project")
     finally:
         conn.close()
+
+
+# --------------------------------------------------------------------------- AC3 boundary table
+
+# TESTOPS-56 AC3. Every value is something a person or a pasted field could really hold, and every
+# line says what the screen must do with it and why. This is the argument the rule can be had with:
+# change a rule, and a line here has to change with it. The first eleven are the original ticket's
+# values, the next fourteen the reviewer's, and the rest pin the boundary the two faults found.
+BOUNDARY = [
+    # --- the original ticket's eleven: ordinary configuration, all accepted
+    ("jagobond/cotw-continuity", "accepted", "a repository coordinate: the '/' marks a path"),
+    ("Jira board COTW", "accepted", "prose - whitespace means it is not one identifier"),
+    ("RuckoldtAndRylander", "accepted", "one word and no credential word inside it"),
+    ("cotw-continuity pipeline #2", "accepted", "prose around a project name"),
+    ("mwinteringham/restful-booker-platform", "accepted", "a repository coordinate"),
+    ("100.121.128.21", "accepted", "an IPv4 address: four digit parts"),
+    ("localhost:8791", "accepted", "host:port, with no credential name before the ':'"),
+    ("https://github.com/org/repo.git", "accepted", "a URL"),
+    ("COTW", "accepted", "a board key"),
+    ("TOPS", "accepted", "a Jira project key"),
+    ("test password reset flow", "accepted", "prose: whitespace, so not one identifier"),
+    # --- the reviewer's fourteen
+    ("password-manager/tool", "accepted", "a path; the '/' makes it a coordinate, not a name"),
+    ("secrets-service", "accepted", "'secrets' is not the credential word 'secret'"),
+    ("vault.internal", "accepted", "a hostname"),
+    ("vault-prod", "accepted", "a hostname with a short compound part"),
+    ("https://vault.internal:8200/v1/secret", "accepted", "a URL; a trailing 'secret' has no value"),
+    ("skypoint-dashboard", "accepted", "a name that merely begins with 'sk'"),
+    ("docs/token-refresh.md", "accepted", "a path"),
+    ("token-bucket-limiter", "accepted",
+     "three parts whose last is not the credential word: a compound technical name"),
+    ("my-password-manager", "accepted", "three parts, credential word in the middle: a tool name"),
+    ("client_secret_manager", "accepted", "three parts, credential word in the middle: a module name"),
+    ("Bearer token rotation work", "refused",
+     "it begins with an authorization scheme; refused by shape, and called out in the report"),
+    ("AKIA-reviews-team", "accepted", "the prefix needs a 16-character upper-case key body"),
+    ("xoxb-not-a-token", "accepted", "the prefix needs a digit-and-hyphen token body"),
+    ("ghp_only_a_document_path", "accepted",
+     "a real ghp_ body is one unbroken base62 run; this carries underscores"),
+    # --- the boundary itself, in both directions
+    ("my-password", "refused", "two parts, the last a credential word: a credential named plainly"),
+    ("an-api-token", "refused", "the last part is the credential word itself"),
+    ("client-secret", "refused", "two parts, the last a credential word, the other no suffix"),
+    ("password", "refused", "a bare credential word names the thing itself"),
+    ("password-manager", "accepted", "'manager' is a technical suffix: the name of a tool"),
+    ("token-bucket", "accepted", "'bucket' is a technical suffix: the rate-limiting algorithm"),
+    ("password=hunter2", "refused", "a pasted name=value pair"),
+    ("ghp_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb", "refused",
+     "a real GitHub classic token: ghp_ and 36 base62 characters"),
+    ("AKIA" + "Q7FZ2K9M4T8X1B6N", "refused", "a real AWS key ID: AKIA and 16 upper-case characters"),
+    ("xoxb-" + "123456789012-1234567890123-Ab3dE5fG7hJ9", "refused",
+     "a real Slack token: xoxb-, digit segments and a base62 tail"),
+    ("glpat-" + "aB3dE5fG7hJ9kL2mN4pQ", "refused", "a real GitLab PAT: glpat- and a 20-character run"),
+    ("sk-" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAbAb3dE5fG", "refused",
+     "a real sk- key: sk- and an unbroken 32+ character run"),
+    ("github_pat_" + "aB3dE5fG7hJ9kL2mN4pQAb", "refused",
+     "a real fine-grained GitHub token"),
+]
+
+
+@pytest.mark.parametrize("value,verdict,why", BOUNDARY,
+                         ids=[f"{verdict}-{value[:24]}" for value, verdict, _why in BOUNDARY])
+def test_the_false_positive_boundary_is_pinned(value, verdict, why):
+    """AC3: the rule is argued with here, not guessed at. ``why`` is the one-line argument."""
+    reason = services._looks_like_secret(value)
+    if verdict == "accepted":
+        assert reason is None, f"{value!r} was refused ({reason}); the table says: {why}"
+        assert services.validate_settings({"name": value}) == {"name": value}
+    else:
+        assert reason is not None, f"{value!r} was accepted; the table says: {why}"
+        assert value not in reason, "refusing a value must not become a way to print it"
+        with pytest.raises(services.ConfigError):
+            services.validate_settings({"name": value})
+
+
+def test_the_boundary_table_covers_both_verdicts_and_at_least_twenty_five_values():
+    assert len(BOUNDARY) >= 25
+    assert {verdict for _v, verdict, _r in BOUNDARY} == {"accepted", "refused"}
+
+
+# --------------------------------------------------------------------------- AC1 real bodies
+
+# Each real token is built from the body its format actually issues - the length and the charset are
+# asserted before the refusal is asked for, so this table cannot decay into "a prefix and some
+# characters". No value here is a live credential.
+REAL_TOKENS = [
+    ("AKIA" + "Q7FZ2K9M4T8X1B6N", re.compile(r"AKIA[A-Z0-9]{16}"), "AKIA"),
+    ("ASIA" + "Y34FZKBOKMUTVV7A", re.compile(r"ASIA[A-Z0-9]{16}"), "ASIA"),
+    ("ghp_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb", re.compile(r"ghp_[A-Za-z0-9]{36}"), "ghp_"),
+    ("gho_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb", re.compile(r"gho_[A-Za-z0-9]{36}"), "gho_"),
+    ("ghs_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb", re.compile(r"ghs_[A-Za-z0-9]{36}"), "ghs_"),
+    ("xoxb-" + "123456789012-1234567890123-Ab3dE5fG7hJ9",
+     re.compile(r"xoxb-[0-9]{12}-[0-9]{13}-[A-Za-z0-9]{12}"), "xoxb-"),
+    ("xoxp-" + "123456789012-1234567890123-Ab3dE5fG7hJ9",
+     re.compile(r"xoxp-[0-9]{12}-[0-9]{13}-[A-Za-z0-9]{12}"), "xoxp-"),
+    ("glpat-" + "aB3dE5fG7hJ9kL2mN4pQ", re.compile(r"glpat-[A-Za-z0-9_-]{20}"), "glpat-"),
+    ("github_pat_" + "aB3dE5fG7hJ9kL2mN4pQAb",
+     re.compile(r"github_pat_[A-Za-z0-9]{22}"),
+     "github_pat_"),
+    ("sk-" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAbAb3dE5fG",
+     re.compile(r"sk-[A-Za-z0-9]{40,}"), "sk-"),
+]
+
+
+@pytest.mark.parametrize("token,shape,prefix", REAL_TOKENS,
+                         ids=[f"{prefix}-real-body" for _t, _s, prefix in REAL_TOKENS])
+def test_a_real_token_of_each_format_is_still_refused(token, shape, prefix):
+    """AC1: the prefix is qualified, not dropped - the format's own body still trips the rule."""
+    assert shape.fullmatch(token), "this probe must be the format's real body, or it proves nothing"
+    reason = services._looks_like_secret(token)
+    assert reason is not None, f"a real-shaped {prefix} token was read as configuration"
+    assert prefix in reason, "the refusal should name the format it recognised"
+    assert token not in reason, "refusing a token must not print it"
+    with pytest.raises(services.ConfigError):
+        services.validate_settings({"board": token})
+
+
+PREFIX_LOOKALIKES = {
+    "AKIA-reviews-team": "AKIA",
+    "xoxb-not-a-token": "xoxb-",
+    "ghp_only_a_document_path": "ghp_",
+    "glpat-migration-plan": "glpat-",
+}
+
+
+@pytest.mark.parametrize("value,prefix", sorted(PREFIX_LOOKALIKES.items()))
+def test_a_prefix_followed_by_ordinary_words_is_not_a_refusal(value, prefix):
+    """AC1: the first characters alone are not a shape - these are names that begin with one."""
+    assert value.startswith(prefix)
+    assert services._looks_like_secret(value) is None, \
+        f"{value!r} was refused for its first characters alone"
+
+
+# --------------------------------------------------------------------------- AC2 the scoped rule
+
+def test_the_short_identifier_rule_accepts_a_tool_name_and_refuses_a_credential_name():
+    """AC2: the class is scoped deliberately, and the two ends of it are pinned here."""
+    assert services._looks_like_secret("token-bucket-limiter") is None, \
+        "a rate-limiting algorithm is not a credential"
+    reason = services._looks_like_secret("my-password")
+    assert reason is not None, "a plain credential name was accepted"
+    assert "credential word" in reason
+
+
+def test_the_scoped_rule_over_http_stores_the_tool_and_refuses_the_credential(live):
+    base, _path = live
+    _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
+
+    status, body = _post(f"{base}/config/services",
+                         _service_fields(name="token-bucket-limiter"))
+    assert status == 200, body
+    assert "token-bucket-limiter" in _get(f"{base}/config")
+
+    status, body = _post(f"{base}/config/services", _service_fields(name="my-password"))
+    assert status == 400, "a bare credential name was stored"
+    assert "credential" in body
+    assert "my-password" not in body
+
+
+# --------------------------------------------------------------------------- AC4 unknown keys
+
+# A real-shaped GitHub token, used to prove an unknown key is refused *and* not echoed. It is a
+# synthetic body, not a live credential.
+PROBE_TOKEN = "ghp_" + "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY2zAb"
+
+
+def test_an_unknown_settings_key_is_refused_with_a_reason_and_nothing_is_stored(live):
+    """AC4: the form layer refuses an unseen key instead of dropping it, so nothing bypasses the
+    screen by being in a field this build does not know."""
+    base, path = live
+    _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
+
+    status, body = _post(f"{base}/config/services",
+                         _service_fields(a_field_added_next_year=PROBE_TOKEN))
+
+    assert status == 400, "an unseen settings key was accepted"
+    assert "a_field_added_next_year" in body, "the refusal does not name the field it refused"
+    assert "refused" in body, "the refusal does not say it was refused rather than dropped"
+    assert PROBE_TOKEN not in body, "the refusal page printed the value"
+
+    conn = db.connect(path)
+    try:
+        assert services.list_services(conn, "team") == [], "a refused configuration reached the store"
+    finally:
+        conn.close()
+    raw = path.read_bytes()
+    assert b"a_field_added_next_year" not in raw, "the unseen key was written to the store"
+    assert PROBE_TOKEN.encode() not in raw, "the refused value was written to the store"
+
+
+def test_an_unknown_settings_key_is_refused_even_when_its_value_is_ordinary(live):
+    """The refusal is about the key, not about what it happens to hold: a key nobody screens
+    must not be accepted at all."""
+    base, _path = live
+    _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
+    status, body = _post(f"{base}/config/services",
+                         _service_fields(a_field_added_next_year="COTW-PROJ-KEY-1"))
+    assert status == 400
+    assert "a_field_added_next_year" in body
+
+
+# --------------------------------------------------------------------------- AC5 bypass re-run
+
+# The TESTOPS-51 AC5 bypass table, re-run attempt by attempt after the tuning. Commented with what
+# the previous ticket observed, so a change in one of them is visible rather than implied.
+def test_the_tesops_51_bypass_table_is_still_closed(live):
+    base, path = live
+    _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
+
+    # 1. Unknown settings key carrying a token. Was: 303 with the value silently dropped.
+    status, body = _post(f"{base}/config/services",
+                         _service_fields(a_field_added_next_year=PROBE_TOKEN))
+    assert status == 400, "an unknown key still reaches a redirect"
+
+    # 2. A project named like a credential.
+    status, body = _post(f"{base}/config/projects", {"slug": "password", "name": "Password"})
+    assert status == 400, "a project named like a credential was created"
+
+    # 3. Leading whitespace before the token in the repository field.
+    status, body = _post(f"{base}/config/services", _service_fields(repo=" " + PROBE_TOKEN))
+    assert status == 400, "leading whitespace defeated the screen"
+
+    # 4. A trailing newline after the token in the name field.
+    status, body = _post(f"{base}/config/services", _service_fields(name=PROBE_TOKEN + "\n"))
+    assert status == 400, "a trailing newline defeated the screen"
+
+    # 5. Double-URL-encoded token in the board field. Was: 303, storing the literal percent string,
+    #    which nothing decodes - not a credential in the store. Still not one, and never the token.
+    encoded = "".join(f"%{ord(ch):02X}" for ch in PROBE_TOKEN)
+    status, body = _post(f"{base}/config/services",
+                         _service_fields(type="jira_board", role="", board=encoded))
+    assert status == 200, "the encoded value was refused (a change from the last ticket)"
+    conn = db.connect(path)
+    try:
+        boards = [row.settings.get("board") for row in services.list_services(conn, "team")
+                  if "board" in row.settings]
+    finally:
+        conn.close()
+    assert boards == [encoded], \
+        "the encoded value was decoded into a credential before it was stored"
+    assert PROBE_TOKEN not in boards
+
+    # 6. Mixed-case credential word.
+    status, body = _post(f"{base}/config/services", _service_fields(name="PaSsWoRd=hunter2"))
+    assert status == 400, "changing case defeated the screen"
+
+    # 7. Value split across fields: the name of a credential in one, its value in the next.
+    status, body = _post(f"{base}/config/services",
+                         _service_fields(name="token=", board="hunter2"))
+    assert status == 400, "splitting the pair across fields defeated the screen"
+
+    # Nothing the attempts carried is in the store, and the only rows are the ones that were stored
+    # as ordinary configuration.
+    raw = path.read_bytes()
+    for probe in (PROBE_TOKEN, "hunter2", "password"):
+        assert probe.encode() not in raw, f"{probe!r} reached the store"
+
+
+def test_a_real_token_is_refused_on_every_settings_field_over_http(live):
+    """AC1/AC5 at the route a person uses: each field the form knows meets the same screen."""
+    base, _path = live
+    _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
+    for fields in (_service_fields(repo=PROBE_TOKEN),
+                   _service_fields(type="jira_board", role="", board=PROBE_TOKEN),
+                   _service_fields(type="jira_board", role="", host=PROBE_TOKEN),
+                   _service_fields(type="ado_pipeline", role="", org=PROBE_TOKEN),
+                   _service_fields(type="ado_pipeline", role="", ado_project=PROBE_TOKEN)):
+        status, body = _post(f"{base}/config/services", fields)
+        assert status == 400, f"a real token was accepted: {sorted(fields)}"
+        assert PROBE_TOKEN not in body

@@ -83,31 +83,32 @@ _BLOB_MIN = 32
 _BASE64 = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
 _BASE64_ENTROPY = 4.3
 
-# TESTOPS-44 fix round. The entropy floors below only judge values of 32+ characters, so the shortest
-# AWS credential - an `AKIA` key ID at 20 characters - passed by being short. A known token prefix is
-# a shape, not a length, so this rule runs at *any* length and before the floors. Each entry is the
-# literal start of a published credential format; matching is case-sensitive, because these prefixes
-# are case-sensitive in the formats themselves and lower-case lookalikes (`skipton-branch`,
-# `masking/x`, `task-akia-review`) are real configuration. Only the prefix is matched, and only the
+# TESTOPS-44 fix round. The entropy floors below only judge values of 32+ characters, so the
+# shortest AWS credential - an `AKIA` key ID at 20 characters - passed by being short. A known token
+# prefix is a shape, not a length, so this rule runs before the floors. Each entry is the literal
+# start of a published credential format and, since TESTOPS-56 AC1, its body shape as well: a prefix
+# alone is also how ordinary identifiers start (`AKIA-reviews-team`, `xoxb-not-a-token`,
+# `ghp_only_a_document_path`), and no reader of those would expect a credential refusal. Matching is
+# case-sensitive, because these prefixes are case-sensitive in the formats themselves and lower-case
+# lookalikes (`skipton-branch`, `masking/x`, `task-akia-review`) are real configuration. Only the
 # prefix is named in the refusal - never the value.
-_TOKEN_PREFIXES = (
-    "AKIA",             # AWS access key ID
-    "ASIA",             # AWS temporary access key ID
-    "ghp_", "gho_", "ghu_", "ghs_",   # GitHub personal / OAuth / user / server tokens
-    "xoxb-", "xoxp-",   # Slack bot / user tokens
-    "glpat-",           # GitLab personal access token
-    "eyJ",              # base64-encoded '{"' - the header of every JWT
-    "-----BEGIN ",      # PEM private key (and any other PEM block)
-)
-
-# Two prefixes are also prefixes of ordinary identifiers - `sk-utils/tools` is a repository path and
-# `github_pat_docs` a documentation slug - so for these the prefix alone is not a shape. The rest of
-# the value has to look like the credential's own body, and only then is it refused.
+#
+# The body shapes are the formats' own: a 20-character AWS key ID in upper-case base32; a GitHub
+# classic token as one unbroken base62 run after `ghp_`/`gho_`/`ghu_`/`ghs_`; a GitLab PAT as one
+# unbroken run after `glpat-`; a Slack token as digit-and-hyphen segments with a base62 tail; a JWT
+# header followed by base64url segments. `github_pat_` and `sk-` keep the qualification they were
+# given in TESTOPS-44, because their prefixes begin ordinary repository paths too.
+_AWS_KEY_ID = re.compile(r"A(?:KIA|SIA)[A-Z0-9]{16}")
+_GITHUB_CLASSIC = re.compile(r"gh[pous]_[A-Za-z0-9]+")
+_GITLAB_PAT = re.compile(r"glpat-[A-Za-z0-9_-]{14,}")
+_SLACK_TOKEN = re.compile(r"xox[bp]-[A-Za-z0-9-]{12,}")
+_JWT_HEAD = re.compile(r"eyJ[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]+)*")
+_PEM_KEY = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
 _SK_MIN = 32                    # an `sk-` key body is an unbroken run, never a short word
 _GITHUB_PAT = re.compile(r"^github_pat_[A-Za-z0-9]{22,}(?:_[A-Za-z0-9]+)*$")
 #                                          ^ 22+ base62: the documented `github_pat_` body, with or
 #                                            without the `_`-split suffix. `github_pat_docs` is 4.
-_WORD_CHAIN = re.compile(r"[a-z]+(?:-[a-z]+)+")     # `sk-utils-tools`: words, not a key
+_WORD_CHAIN = re.compile(r"[a-z]+(?:-[a-z]+)+")     # `sk-and-words`: words, not a key
 _SK_BODY = re.compile(r"[A-Za-z0-9_\-]+")
 
 
@@ -119,10 +120,70 @@ def _is_sk_key(value: str) -> bool:
             and _WORD_CHAIN.fullmatch(body) is None)
 
 
-_QUALIFIED_TOKEN_PREFIXES = (
-    ("github_pat_", lambda value: _GITHUB_PAT.fullmatch(value) is not None),
+def _fullmatches(pattern: re.Pattern):
+    return lambda value: pattern.fullmatch(value) is not None
+
+
+def _is_unbroken_token(pattern: re.Pattern):
+    """The format's body, and not a chain of ordinary words joined by hyphens.
+
+    `glpat-migration-plan` and `xoxb-not-a-token` are names; a real token's body is a mixed-case run
+    with digits in it, which is never a lowercase word chain (TESTOPS-56 AC1).
+    """
+    return lambda value: (pattern.fullmatch(value) is not None
+                          and _WORD_CHAIN.fullmatch(value) is None)
+
+
+# TESTOPS-56 AC1: every prefix rule is qualified by body shape. The prefix says which format the
+# value claims to be; the body decides whether it is one.
+_PREFIXED_TOKENS = (
+    ("AKIA", _fullmatches(_AWS_KEY_ID)),
+    ("ASIA", _fullmatches(_AWS_KEY_ID)),
+    ("ghp_", _fullmatches(_GITHUB_CLASSIC)),
+    ("gho_", _fullmatches(_GITHUB_CLASSIC)),
+    ("ghu_", _fullmatches(_GITHUB_CLASSIC)),
+    ("ghs_", _fullmatches(_GITHUB_CLASSIC)),
+    ("xoxb-", _is_unbroken_token(_SLACK_TOKEN)),
+    ("xoxp-", _is_unbroken_token(_SLACK_TOKEN)),
+    ("glpat-", _is_unbroken_token(_GITLAB_PAT)),
+    ("eyJ", _fullmatches(_JWT_HEAD)),
+    ("-----BEGIN ", _fullmatches(_PEM_KEY)),
+    ("github_pat_", _fullmatches(_GITHUB_PAT)),
     ("sk-", _is_sk_key),
 )
+
+# TESTOPS-56 AC2: the parts a compound name may end with without the name reading as a credential.
+# `password-manager` and `token-bucket` are the names of tools and of a rate-limiting algorithm, and
+# they are what a person types. `my-password` is a credential name written plainly, and it has no such
+# part - which is exactly where the boundary is drawn.
+_TECHNICAL_SUFFIXES = frozenset({
+    "manager", "store", "storage", "service", "bucket", "policy", "rotation", "refresh", "reset",
+    "flow", "file", "path", "dialog", "prompt", "field", "input", "hint", "header", "label",
+    "name", "value", "length", "strength", "expiry", "provider", "plugin",
+})
+_CREDENTIAL_WORD = re.compile(rf"(?i)^{_CREDENTIAL_NAME}$")
+
+
+def _names_a_credential(parts: list[str]) -> bool:
+    """Whether a short identifier, split into its parts, reads as *the name of a credential*.
+
+    TESTOPS-56 AC2 scopes this rule deliberately. A bare credential word is refused; so is a name of
+    up to three parts that **ends** in the credential word, which is how a credential is named out
+    loud (`my-password`, `an-api-token`). A two-part name whose other part is a known technical
+    suffix (`password-manager`, `token-bucket`) is the name of a tool, and a longer compound whose
+    last part is not the credential word - `token-bucket-limiter`, the rate-limiting algorithm, or
+    `xoxb-not-a-token`, a label about one - is a technical name. That is the whole of the decision,
+    and the boundary table in ``tests/test_config_credential_screen.py`` pins both sides of it.
+    """
+    credential = [i for i, part in enumerate(parts) if _CREDENTIAL_WORD.fullmatch(part)]
+    if not credential:
+        return False
+    if len(parts) == 1:
+        return True                                   # `password` on its own names the thing
+    if len(parts) == 2 and parts[1 - credential[0]] in _TECHNICAL_SUFFIXES:
+        return False                                  # `password-manager`: a tool, not a secret
+    return len(parts) <= 3 and credential[-1] == len(parts) - 1   # `my-password`, `an-api-token`
+
 
 # What divides a structured key into readable parts. `COTW-PROJ-KEY-0123456789-ABCDEFG` and a UUID
 # are configuration written as short parts; a token is one long unbroken run. Judging the longest run
@@ -180,24 +241,22 @@ def _looks_like_secret(value: str) -> str | None:
     if _AUTH_SCHEME.match(plain):
         return ("it begins with an authorization scheme ('Bearer', 'Basic', 'Digest' or 'Token') "
                 "and a value")
-    # 3. One short unbroken identifier naming a credential: `my-password`, `an-api-token`. Two
+    # 3. One short unbroken identifier naming a credential: `my-password`, `client-secret`. Two
     #    boundaries keep real names out: prose (whitespace) is not a token, a repository coordinate
     #    or path (a '/') is a coordinate, and a longer snake_cased label
-    #    (`test_password_reset_flow`) is a name, not a secret. The pair, prefix, PEM and JWT rules
-    #    above still catch a real credential written in any of those forms.
+    #    (`test_password_reset_flow`) is a name, not a secret. TESTOPS-56 AC2 scopes the rule itself
+    #    in :func:`_names_a_credential`, so a compound name is not a credential name. The pair,
+    #    prefix, PEM and JWT rules above still catch a real credential written in any of those forms.
     if not any(ch.isspace() for ch in plain) and "/" not in plain:
         parts = [part for part in re.split(r"[^A-Za-z0-9]+", plain) if part]
-        if len(parts) <= 3 and _CREDENTIAL_NAME_ALONE.search(plain):
+        if _names_a_credential(parts):
             return "it is a short identifier containing a credential word"
-    # A known credential prefix is refused at any length, before the floors: the shortest realistic
-    # AWS key ID is 20 characters and would otherwise sit below `_BLOB_MIN`.
-    for prefix in _TOKEN_PREFIXES:
-        if plain.startswith(prefix):
-            return f"it begins with {prefix!r}, the prefix of a known credential format"
-    # `sk-` and `github_pat_` start ordinary identifiers too, so these are refused only when the
-    # body reads like the credential as well (`sk-utils/tools` and `github_pat_docs` are not keys).
-    for prefix, looks_qualified in _QUALIFIED_TOKEN_PREFIXES:
-        if plain.startswith(prefix) and looks_qualified(plain):
+    # TESTOPS-56 AC1: every known credential prefix is qualified by the body shape the format is
+    # issued with, so `AKIA-reviews-team` and `ghp_only_a_document_path` are names, not keys, while a
+    # real token of each format - written at that format's own length and charset - is still
+    # refused, before the entropy floors (the shortest AWS key ID is 20 characters).
+    for prefix, looks_issued in _PREFIXED_TOKENS:
+        if plain.startswith(prefix) and looks_issued(plain):
             return f"it begins with {prefix!r}, the prefix of a known credential format"
     # A long blob of one alphabet is a token shape, not a host, a path or a repository. URLs and
     # paths are exempt: they are what settings are for.
