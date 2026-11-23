@@ -225,7 +225,7 @@ Estimates are engineering days for one person who has read this document, includ
 |---|---|---|---|
 | Binding declaration scanner | tolerate 36% multi-line layouts, both quoting styles, `this.` form, regex literals; report line numbers | 44 declarations, 16 multi-line, 1 quote style | 0.5 day |
 | Pattern → matcher | `{string}`, `{int}`, optional regex literal; 1 duplicate pattern | 43 distinct patterns, 2 placeholder kinds | 0.5 day |
-| Suite scoping | a `.feature` beside a `.stepdef.js` is the same suite; today's stem rule already works on 5 of 5 files | 5 stepdef files, 6 feature files | 0.25 day |
+| Suite scoping | a `.feature` beside a `.stepdef.js` is the same suite; the working rule is directory co-location, because the filename stem rule matches 0 of 5 files (see Corrections) | 5 stepdef files, 6 feature files | 0.25 day |
 | Custom-command model | parse `Cypress.Commands.add`, extract the body, build command-name → body, follow one level of local helpers | 11 commands; 28 of 44 step bodies depend on them | 1.5 days |
 | JS/TS layer vocabulary | `cy.*` UI families, `cy.request`/`supertest`/`axios`/`fetch` API, `prisma`/`knex` storage, `should`/`expect` assertion; separate from `SIGNALS` | 9 distinct signals needed for this corpus; 6 present at 0 count and only specified | 1 day |
 | Call-graph layer inference | declaration → command/helpers → `cy.*`, so a step's instrument is found where it happens | 16 of 44 resolvable in the body; 28 only one level down | 1.5 days |
@@ -277,3 +277,29 @@ read-only, by `tools/ecosystem_inventory_counts.py`:
 No count the review confirmed has changed. 44 declarations, 16 multi-line, 11 real custom commands,
 17 of 43 asserting steps and 26 matching nothing all stand, and each now has its rule printed beside
 it.
+
+### 23 November 2026 (TESTOPS-42C-2)
+
+- **The §7 sentence "today's stem rule already works on 5 of 5 files" was false.** It is corrected
+  in the table above and preserved here, because a reader costed from it.
+
+  Measured on this corpus with `stepbindings._suite_of`, the stem rule strips the extension words it
+  knows and stops: it removes `js` but has no `stepdef` entry, so after stripping `js` the stem no
+  longer ends in a listed suffix. The five step-definition files come out as `loginstepdef`,
+  `roommanagementstepdef`, `bookingstepdef`, `contactstepdef`, `backgroundstepdef`; the six feature
+  stems are `login`, `roommanagement`, `bookaroom`, `bookaroominvalidvalidation`, `contacthotel`,
+  `contacthotelinvalidvalidation`. `_suite_matches` therefore matches **0 of 5** step-definition
+  files to any feature. §7's costing rested on the old sentence as evidence that scoping was cheap;
+  the cost is right, the measurement behind it was not.
+
+  The rule that works is **directory co-location**: apply the stem rule to the containing directory
+  (`cucumber_js.suite_of_path`). It gives `login`, `management`, `booking`, `contact`, `support` —
+  five suites — and all six features resolve, because each feature's directory holds one of them
+  (`book-a-room.feature` and `book-a-room-invalid-validation.feature` both resolve to `booking`, and
+  the two contact features to `contact`). Four of the five step-definition files share their
+  directory with a feature; the shared `background.stepdef.js` sits in `cypress/e2e/support/` and is
+  reached by the any-suite fallback that §2's duplicate-pattern rule already needs.
+
+- **The 0.25-day estimate is unaffected.** The directory rule is the cheaper of the two: no suffix
+  table to extend and no per-corpus filename convention to defend. The cost line stands; only the
+  rule it names has changed.

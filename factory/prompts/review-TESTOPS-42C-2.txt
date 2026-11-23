@@ -1,0 +1,35 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-42C-2 - part 2 of 3: per-command layer inference.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t42c2 (branch `factory/testops-42c2-inference`). Work only here.
+Store copy in `data/` (gitignored) - read blobs via `tools/ecosystem_inventory_counts.load_files`.
+Ticket:  factory/tickets/TESTOPS-42C-2.md
+Build:   factory/reports/2026-11-23/TESTOPS-42C-2-build.md
+Prior review: factory/reports/2026-11-23/TESTOPS-42C-1-review.md (the concatenation finding is carried item A).
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Run the suite from this worktree with the interpreter above.
+- **Re-derive the command table yourself** by parsing the four `custom-commands/*.js` files with your own scan: 11 real
+  registrations, 4 inside comments. Then read each command's body and say what layer YOU would give it, and compare.
+  Report any command the build layers differently from you, with the line that justifies your answer.
+- **The 11 unknown bindings** are attributed to `Step(this, …)` delegation. Check that: are the delegating calls
+  passing a LITERAL string, or a run-time-built one? If literals exist, not following them is a choice that costs
+  placements - quantify how many of the 11 could be resolved by following a literal `Step(this, '...')`, and judge
+  whether the build's reason holds. This is the single most consequential judgement in the ticket.
+- **The alias qualification.** `cy.get('@alias')` is treated as data access, not ui, so `createRoomViaApi` resolves api.
+  Verify it does not over-suppress: `cy.get('.selector')`, `cy.get('#id')`, `cy.get('[data-x]')` must all still be ui,
+  and `cy.get(someVariable)`'s treatment must be stated. Test each call yourself.
+- **Carried item A:** the concatenation arm must raise or flag, never truncate. Reproduce with a synthetic fixture and
+  paste the refusal. Then judge the standing decision the build left open for T42C-3: raising on a regex-literal or
+  concatenated declaration converts one unreadable declaration into ZERO claims for a whole suite. Is that right, or
+  should it place nothing for that declaration and continue? Give a recommendation.
+- **Carried item B:** confirm the inventory now says the stem rule matches 0 of 5 (not 5 of 5), that the Corrections
+  section preserves the old sentence, and that §7's costed estimate was not quietly changed to fit.
+- **No placement:** analysers/pipeline unchanged, `supported is False`, corpus still `not_assessable`, zero claims.
+- **.NET parity:** `test_the_reqnroll_module_is_the_old_extractor` row-for-row equality, CotW 94/90/1/1/2, ReqOverflow
+  17/17, goldens byte-identical. The `Binding` grew two fields - confirm .NET rows are unaffected.
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-23/TESTOPS-42C-2-review.md with: ## Verdict; ## The command table, re-derived; ## The 11
+  unknown (Step delegation); ## Alias qualification; ## Carried A (and the raise-vs-continue recommendation); ## Carried
+  B; ## No placement; ## .NET parity; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 300 words.

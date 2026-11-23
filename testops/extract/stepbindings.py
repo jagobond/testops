@@ -55,6 +55,13 @@ class Binding:
     # 1-based line of the [Given("...")] attribute, so evidence can link to the binding itself. 0 means
     # the parser did not record it - never a line number it guessed.
     line: int = 0
+    # How the layer was reached, where the reader followed a call graph: the steps it took
+    # ("cy.loginViaApi()", "enterUserName()", "cy.get"). Empty for the .NET reader, whose layer
+    # comes from the driver map and needs no chain.
+    layer_via: tuple[str, ...] = ()
+    # Why the layer is "unknown". Empty when it resolved. TESTOPS-42C-2: an unknown without a
+    # reason is the dead end this product refuses to print.
+    layer_reason: str = ""
 
 
 def highest(layers) -> str:
