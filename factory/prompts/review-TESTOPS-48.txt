@@ -1,0 +1,26 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-48 - the last known hole in the packaging proof.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t48 (branch `factory/testops-48-wheel-coverage`). Work only here.
+Ticket:  factory/tickets/TESTOPS-48.md
+Build:   factory/reports/2026-11-23/TESTOPS-48-build.md
+Prior review: factory/reports/2026-11-23/TESTOPS-8-review.md, concern 1 - the evidence.
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Run the suite from this worktree with the interpreter above.
+- **Confirm the hole is closed, not narrowed.** Reproduce the build's case (b): create
+  `testops/web/templates/probe.html` and declare `"templates/probe.html"` (no `web/` prefix). The OLD matcher accepted
+  that declaration; the new test must fail. Then declare it correctly (`web/templates/probe.html`) and confirm it
+  passes - both directions, or the rule is just stricter rather than right.
+- **Check the check is not vacuous:** how many non-Python files does it actually enumerate today, and what happens if the
+  enumeration returns an empty list (simulate it)? A test that asserts about nothing passes forever.
+- **One wheel per session:** confirm the fixture is session-scoped and that adding the packaging test to the suite did not
+  double the build cost. Time the suite.
+- **No writes into the repo:** confirm neither the wheel build nor the venv install leaves artefacts in the checkout
+  (`git status` clean after a full run) and that `data/` is untouched.
+- **Error message:** as a reader who has just broken the build, is the message enough to fix it? Say which part helps and
+  which part is noise.
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-23/TESTOPS-48-review.md with: ## Verdict; ## The hole, closed both ways; ## Not vacuous;
+  ## Cost; ## No writes; ## The message; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 250 words.
