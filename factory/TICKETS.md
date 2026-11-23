@@ -66,6 +66,8 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-45 | The store will accept any verdict string, and 128 rows still carry retired names | F2 | done | Schema v5 vocabulary + triggers, `check-store`; 534 tests; PR #38 |
 | TESTOPS-46 | A store can no longer be restored from its own history | F2 | done | Insert allows ever-emitted, update stays current-only; `add_claim` guard now actually called; 548 tests; PR #40 |
 | TESTOPS-47 | Each analyser states the cover of its own decision, and states identity rather than promising an event | F2 | done | From the TESTOPS-40 review: one global sentence is wrong for duplication and over-promises on net-zero twin edits |
+| TESTOPS-51 | `password=hunter2` was stored and echoed by `/config`; a project cannot be deleted | F1 | ready | From T7: the screen exists per-field, so every field inherits the hole. One shared check, plus a project delete route |
+| TESTOPS-52 | "Cannot assess" wears the alarm colour, and 32+ badges have malformed class attributes | F1 | ready | From T7: the soft style exists in CSS and is applied to nothing; `class="badge class="hot""` makes `hot` inert |
 
 |----|-------|---------|--------|------|
 
