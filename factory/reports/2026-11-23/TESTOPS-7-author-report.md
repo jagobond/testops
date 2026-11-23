@@ -1,0 +1,408 @@
+# TESTOPS-7 — page-contract suite, blind: factory report
+
+Author: qa-author (TestOps factory). Delivered suite: `tests/test_page_contracts.py`.
+Draft-run provenance kept: `draft-run.txt` (first draft, 6 failed / 19 passed / 3 skipped),
+`draft-run-2.txt` (after fixing a harness selector, 5 failed / 20 passed / 3 skipped),
+`first-run.txt` (delivered suite, 6 failed / 20 passed / 3 skipped). The suite was **not**
+softened to green; one harness bug was fixed and one *stricter* P23 test was added after probing.
+
+---
+
+## (a) What I was given, verbatim, and what I did not open
+
+Given (one line each):
+
+- "The brief is `brief/page-contracts.md`. It is the whole specification." — README.md
+- "The application is running at http://100.121.128.21:8791/ (also reachable as http://localhost:8791/)." — README.md
+- "Python with pytest and requests: C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe" — README.md
+- "This is the whole brief. If you read the application's source, its templates, its goldens or its existing page tests, this suite stops being independent evidence — so don't." — brief/page-contracts.md
+- "do NOT open the application's source at C:/Users/Chester/Projects/testops, and do not open its tests/, factory/reports/ or any golden file." — task brief
+
+Environment note: `requests` is **not** installed in that venv (pytest 9.2.0 is). The suite uses
+`urllib.request` from the standard library. `http://localhost:8791/` refused the connection; the
+`100.121.128.21:8791` address served every page (HTTP 200).
+
+Deliberately **not** opened:
+
+- `C:/Users/Chester/Projects/testops/src/` (the application source) and the rest of the product tree.
+- `C:/Users/Chester/Projects/testops/tests/`, `factory/reports/`, and any golden file.
+- `C:/Users/Chester/Projects/cotw-continuity/src/`.
+- Any pre-existing page test or Gherkin scenario in either repository.
+
+What I *did* read is the artefact under test: the HTML and inline public CSS served by the running
+server, and the links on those pages. Everything the suite asserts was observed over HTTP or taken
+from the brief; none of it was taken from source.
+
+---
+
+## (b) Promise → test mapping
+
+| Promise | Test(s) | Result in first run |
+|---|---|---|
+| P1 nothing is silent | `test_P01_a_run_that_found_nothing_says_so`, `test_P01_no_page_is_blank` | PASS |
+| P2 a number says what it counts | `test_P02_counts_carry_their_unit` | PASS |
+| P3 unread never dressed as read | `test_P03_unread_files_are_counted_and_named_on_the_page` | PASS |
+| P4 certainty vs uncertainty look different | `test_P04_uncertain_verdict_is_not_styled_as_settled` | **FAIL** |
+| P5 every page reachable, no dead ends | `test_P05_front_reaches_run_and_run_reaches_case`, `test_P05_case_links_back_to_its_run`, `test_P05_config_page_is_reachable_from_the_front_page` | 1 PASS, 2 **FAIL** |
+| P6 URL stable enough to cite | `test_P06_a_case_url_shows_the_same_thing_twice` | PASS |
+| P7 front page says what it analyses and how much exists | `test_P07_front_page_states_what_analyses_and_how_much_exists` | **FAIL** |
+| P8 runs distinguishable | `test_P08_two_runs_of_one_project_at_different_commits_are_tellable_apart` | PASS |
+| P9 empty run vs failed run differ | `test_P09_failed_and_empty_runs_are_distinguishable` | SKIPPED (untestable here) |
+| P10 files read per repo per kind, incl. explicit zeroes | `test_P10_run_states_files_read_per_kind_including_explicit_zeroes` | **FAIL** |
+| P11 what each repository was read as | `test_P11_each_repository_says_what_it_was_read_as` | PASS |
+| P12 skipped files by kind and count | `test_P12_skipped_files_are_stated_by_kind_and_count` | PASS |
+| P13 placed / unplaced + reason | `test_P13_placed_and_unplaced_are_stated_with_a_reason` | PASS |
+| P14 no credit for analysis not performed | `test_P14_unanalysed_repository_gets_no_credit` | SKIPPED (untestable here) |
+| P15 claim in developer's words | `test_P15_case_states_an_actionable_claim_naming_the_step` | PASS |
+| P16 verdict + context + what settles it | `test_P16_verdict_has_context_and_states_what_settles_it` | PASS |
+| P17 evidence traceable (repo/commit/file/line) | `test_P17_evidence_names_repo_commit_file_and_line` | PASS |
+| P18 partial read stated on the page | `test_P18_partial_read_is_stated_on_the_case_page` | PASS |
+| P19 record a decision + coverage | `test_P19_decision_form_and_its_coverage_are_present` | PASS |
+| P20 unplaced claim looks less settled | `test_P20_unplaced_claim_looks_less_settled` | SKIPPED (untestable here) |
+| P21 projects and their resources | `test_P21_config_lists_projects_and_their_resources` | PASS |
+| P22 add project/resource, no restart | `test_P22_project_and_service_can_be_added` | PASS |
+| P23 refuse credentials, say why | `test_P23_credential_token_is_refused_with_a_reason`, `test_P23_password_looking_value_is_refused`, `test_P23_password_in_free_text_field_is_refused` | 2 PASS, 1 **FAIL** |
+| P24 edit does not blank other data | `test_P24_editing_one_field_does_not_blank_another` | PASS |
+
+### Promises judged not testable over HTTP (and why)
+
+- **P9** — "a run that found nothing and a run that failed are different things." The store has
+  no failed run: the runs index shows only `N findings`, `No findings`, and `All decided`. Without
+  a failed run rendered, the *contrast* the promise is about cannot be observed. (Checked every
+  entry on `/runs`; no failure state appears, and no pagination hides more.)
+- **P14** — "never awards a repository credit for analysis it did not perform." "Credit" is an
+  internal attribution (did a claim count as checked against this repo?). The rendered page says
+  what was read and what was not, but does not expose a per-repository credit ledger, so awarding
+  or withholding credit is not observable from HTML alone.
+- **P20** — "a claim that could not be placed must look less settled than one that could." The
+  restfulbooker run reports 26 steps that "matched no step binding", but the store created **no
+  case** for an unplaced claim; every reachable case page is a placed claim. The only "uncertain"
+  verdict available is `Cannot assess` on a claim the page says *was* placed, so the required
+  placed-vs-unplaced visual contrast cannot be set up. (P4 still catches uncertainty-vs-certainty
+  styling, and fails.)
+
+### Interpretations of ambiguous wording
+
+- **P2**: I read "a number always says what it counts" as numeric badges/headers must carry a unit
+  noun (`4 findings`, `43 claims`); I did not try to police every integer (dates, line numbers).
+- **P7**: I read "how many projects, runs, cases" as explicit numeric counts on the front page,
+  not merely countable lists.
+- **P10**: I read "per repository, how many files of each kind were read, including explicit
+  zeroes" strictly: a per-kind read count with an explicit `0` where a kind was read-and-empty. The
+  page does give skipped-per-kind counts, so this is a genuine distinction, not pedantry.
+- **P5 / config**: P21–P24 imply a configuration page. It exists only at `/config` and is linked
+  from nowhere (see failure below); to test P21–P24 I therefore used `/config` directly, and the
+  unlinkedness is reported as a P5 failure rather than silently worked around.
+
+---
+
+## (c) First run of the delivered suite (full output below)
+
+Summary: **6 failed, 20 passed, 3 skipped**, exit 1. Commands:
+`C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest tests -v -p no:cacheprovider`
+
+### Failure-by-failure
+
+1. **P4 — `test_P04_uncertain_verdict_is_not_styled_as_settled`**  
+   Page: case pages. Sentence that breaks it: on `/case/case-restfulbooker-levels-20261123T132456-04`
+   the verdict is `<strong class="verdict hot">Cannot assess</strong>`; on a settled case
+   `/case/case-reqoverflow-dup-20261122T205100-17` it is
+   `<strong class="verdict hot">Checked, but this repeats another test</strong>`. Same class, same
+   styling. **I believe the page breaks P4**: "Cannot assess" is dressed exactly as a settled
+   verdict; only the words differ, which is "reading a legend". This is a real gap, not over-promise.
+
+2. **P5 — `test_P05_case_links_back_to_its_run`**  
+   Page: the case page. Absence: `/case/case-restfulbooker-levels-20261123T132456-04` contains only
+   `href="/"`, `href="/runs"` and GitHub links; there is **no** `/run/restfulbooker-levels-20261123T132456`
+   link. **Page breaks P5**: "from a case back to its run" is not offered; the nav goes to the run
+   *index*, not the originating run.
+
+3. **P5 — `test_P05_config_page_is_reachable_from_the_front_page`**  
+   Page: the whole link graph reachable from `/` (crawled depth 3; hundreds of pages). Absence: no
+   page links `/config`. **Page breaks P5**: the configuration page "only exists if you already
+   know its URL", which P5 explicitly forbids. (Either the page breaks P5 or the brief's P21–P24
+   presuppose a page it also forbids being hidden; I read P5 as the stronger promise and mark the
+   page at fault.)
+
+4. **P7 — `test_P07_front_page_states_what_analyses_and_how_much_exists`**  
+   Page: `/`. Absence: the front page never says "projects", and states no numeric count of
+   projects, runs, or cases — it lists three project sections and four case links, then says
+   "197 earlier runs not shown". **Page breaks P7** as written ("how many projects, runs, cases").
+   Alternative reading: the brief over-promised a summary a case-list front page cannot give; I
+   still record it as a page gap because the counts exist in the store and are cheap to state.
+
+5. **P10 — `test_P10_run_states_files_read_per_kind_including_explicit_zeroes`**  
+   Page: the run page. Absence: it says `5 files` and `the 27 files read` per repository, and lists
+   *skipped* files by kind (`142 .java`, ...), but gives **no per-kind read count and no explicit
+   zero** (`0 product files`). **Page breaks P10** as written. The information to do this is already
+   on the page in aggregate; the promise asks for it per kind including zeroes.
+
+6. **P23 — `test_P23_password_in_free_text_field_is_refused`**  
+   Page: `/config` service form. Sentence that breaks it: entering `name=password=hunter2` (the
+   free-text display-name field) returns HTTP 200 and the config page then shows
+   `value="password=hunter2"` stored. (The `repo` field *does* refuse it with a clear reason —
+   "contains 'password'" — so credential detection exists but is not applied to every field;
+   `name=api_key=...` was likewise stored in probe.) **Page breaks P23**: a value that looks like a
+   password is stored and echoed. The brief's "anything that looks like" is broad, but this value
+   literally contains `password=`, so I do not think the brief over-promised.
+
+### Harness notes (not page findings)
+
+- In the **draft** run (`draft-run.txt`) P2 failed with "No numeric badges found to check". Cause:
+  the page emits malformed badge markup, `<span class="badge class="hot"">4 findings</span>` (a quote
+  inside the class attribute), which my first selector did not match. This was a **harness bug**, not
+  a P2 break; the selector was corrected and P2 passes in the delivered run. The malformed attribute
+  is itself a real defect worth raising (it likely makes the `hot` class inert), but it is a styling
+  bug, not the count-label promise, so it is not scored as a failure.
+- The P23 free-text test was **added** after the draft run, because the first P23 password test only
+  exercised the `repo` field, which refuses `password` as part of coordinate validation. Adding a
+  stricter test after seeing a pass is the opposite of tuning to green; it is recorded here in the
+  open.
+
+### Full first-run output (verbatim, as produced)
+
+```text
+============================= test session starts =============================
+platform win32 -- Python 3.12.5, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\Chester\Projects\testops\.venv\Scripts\python.exe
+rootdir: C:\Users\Chester\Projects\testops-contract-author
+collecting ... collected 29 items
+
+tests/test_page_contracts.py::test_P01_a_run_that_found_nothing_says_so PASSED [  3%]
+tests/test_page_contracts.py::test_P01_no_page_is_blank PASSED           [  6%]
+tests/test_page_contracts.py::test_P02_counts_carry_their_unit PASSED    [ 10%]
+tests/test_page_contracts.py::test_P03_unread_files_are_counted_and_named_on_the_page PASSED [ 13%]
+tests/test_page_contracts.py::test_P04_uncertain_verdict_is_not_styled_as_settled FAILED [ 17%]
+tests/test_page_contracts.py::test_P05_front_reaches_run_and_run_reaches_case PASSED [ 20%]
+tests/test_page_contracts.py::test_P05_case_links_back_to_its_run FAILED [ 24%]
+tests/test_page_contracts.py::test_P05_config_page_is_reachable_from_the_front_page FAILED [ 27%]
+tests/test_page_contracts.py::test_P06_a_case_url_shows_the_same_thing_twice PASSED [ 31%]
+tests/test_page_contracts.py::test_P07_front_page_states_what_analyses_and_how_much_exists FAILED [ 34%]
+tests/test_page_contracts.py::test_P08_two_runs_of_one_project_at_different_commits_are_tellable_apart PASSED [ 37%]
+tests/test_page_contracts.py::test_P09_failed_and_empty_runs_are_distinguishable SKIPPED [ 41%]
+tests/test_page_contracts.py::test_P10_run_states_files_read_per_kind_including_explicit_zeroes FAILED [ 44%]
+tests/test_page_contracts.py::test_P11_each_repository_says_what_it_was_read_as PASSED [ 48%]
+tests/test_page_contracts.py::test_P12_skipped_files_are_stated_by_kind_and_count PASSED [ 51%]
+tests/test_page_contracts.py::test_P13_placed_and_unplaced_are_stated_with_a_reason PASSED [ 55%]
+tests/test_page_contracts.py::test_P14_unanalysed_repository_gets_no_credit SKIPPED [ 58%]
+tests/test_page_contracts.py::test_P15_case_states_an_actionable_claim_naming_the_step PASSED [ 62%]
+tests/test_page_contracts.py::test_P16_verdict_has_context_and_states_what_settles_it PASSED [ 65%]
+tests/test_page_contracts.py::test_P17_evidence_names_repo_commit_file_and_line PASSED [ 68%]
+tests/test_page_contracts.py::test_P18_partial_read_is_stated_on_the_case_page PASSED [ 72%]
+tests/test_page_contracts.py::test_P19_decision_form_and_its_coverage_are_present PASSED [ 75%]
+tests/test_page_contracts.py::test_P20_unplaced_claim_looks_less_settled SKIPPED [ 79%]
+tests/test_page_contracts.py::test_P21_config_lists_projects_and_their_resources PASSED [ 82%]
+tests/test_page_contracts.py::test_P22_project_and_service_can_be_added PASSED [ 86%]
+tests/test_page_contracts.py::test_P23_credential_token_is_refused_with_a_reason PASSED [ 89%]
+tests/test_page_contracts.py::test_P23_password_looking_value_is_refused PASSED [ 93%]
+tests/test_page_contracts.py::test_P23_password_in_free_text_field_is_refused FAILED [ 96%]
+tests/test_page_contracts.py::test_P24_editing_one_field_does_not_blank_another PASSED [100%]
+
+================================== FAILURES ===================================
+_____________ test_P04_uncertain_verdict_is_not_styled_as_settled _____________
+
+case_urls = ['/case/case-restfulbooker-levels-20261123T132456-04', '/case/case-restfulbooker-levels-20261123T132456-03', '/case/ca...1123T132456-01', '/case/case-reqoverflow-dup-20261122T205100-17', '/case/case-reqoverflow-dup-20261122T205100-16', ...]
+
+    def test_P04_uncertain_verdict_is_not_styled_as_settled(case_urls):
+        """P4: a conclusion the tool could not reach must not share the styling of a settled one."""
+        uncertain = None
+        settled = None
+        for u in case_urls:
+            h = get(u)
+            vt = verdict_text(h)
+            vc = verdict_class(h)
+            if not vt or not vc:
+                continue
+            if re.search(r"cannot (assess|tell)|could not|unknown|unplaced", vt, re.I):
+                uncertain = (u, vt, vc)
+            elif re.search(r"checked|placed|settled|already asserted", vt, re.I):
+                settled = (u, vt, vc)
+            if uncertain and settled:
+                break
+        assert uncertain, "No case presenting an uncertain/undecided verdict was reachable"
+        assert settled, "No case presenting a settled verdict was reachable"
+>       assert uncertain[2] != settled[2], (
+            "An uncertain verdict (%r, class %r) is styled identically to a settled one "
+            "(%r, class %r): 'Cannot tell' is dressed as settled (P4)."
+            % (uncertain[1], uncertain[2], settled[1], settled[2])
+        )
+E       AssertionError: An uncertain verdict ('Cannot assess', class 'verdict hot') is styled identically to a settled one ('Checked, but this repeats another test', class 'verdict hot'): 'Cannot tell' is dressed as settled (P4).
+E       assert 'verdict hot' != 'verdict hot'
+
+tests\test_page_contracts.py:282: AssertionError
+_____________________ test_P05_case_links_back_to_its_run _____________________
+
+run_urls = ['/run/restfulbooker-levels-20261123T132456', '/run/reqoverflow-dup-20261122T205100', '/run/cotw-levels-20261122T20494...er-levels-20261122T204917', '/run/restfulbooker-levels-20261122T204834', '/run/restfulbooker-dup-20261122T201909', ...]
+case_urls = ['/case/case-restfulbooker-levels-20261123T132456-04', '/case/case-restfulbooker-levels-20261123T132456-03', '/case/ca...1123T132456-01', '/case/case-reqoverflow-dup-20261122T205100-17', '/case/case-reqoverflow-dup-20261122T205100-16', ...]
+
+    def test_P05_case_links_back_to_its_run(run_urls, case_urls):
+        """P5: from a case a reader can get back to its run."""
+        # Take a run page, take one of its cases, and require the case to link that run.
+        run_html = get(run_urls[0])
+        cs = case_links(run_html)
+        assert cs, "No case links on the selected run page"
+        case_html = get(cs[0])
+>       assert run_urls[0] in hrefs(case_html), (
+            "The case page %s has no link back to its run %s; the only navigation is "
+            "to / and /runs. A reader cannot return to the run they came from (P5)."
+            % (cs[0], run_urls[0])
+        )
+E       AssertionError: The case page /case/case-restfulbooker-levels-20261123T132456-04 has no link back to its run /run/restfulbooker-levels-20261123T132456; the only navigation is to / and /runs. A reader cannot return to the run they came from (P5).
+E       assert '/run/restfulbooker-levels-20261123T132456' in ['/', '/runs', 'https://github.com/m-pujic-levi9-com/cypress-cucumber-e2e-tests/blob/fe8537dbff2c8daab635f9d50d584011c6afa470/cypress/e2e/features/admin-panel/login/login.feature#L28', 'https://github.com/m-pujic-levi9-com/cypress-cucumber-e2e-tests/blob/fe8537dbff2c8daab635f9d50d584011c6afa470/cypress/e2e/features/admin-panel/login/login.feature#L28', 'https://github.com/m-pujic-levi9-com/cypress-cucumber-e2e-tests/blob/fe8537dbff2c8daab635f9d50d584011c6afa470/cypress/e2e/features/admin-panel/login/login.stepdef.js#L41', 'https://github.com/m-pujic-levi9-com/cypress-cucumber-e2e-tests/blob/fe8537dbff2c8daab635f9d50d584011c6afa470/cypress/e2e/features/admin-panel/login/login.feature#L26', ...]
+E        +  where ['/', '/runs', 'https://github.com/m-pujic-levi9-com/cypress-cucumber-e2e-tests/blob/fe8537dbff2c8daab635f9d50d584011c6afa470/cypress/e2e/features/admin-panel/login/login.feature#L28', 'https://github.com/m-pujic-levi9-com/cypress-cucumber-e2e-tests/blob/fe8537dbff2c8daab635f9d50d584011c6afa470/cypress/e2e/features/admin-panel/login/login.feature#L28', 'https://github.com/m-pujic-levi9-com/cypress-cucumber-e2e-tests/blob/fe8537dbff2c8daab635f9d50d584011c6afa470/cypress/e2e/features/admin-panel/login/login.stepdef.js#L41', 'https://github.com/m-pujic-levi9-com/cypress-cucumber-e2e-tests/blob/fe8537dbff2c8daab635f9d50d584011c6afa470/cypress/e2e/features/admin-panel/login/login.feature#L26', ...] = hrefs('<!doctype html><html lang="en"><head><meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>TestOps · case-restfulbooker-levels-20261123T132456-04</title><style>\n:root { --ink:#1b1f24; --dim:#5b6672; --line:#dfe3e8; --bg:#fbfbfa; --accent:#8C5E2C; --bad:#8a2b2b; }\n* { box-sizing: border-box; }\nbody { margin:0; background:var(--bg); color:var(--ink);\n       font:16px/1.55 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }\nmain { max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }\nh1 { font-size: 1.15rem; letter-spacing:.02em; text-transform:uppercase; color:var(--dim); font-weight:600; }\nh2 { font-size: 1.35rem; margin: 1.9rem 0 .35rem; }\nh2.section { font-size: 1.02rem; letter-spacing:.01em; border-bottom:1px solid var(--line);\n             padding-bottom:.3rem; margin-top:2rem; }\na { color: var(--accent); }\n.fresh { color: var(--dim); font-size:.92rem; border-bottom:1px solid var(--line); padding-bottom:.9rem; }\n.fresh strong { color: var(--ink); font-weight:600; }\nul.cases { list-style:none; padding:0; margin:1.5rem 0; }\nul.cases li { border:1px solid var(--line); border-radius:6px; backgroun...configured for this project.</p><h2 class="section">5. Decision</h2><form class="decide" method="post" action="/case/case-restfulbooker-levels-20261123T132456-04/state"><p><strong>Decide this case</strong> — 1 finding rides on this decision, and it applies to this case only.</p><p><input type="text" name="note" placeholder="Why? (optional, shown next time)"></p><p><button name="state" value="needs_fix">Needs a fix</button> <button class="term" name="state" value="resolved">Resolved — stop reporting</button> <button class="term" name="state" value="false_positive">Not a real finding — stop reporting</button></p><p class="warn">Resolved and “not a real finding” hide this evidence from future runs, for this case only. You can reopen the case later; reopening deletes the suppression and makes it report again.</p></form><p class="quiet">A decision covers one assertion in one scenario: the same interaction, words, and count of identical assertions, in any commit and with any test data; removing an identical assertion can let an earlier decision cover again.</p><p class="code footnote">Debugging shorthand, not part of the finding: interaction KP; verdict review.</p></main></body></html>')
+
+tests\test_page_contracts.py:306: AssertionError
+____________ test_P05_config_page_is_reachable_from_the_front_page ____________
+
+front = '<!doctype html><html lang="en"><head><meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initi...ul><p class="quiet">197 earlier runs not shown — only the newest case per analyser is listed.</p></main></body></html>'
+
+    def test_P05_config_page_is_reachable_from_the_front_page(front):
+        """P5: no page that only exists if you already know its URL. The brief's
+        config promises (P21..P24) imply a config page, so it must be linked."""
+        seen, frontier = {"/"}, ["/"]
+        found = set()
+        for _depth in range(3):
+            nxt = []
+            for path in list(frontier)[:120]:
+                try:
+                    h = get(path)
+                except AssertionError:
+                    continue
+                for link in hrefs(h):
+                    if not link.startswith("/"):
+                        continue
+                    link = link.split("#")[0]
+                    found.add(link)
+                    if link not in seen:
+                        seen.add(link)
+                        nxt.append(link)
+            frontier = nxt
+>       assert "/config" in found, (
+            "No reachable page links to the configuration page (/config): it can only be "
+            "reached by guessing the URL (P5). Reachable from the front page: %s"
+            % sorted(found)
+        )
+E       AssertionError: No reachable page links to the configuration page (/config): it can only be reached by guessing the URL (P5). Reachable from the front page: ['/', '/case/case-cotw-levels-20261121T165925', '/case/case-cotw-levels-20261121T170025', '/case/case-cotw-levels-20261121T170231', '/case/case-cotw-levels-20261121T170333', '/case/case-cotw-levels-20261121T170408', '/case/case-cotw-levels-20261121T172207', '/case/case-cotw-levels-20261121T172245', '/case/case-cotw-levels-20261121T173046', '/case/case-cotw-levels-20261121T173152', '/case/case-cotw-levels-20261121T175312', '/case/case-cotw-levels-20261121T175914', '/case/case-cotw-levels-20261121T215534-01', '/case/case-cotw-levels-20261121T215534-02', '/case/case-cotw-levels-20261121T215534-03', '/case/case-cotw-levels-20261121T230627-01', '/case/case-cotw-levels-20261121T230627-02', '/case/case-cotw-levels-20261121T230627-03', '/case/case-cotw-levels-20261121T230858-01', '/case/case-cotw-levels-20261121T230858-02', '/case/case-cotw-levels-20261121T230858-03', '/case/case-cotw-levels-20261122T000930-01', '/case/case-cotw-levels-20261122T000930-02', '/case/case-cotw-levels-20261122T000930-03', '/case/case-cotw-levels-20261122T001058-01', '/case/case-cotw-levels-20261122T001058-02', '/case/case-cotw-levels-20261122T001058-03', '/case/case-cotw-levels-20261122T001550-01', '/case/case-cotw-levels-20261122T001550-02', '/case/case-cotw-levels-20261122T001550-03', '/case/case-cotw-levels-20261122T005529-01', '/case/case-cotw-levels-20261122T005529-02', '/case/case-cotw-levels-20261122T005529-03', '/case/case-cotw-levels-20261122T010730-01', '/case/case-cotw-levels-20261122T010730-02', '/case/case-cotw-levels-20261122T010730-03', '/case/case-cotw-levels-20261122T011316-01', '/case/case-cotw-levels-20261122T011316-02', '/case/case-cotw-levels-20261122T011316-03', '/case/case-cotw-levels-20261122T111027-01', '/case/case-cotw-levels-20261122T111027-02', '/case/case-cotw-levels-20261122T111027-03', '/case/case-cotw-levels-20261122T111056-01', '/case/case-cotw-levels-20261122T111056-02', '/case/case-cotw-levels-20261122T111056-03', '/case/case-cotw-levels-20261122T115115-01', '/case/case-cotw-levels-20261122T115115-02', '/case/case-cotw-levels-20261122T115115-03', '/case/case-cotw-levels-20261122T120603-01', '/case/case-cotw-levels-20261122T120603-02', '/case/case-cotw-levels-20261122T120603-03', '/case/case-cotw-levels-20261122T204947-01', '/case/case-cotw-levels-20261122T204947-02', '/case/case-cotw-levels-20261122T204947-03', '/case/case-reqoverflow-dup-20261122T090025-01', '/case/case-reqoverflow-dup-20261122T090025-02', '/case/case-reqoverflow-dup-20261122T090025-03', '/case/case-reqoverflow-dup-20261122T090025-04', '/case/case-reqoverflow-dup-20261122T090025-05', '/case/case-reqoverflow-dup-20261122T090025-06', '/case/case-reqoverflow-dup-20261122T090025-07', '/case/case-reqoverflow-dup-20261122T090025-08', '/case/case-reqoverflow-dup-20261122T090025-09', '/case/case-reqoverflow-dup-20261122T090025-10', '/case/case-reqoverflow-dup-20261122T090025-11', '/case/case-reqoverflow-dup-20261122T090025-12', '/case/case-reqoverflow-dup-20261122T090025-13', '/case/case-reqoverflow-dup-20261122T090025-14', '/case/case-reqoverflow-dup-20261122T090025-15', '/case/case-reqoverflow-dup-20261122T090025-16', '/case/case-reqoverflow-dup-20261122T090025-17', '/case/case-reqoverflow-dup-20261122T090025-18', '/case/case-reqoverflow-dup-20261122T090159-01', '/case/case-reqoverflow-dup-20261122T090159-02', '/case/case-reqoverflow-dup-20261122T090159-03', '/case/case-reqoverflow-dup-20261122T090159-04', '/case/case-reqoverflow-dup-20261122T090159-05', '/case/case-reqoverflow-dup-20261122T090159-06', '/case/case-reqoverflow-dup-20261122T090159-07', '/case/case-reqoverflow-dup-20261122T090159-08', '/case/case-reqoverflow-dup-20261122T090159-09', '/case/case-reqoverflow-dup-20261122T090159-10', '/case/case-reqoverflow-dup-20261122T090159-11', '/case/case-reqoverflow-dup-20261122T090159-12', '/case/case-reqoverflow-dup-20261122T090159-13', '/case/case-reqoverflow-dup-20261122T090159-14', '/case/case-reqoverflow-dup-20261122T090159-15', '/case/case-reqoverflow-dup-20261122T090159-16', '/case/case-reqoverflow-dup-20261122T090159-17', '/case/case-reqoverflow-dup-20261122T090159-18', '/case/case-reqoverflow-dup-20261122T090439-01', '/case/case-reqoverflow-dup-20261122T090439-02', '/case/case-reqoverflow-dup-20261122T090439-03', '/case/case-reqoverflow-dup-20261122T090439-04', '/case/case-reqoverflow-dup-20261122T090439-05', '/case/case-reqoverflow-dup-20261122T090439-06', '/case/case-reqoverflow-dup-20261122T090439-07', '/case/case-reqoverflow-dup-20261122T090439-08', '/case/case-reqoverflow-dup-20261122T090439-09', '/case/case-reqoverflow-dup-20261122T090439-10', '/case/case-reqoverflow-dup-20261122T090439-11', '/case/case-reqoverflow-dup-20261122T090439-12', '/case/case-reqoverflow-dup-20261122T090439-13', '/case/case-reqoverflow-dup-20261122T090439-14', '/case/case-reqoverflow-dup-20261122T090439-15', '/case/case-reqoverflow-dup-20261122T090439-16', '/case/case-reqoverflow-dup-20261122T090439-17', '/case/case-reqoverflow-dup-20261122T090439-18', '/case/case-reqoverflow-dup-20261122T111139-01', '/case/case-reqoverflow-dup-20261122T111139-02', '/case/case-reqoverflow-dup-20261122T111139-03', '/case/case-reqoverflow-dup-20261122T111139-04', '/case/case-reqoverflow-dup-20261122T111139-05', '/case/case-reqoverflow-dup-20261122T111139-06', '/case/case-reqoverflow-dup-20261122T111139-07', '/case/case-reqoverflow-dup-20261122T111139-08', '/case/case-reqoverflow-dup-20261122T111139-09', '/case/case-reqoverflow-dup-20261122T111139-10', '/case/case-reqoverflow-dup-20261122T111139-11', '/case/case-reqoverflow-dup-20261122T111139-12', '/case/case-reqoverflow-dup-20261122T111139-13', '/case/case-reqoverflow-dup-20261122T111139-14', '/case/case-reqoverflow-dup-20261122T111139-15', '/case/case-reqoverflow-dup-20261122T111139-16', '/case/case-reqoverflow-dup-20261122T111139-17', '/case/case-reqoverflow-dup-20261122T111139-18', '/case/case-reqoverflow-dup-20261122T111222-01', '/case/case-reqoverflow-dup-20261122T111222-02', '/case/case-reqoverflow-dup-20261122T111222-03', '/case/case-reqoverflow-dup-20261122T111222-04', '/case/case-reqoverflow-dup-20261122T111222-05', '/case/case-reqoverflow-dup-20261122T111222-06', '/case/case-reqoverflow-dup-20261122T111222-07', '/case/case-reqoverflow-dup-20261122T111222-08', '/case/case-reqoverflow-dup-20261122T111222-09', '/case/case-reqoverflow-dup-20261122T111222-10', '/case/case-reqoverflow-dup-20261122T111222-11', '/case/case-reqoverflow-dup-20261122T111222-12', '/case/case-reqoverflow-dup-20261122T111222-13', '/case/case-reqoverflow-dup-20261122T111222-14', '/case/case-reqoverflow-dup-20261122T111222-15', '/case/case-reqoverflow-dup-20261122T111222-16', '/case/case-reqoverflow-dup-20261122T111222-17', '/case/case-reqoverflow-dup-20261122T111222-18', '/case/case-reqoverflow-dup-20261122T115216-01', '/case/case-reqoverflow-dup-20261122T115216-02', '/case/case-reqoverflow-dup-20261122T115216-03', '/case/case-reqoverflow-dup-20261122T115216-04', '/case/case-reqoverflow-dup-20261122T115216-05', '/case/case-reqoverflow-dup-20261122T115216-06', '/case/case-reqoverflow-dup-20261122T115216-07', '/case/case-reqoverflow-dup-20261122T115216-08', '/case/case-reqoverflow-dup-20261122T115216-09', '/case/case-reqoverflow-dup-20261122T115216-10', '/case/case-reqoverflow-dup-20261122T115216-11', '/case/case-reqoverflow-dup-20261122T115216-12', '/case/case-reqoverflow-dup-20261122T115216-13', '/case/case-reqoverflow-dup-20261122T115216-14', '/case/case-reqoverflow-dup-20261122T115216-15', '/case/case-reqoverflow-dup-20261122T115216-16', '/case/case-reqoverflow-dup-20261122T115216-17', '/case/case-reqoverflow-dup-20261122T115216-18', '/case/case-reqoverflow-dup-20261122T164254-01', '/case/case-reqoverflow-dup-20261122T164254-02', '/case/case-reqoverflow-dup-20261122T164254-03', '/case/case-reqoverflow-dup-20261122T164254-04', '/case/case-reqoverflow-dup-20261122T164254-05', '/case/case-reqoverflow-dup-20261122T164254-06', '/case/case-reqoverflow-dup-20261122T164254-07', '/case/case-reqoverflow-dup-20261122T164254-08', '/case/case-reqoverflow-dup-20261122T164254-09', '/case/case-reqoverflow-dup-20261122T164254-10', '/case/case-reqoverflow-dup-20261122T164254-11', '/case/case-reqoverflow-dup-20261122T164254-12', '/case/case-reqoverflow-dup-20261122T164254-13', '/case/case-reqoverflow-dup-20261122T164254-14', '/case/case-reqoverflow-dup-20261122T164254-15', '/case/case-reqoverflow-dup-20261122T164254-16', '/case/case-reqoverflow-dup-20261122T164254-17', '/case/case-reqoverflow-dup-20261122T205100-01', '/case/case-reqoverflow-dup-20261122T205100-02', '/case/case-reqoverflow-dup-20261122T205100-03', '/case/case-reqoverflow-dup-20261122T205100-04', '/case/case-reqoverflow-dup-20261122T205100-05', '/case/case-reqoverflow-dup-20261122T205100-06', '/case/case-reqoverflow-dup-20261122T205100-07', '/case/case-reqoverflow-dup-20261122T205100-08', '/case/case-reqoverflow-dup-20261122T205100-09', '/case/case-reqoverflow-dup-20261122T205100-10', '/case/case-reqoverflow-dup-20261122T205100-11', '/case/case-reqoverflow-dup-20261122T205100-12', '/case/case-reqoverflow-dup-20261122T205100-13', '/case/case-reqoverflow-dup-20261122T205100-14', '/case/case-reqoverflow-dup-20261122T205100-15', '/case/case-reqoverflow-dup-20261122T205100-16', '/case/case-reqoverflow-dup-20261122T205100-17', '/case/case-restfulbooker-levels-20261123T132456-01', '/case/case-restfulbooker-levels-20261123T132456-02', '/case/case-restfulbooker-levels-20261123T132456-03', '/case/case-restfulbooker-levels-20261123T132456-04', '/run/cotw-levels-20261121T165925', '/run/cotw-levels-20261121T170025', '/run/cotw-levels-20261121T170231', '/run/cotw-levels-20261121T170333', '/run/cotw-levels-20261121T170408', '/run/cotw-levels-20261121T172207', '/run/cotw-levels-20261121T172245', '/run/cotw-levels-20261121T173046', '/run/cotw-levels-20261121T173120', '/run/cotw-levels-20261121T173152', '/run/cotw-levels-20261121T173223', '/run/cotw-levels-20261121T175312', '/run/cotw-levels-20261121T175914', '/run/cotw-levels-20261121T215534', '/run/cotw-levels-20261121T230627', '/run/cotw-levels-20261121T230858', '/run/cotw-levels-20261122T000930', '/run/cotw-levels-20261122T001058', '/run/cotw-levels-20261122T001550', '/run/cotw-levels-20261122T005529', '/run/cotw-levels-20261122T010730', '/run/cotw-levels-20261122T011316', '/run/cotw-levels-20261122T111027', '/run/cotw-levels-20261122T111056', '/run/cotw-levels-20261122T115115', '/run/cotw-levels-20261122T120603', '/run/cotw-levels-20261122T204947', '/run/reqoverflow-dup-20261122T090025', '/run/reqoverflow-dup-20261122T090159', '/run/reqoverflow-dup-20261122T090439', '/run/reqoverflow-dup-20261122T111139', '/run/reqoverflow-dup-20261122T111222', '/run/reqoverflow-dup-20261122T115216', '/run/reqoverflow-dup-20261122T164254', '/run/reqoverflow-dup-20261122T205100', '/run/restfulbooker-dup-20261122T201909', '/run/restfulbooker-levels-20261122T201853', '/run/restfulbooker-levels-20261122T204834', '/run/restfulbooker-levels-20261122T204917', '/run/restfulbooker-levels-20261123T132456', '/runs']
+E       assert '/config' in {'/', '/case/case-cotw-levels-20261121T165925', '/case/case-cotw-levels-20261121T170025', '/case/case-cotw-levels-20261121T170231', '/case/case-cotw-levels-20261121T170333', '/case/case-cotw-levels-20261121T170408', ...}
+
+tests\test_page_contracts.py:334: AssertionError
+________ test_P07_front_page_states_what_analyses_and_how_much_exists _________
+
+front = '<!doctype html><html lang="en"><head><meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initi...ul><p class="quiet">197 earlier runs not shown — only the newest case per analyser is listed.</p></main></body></html>'
+
+    def test_P07_front_page_states_what_analyses_and_how_much_exists(front):
+        """P7: a newcomer sees what is analysed and how many projects, runs, cases exist."""
+        page = text(front)
+>       assert re.search(r"\bprojects?\b", page, re.I), "Front page never says 'projects'"
+E       AssertionError: Front page never says 'projects'
+E       assert None
+E        +  where None = <function search at 0x00000217073EC720>('\\bprojects?\\b', 'TestOps TestOps all runs Last analysed 21 minutes ago at cypress-cucumber-e2e-tests@fe8537db, restful-booker-platform@efe2deb8 (Level fitness) restfulbooker Open Checked, but over-tested Level fitness · 1 finding · 21 minutes ago Checked, but over-tested — User is not able to login with wrong password reqoverflow Open Already asserted elsewhere Duplication · 1 finding · 16 hours ago Already asserted elsewhere — User registers successfully cotw Open Checked, but over-tested Level fitness · 1 finding · 16 hours ago Checked, but over-tested — Every rendered fact is anchored by a stable data-fact-id 197 earlier runs not shown — only the newest case per analyser is listed.', re.IGNORECASE)
+E        +    where <function search at 0x00000217073EC720> = re.search
+E        +    and   re.IGNORECASE = re.I
+
+tests\test_page_contracts.py:367: AssertionError
+______ test_P10_run_states_files_read_per_kind_including_explicit_zeroes ______
+
+first_run_html = '<!doctype html><html lang="en"><head><meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initi...ode">branding/src/main/resources/db/changelog/db.changelog-master.yaml</span></li></ul></details></main></body></html>'
+
+    def test_P10_run_states_files_read_per_kind_including_explicit_zeroes(first_run_html):
+        """P10: per repository, how many files of each kind were read, including zeroes."""
+        page = text(first_run_html)
+        assert re.search(r"\d+\s+files?\s+(?:were\s+)?read", page, re.I), (
+            "The run page gives no 'N files read' statement per repository"
+        )
+        # The distinctive promise is the explicit zero: "0 product files".
+>       assert re.search(r"\b0\s+(?:product|test|[.\w-]+)\s+files?\b", page, re.I), (
+            "The run page gives no explicit zero read-count per file kind (e.g. "
+            "'0 product files'), so a reader cannot tell a kind that was read-and-empty "
+            "from one that was never mentioned (P10)."
+        )
+E       AssertionError: The run page gives no explicit zero read-count per file kind (e.g. '0 product files'), so a reader cannot tell a kind that was read-and-empty from one that was never mentioned (P10).
+E       assert None
+E        +  where None = <function search at 0x00000217073EC720>('\\b0\\s+(?:product|test|[.\\w-]+)\\s+files?\\b', 'TestOps · restfulbooker-levels-20261123T132456 ← all cases · all runs restfulbooker · Level fitness 4 findings · Ran 21 minutes ago at cypress-cucumber-e2e-tests@fe8537db, restful-booker-platform@efe2deb8 · restfulbooker-levels-20261123T132456 The test repository m-pujic-levi9-com/cypress-cucumber-e2e-tests was read as cucumber-js (44 cucumber-js step-binding declarations in 5 files; declaration syntax: 44 single-quoted strings; 0 declared as this.<Verb>(...); 28 same-line, 16 with the pattern on the following line; 0 regex-literal declarations; regex-literal patterns are unsupported by this build; 11 Cypress custom commands (6 api, 5 ui)). The product repository mwinteringham/restful-booker-platform was read as no ecosystem this build recognises: none of the 3 ecosystems this build knows was recognised in the 27 files read (reqnroll, python-bdd, cucumber-js). What this run placed The suite was read as cucumber-js. Of its 43 asserting steps, 17 were placed on a layer (17 ui) and 26 matched no step binding. The 26 matched no binding because no binding matches these words: they name messages the suite never declared. The two nearest patterns are User will get validation/mandatory ...nd. Name them assets/public/images/rbp-logo.jpg assets/public/images/room1.jpg assets/public/images/room2.jpg assets/public/images/room3.jpg 3 .md in the test repository — unsupported kind. Name them README.md docs/minikube-setup-mac.md docs/minikube-setup-windows.md 2 .cmd in the product repository — unsupported kind. Name them build_locally.cmd run_locally.cmd 2 .css in the product repository — unsupported kind. Name them assets/src/app/globals.css assets/src/styles/reservations.css 2 .jar in the product repository — unsupported kind. Name them .utilities/mocking/wiremock-standalone.jar .utilities/wirebridge/Wirebridge-0.0.3.jar 2 .sh in the product repository — unsupported kind. Name them build_locally.sh run_locally.sh 1 .cjs in the test repository — unsupported kind. Name them eslint.config.cjs 1 .html in the test repository — unsupported kind. Name them reports/index.html 1 .ico in the product repository — unsupported kind. Name them assets/public/favicon.ico 1 .jpg in the test repository — unsupported kind. Name them docs/imgs/project-avatar.jpg 1 .yaml in the product repository — unsupported kind. Name them branding/src/main/resources/db/changelog/db.changelog-master.yaml', re.IGNORECASE)
+E        +    where <function search at 0x00000217073EC720> = re.search
+E        +    and   re.IGNORECASE = re.I
+
+tests\test_page_contracts.py:429: AssertionError
+_______________ test_P23_password_in_free_text_field_is_refused _______________
+
+audit_service = {'id': '31', 'marker': 'svc-fef0e2a9', 'project': 'contract-audit-20261123134639'}
+
+    def test_P23_password_in_free_text_field_is_refused(audit_service):
+        """P23: a password-looking value must be refused wherever it is entered, not only
+        in a field with its own format validation (the repo field rejects 'password'
+        partly as a coordinate check; the free-text Name field is stored verbatim)."""
+        status, body = post(
+            "/config/service/%s" % audit_service["id"],
+            {
+                "project": audit_service["project"],
+                "type": "git_repo", "role": "test",
+                "name": "password=hunter2",  # free-text display name, no format of its own
+                "repo": "owner/keep",
+                "board": "", "host": "", "org": "", "ado_project": "", "pipeline_id": "",
+            },
+        )
+        if status == 200:
+            stored = get("/config")
+>           assert "password=hunter2" not in stored, (
+                "A password-looking value ('password=hunter2') was accepted and stored "
+                "verbatim in the free-text Name field (HTTP 200). P23 promises to refuse "
+                "anything that looks like a password."
+            )
+E           AssertionError: A password-looking value ('password=hunter2') was accepted and stored verbatim in the free-text Name field (HTTP 200). P23 promises to refuse anything that looks like a password.
+E           assert 'password=hunter2' not in '<!doctype h...body></html>'
+E             
+E             'password=hunter2' is contained here:
+E               <!doctype html><html lang="en"><head><meta charset="utf-8">
+E               <meta name="viewport" content="width=device-width, initial-scale=1">
+E               <title>TestOps · configuration</title><style>
+E               :root { --ink:#1b1f24; --dim:#5b6672; --line:#dfe3e8; --bg:#fbfbfa; --accent:#8C5E2C; --bad:#8a2b2b; }
+E               * { box-sizing: border-box; }...
+E             
+E             ...Full output truncated, use '-vv' to show
+
+tests\test_page_contracts.py:680: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_page_contracts.py::test_P04_uncertain_verdict_is_not_styled_as_settled
+FAILED tests/test_page_contracts.py::test_P05_case_links_back_to_its_run - As...
+FAILED tests/test_page_contracts.py::test_P05_config_page_is_reachable_from_the_front_page
+FAILED tests/test_page_contracts.py::test_P07_front_page_states_what_analyses_and_how_much_exists
+FAILED tests/test_page_contracts.py::test_P10_run_states_files_read_per_kind_including_explicit_zeroes
+FAILED tests/test_page_contracts.py::test_P23_password_in_free_text_field_is_refused
+=================== 6 failed, 20 passed, 3 skipped in 3.05s ===================
+
+```
+
+---
+
+## (d) What I would need to know to test what I skipped
+
+- **P9 (failed vs empty run).** I need one run in the store recorded as *failed/errored*, with its
+  rendered run page. The runs index currently renders only `N findings`, `No findings`, and `All
+  decided`. Equivalently: how a failure is meant to be triggered, and whether a failed run creates a
+  page at all. Without one, I cannot check that the two states look different rather than merely
+  being described by different words.
+- **P14 (no credit for unperformed analysis).** I need the definition of "credit" in the product's
+  model — is it "a claim counted as checked against this repository", "a finding attributed to it",
+  or something else — and a page (or field) that exposes that attribution. If it is only ever
+  implicit, P14 is not an HTTP-testable promise and the brief should say so.
+- **P20 (unplaced claim looks less settled).** I need a case page generated from a claim that could
+  **not** be placed. The restfulbooker run says 26 steps "matched no step binding", but no case was
+  created for them. Either produce such a case (and tell me which run/page), or confirm that an
+  unplaced claim never becomes a case — in which case P20 has no referent and should be removed or
+  folded into P13.
+- **P5 / config reachability.** Is the configuration page *intended* to be linked (e.g. from the
+  front page or the runs index)? P21–P24 assume a reachable config page; P5 forbids a page that
+  exists only by URL. I need the intended navigation before deciding whether the page or the brief is
+  wrong; I currently record it as a page break.
+- **Operational, for re-running the config tests.** There is no project-delete endpoint on `/config`
+  (only `Remove this service`). The suite therefore creates a new timestamped project
+  (`contract-audit-<timestamp>`) each run and deletes only its services. If repeated runs against a
+  shared store are not acceptable, I need either a delete-project route or a test-only reset.
+
+## Files
+
+- `tests/test_page_contracts.py` — the delivered suite (29 tests, written black-box over HTTP).
+- `first-run.txt` — full output of the delivered suite's first run (embedded above).
+- `draft-run.txt`, `draft-run-2.txt` — earlier drafts, kept for provenance (selector bug, then the
+  stricter P23 test added).
+- `probe/` — raw HTML fetched while reading the running pages, if further inspection is wanted.
