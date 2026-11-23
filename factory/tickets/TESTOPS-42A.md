@@ -2,7 +2,7 @@
 id: TESTOPS-42A
 title: The extractor seam, ecosystem detection, and an inventory of what cucumber-js actually needs
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-42
 ---
