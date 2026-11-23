@@ -6,6 +6,7 @@ returns plain dicts.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import re
 import sqlite3
@@ -735,6 +736,55 @@ def run_read(conn, run_id: str) -> dict | None:
                    "decided_cases": sum(1 for case in raised
                                         if case["state"] in cases.TERMINAL)})
     return record
+
+
+def unplaced_claims(conn, run_id: str) -> list[dict]:
+    """The claims a run could not place, each with the nearest patterns the suite declared.
+
+    TESTOPS-57. ``unplaced`` is the one verdict whose point is "I could not tell", and it never
+    becomes a case because only ``RAISES`` verdicts do. The run page therefore shows these claims
+    as a section of their own, one entry per claim. The nearest patterns are computed from the
+    run's own binding observations - the same comparison the ecosystem's ``explain_unmatched``
+    makes - so a page opened months later still says what the suite came closest to matching.
+
+    The order is the claim id, which is the order the run wrote them. That keeps the section's
+    ``unplaced-<n>`` anchors stable across renders: an anchor a reader cites does not move.
+    """
+    row = conn.execute("SELECT snapshot_id FROM run WHERE id = ?", (run_id,)).fetchone()
+    if row is None:
+        return []
+    patterns = _declared_patterns(conn, row["snapshot_id"])
+    out: list[dict] = []
+    for claim in conn.execute(
+            "SELECT * FROM claim WHERE run_id = ? AND verdict = 'unplaced' ORDER BY id",
+            (run_id,)).fetchall():
+        entry = dict(claim)
+        text = entry.get("assertion_text") or entry.get("statement") or ""
+        entry["nearly"] = _nearest_patterns(patterns, text, 2)
+        out.append(entry)
+    return out
+
+
+def _declared_patterns(conn, snapshot_id: str) -> list[str]:
+    """Every step-binding pattern the run's snapshot recorded, in the order the run read them."""
+    patterns: list[str] = []
+    for row in conn.execute(
+            "SELECT o.value FROM observation o JOIN artefact a ON a.id = o.artefact_id"
+            " WHERE a.snapshot_id = ? AND o.key LIKE 'binding:%' ORDER BY o.id",
+            (snapshot_id,)):
+        pattern = _json(row["value"]).get("pattern")
+        if pattern and pattern not in patterns:
+            patterns.append(pattern)
+    return patterns
+
+
+def _nearest_patterns(patterns: list[str], text: str, n: int) -> list[str]:
+    """The ``n`` declared patterns closest to ``text``, by the same ratio the ecosystem uses."""
+    if not text:
+        return []
+    ranked = sorted(patterns, key=lambda pattern: -difflib.SequenceMatcher(
+        None, pattern.lower(), text.lower()).ratio())
+    return ranked[:n]
 
 
 def list_runs(conn, project: str | None = None, limit: int = 40) -> list[dict]:
