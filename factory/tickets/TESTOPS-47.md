@@ -2,7 +2,7 @@
 id: TESTOPS-47
 title: Each analyser states the cover of its own decision, and states identity rather than promising an event
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-40
 ---
