@@ -21,7 +21,7 @@ is the reason every future full run needs a warning label.
 
 | id | criterion |
 |----|-----------|
-| AC1 | The contract suite **starts and owns its own server** on an ephemeral port with a **disposable store** built in a temp dir (seeded with whatever the tests need). No environment variable, no default, no fallback can point it at a persistent store. |
+| AC1 | The contract suite **starts and owns its own server** on an ephemeral port with a **disposable store** built in a temp dir (seeded with whatever the tests need). No environment variable, no default, no fallback can point it at a persistent store. *Amended by TESTOPS-58: the store path is handed to the child by the fixture and never read from the environment, so no variable can point the suite at a persistent **evidence** store. The temp root itself is discovered from the OS rather than from `TMPDIR`/`TEMP`/`TMP`, and a temp variable resolving into the repository, the user's home or a checkout's `data/` now makes the suite skip. A temp variable pointing at some other persistent directory still chooses where the disposable store is built — junk in a directory, not corrupted evidence.* |
 | AC2 | When the suite cannot start its own server it **skips** with a reason - it never falls back to a URL it was not given, and never guesses a host. |
 | AC3 | A test pins the prohibition: the suite's configured base must never be the live host/port, and the fixture must refuse to run against a store that is not in a temp directory. Make it fail if somebody reintroduces a live default. |
 | AC4 | **Proof by demonstration:** run the full `pytest` suite and show the live store's file hash and project list are byte-identical before and after (`sha256sum` on the db, plus the project list). Include both. |
