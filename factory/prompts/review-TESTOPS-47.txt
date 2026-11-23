@@ -1,0 +1,29 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-47.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t47 (branch `factory/testops-47-analyser-cover`). Work only here.
+Ticket:  factory/tickets/TESTOPS-47.md
+Build:   factory/reports/2026-11-22/TESTOPS-47-build.md
+Prior review (the evidence): factory/reports/2026-11-22/TESTOPS-40-review.md, "Three sharpest concerns".
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+Each analyser now declares its own cover sentence, the global one is gone, and `cover(name)` has no default.
+
+HARD RULES
+- Run the suite from this worktree with the interpreter above.
+- **Prove there is no usable default.** Register a fake analyser that declares nothing and render a case for it: it must
+  raise, not borrow. Then check a page for each real analyser and confirm the sentence shown belongs to that analyser
+  and describes its identity — a duplication case must NOT show the level-fitness wording and vice versa. Quote both.
+- **Judge the words against behaviour, case by case:** net-zero twin edit (delete one identical assertion, add
+  another) - is the page's claim still TRUE now that it describes identity rather than an event? Change the data
+  table; change the commit; rename; move file; change a step in a duplication scenario. For each: promise vs outcome.
+- **AC4 was resolved by stating the hazard, not by adding history to the key.** Verify the sentence actually says it,
+  and that the behaviour matches (decide a lone assertion, add a twin, delete the twin, see whether the old decision
+  covers again). Judge whether stating it is sufficient for a reader who is about to click, or whether it is buried.
+- **The 11 goldens:** strip the cover sentence from each new golden and compare bytes with the old - programmatically,
+  not by eye. Report any file where something else moved.
+- **Prose lint and length:** 36 and 32 words claimed. Read them as a tired reader. Any vocabulary to learn? Any
+  repetition with the page around them?
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-22/TESTOPS-47-review.md with: ## Verdict; ## No default (the fake analyser); ## Promise vs
+  behaviour (each case); ## AC4 - stated or buried; ## The 11 goldens; ## Prose; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 300 words.

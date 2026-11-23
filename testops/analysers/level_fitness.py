@@ -187,6 +187,20 @@ uses_model = False
 NEEDS = frozenset({sources.TEST_CODE, sources.CODE})
 CONSULTS = frozenset({sources.REQUIREMENTS})
 
+# What a decision recorded on one of this analyser's cases covers (TESTOPS-47). It states the
+# *identity* the suppression key is built from - scenario, interaction, words, and the count of
+# identical assertions in the scenario - and not a promise about edits: a net-zero twin edit (delete
+# one identical assertion, add another) leaves the count unchanged, so the decision holds, and a
+# sentence that said "adding or removing one asks you again" would be false. The last clause is
+# the reverse case the store cannot prevent: once the twin is removed the lone key returns, and a
+# decision recorded before the twin existed covers again. Stated, not solved - the cover is always
+# over identical words in the same scenario, and preventing it would mean keying on something
+# outside (scenario, interaction, words, count) - a run or edit identity - which is the re-ask on
+# every deploy or reformat TESTOPS-40 deliberately removed.
+COVER = ("A decision covers one assertion in one scenario: the same interaction, words, and count "
+         "of identical assertions, in any commit and with any test data; removing an identical "
+         "assertion can let an earlier decision cover again.")
+
 BEHAVIOUR = re.compile(r"\b(click(s|ed)?|submit(s|ted)?|type(s|d)?|fills?|enters?|press(es)?|selects?|"
                        r"navigates?|visits?|opens? the page|interacts?|drags?|hovers?)\b", re.I)
 PRESENTATION = re.compile(r"\b(render(s|ed)?|page|pages?|displayed (to|on)|visible|shown?|shows?|"

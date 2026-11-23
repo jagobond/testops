@@ -39,8 +39,17 @@ class Claim:
 
 
 class Analyser(Protocol):
+    """What every registered analyser declares, beside its verdicts and actions.
+
+    ``COVER`` is the sentence the case page shows beside the decision, and it is the *declaring*
+    analyser's sentence - a duplication case shows the duplication contract, a level-fitness case
+    the level-fitness one (TESTOPS-47). There is deliberately no default anywhere: a module that
+    fails to declare ``COVER`` raises when the page asks for it, rather than inheriting another
+    analyser's wording, which is exactly the bug a single global sentence caused.
+    """
     name: str
     version: str
     uses_model: bool
+    COVER: str
 
     def run(self, snapshot, ctx) -> list[Claim]: ...

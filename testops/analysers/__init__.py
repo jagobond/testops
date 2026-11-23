@@ -22,3 +22,14 @@ def registered_names() -> frozenset[str]:
 
 def is_registered(name: str | None) -> bool:
     return bool(name) and name in REGISTERED
+
+
+def cover(name: str) -> str:
+    """The cover sentence the analyser that raised a case declared for its own decision.
+
+    No default and no fallback: an analyser that does not declare ``COVER`` raises
+    ``AttributeError`` here, so a new analyser cannot quietly inherit another's contract
+    (TESTOPS-47, AC5). Callers check :func:`is_registered` first; an unregistered name is a
+    ``KeyError``, not a sentence.
+    """
+    return REGISTERED[name].COVER
