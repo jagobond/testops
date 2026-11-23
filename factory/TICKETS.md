@@ -72,6 +72,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-54 | A case does not link to its run; `/config` is reachable from nowhere | F1 | ready | From T7 P5: no dead ends, no page that only exists if you know the URL |
 | TESTOPS-55 | The front page states no totals; the run page gives no per-kind read counts | F1 | ready | From T7 P7/P10: a reader cannot state what exists or what was read, and never sees an explicit zero |
 | TESTOPS-56 | The screen refuses `token-bucket-limiter` and any value starting `AKIA`/`xoxb-` | F1 | ready | From the T51 review: qualify prefix rules by body shape, scope the short-identifier rule deliberately, pin a 25-value false-positive table |
+| TESTOPS-57 | The 351 claims the tool could not place have no page of their own | F1 | ready | From the T52 review: `unplaced` never becomes a case, so the soft tone is rendered nowhere. A per-run section with anchors and the soft treatment |
 
 |----|-------|---------|--------|------|
 
