@@ -1,0 +1,34 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-42A. The builder wrote it all, verified it, and hit its
+iteration limit before committing; the Lead wrote the build report and committed. Treat every claim as the builder's and
+verify it yourself.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t42a (branch `factory/testops-42a-seam`). Work only here.
+Ticket:  factory/tickets/TESTOPS-42A.md
+Build:   factory/reports/2026-11-23/TESTOPS-42A-build.md
+Deliverable: docs/ecosystem-inventory-cucumber-js.md
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Run the suite from this worktree with the interpreter above. A copy of the live store is in `data/` (gitignored) so the
+  real-corpus tests run rather than skip - keep it there for your probes.
+- **AC5 is the ticket's soul: cucumber-js must still be unsupported.** Call the cucumber_js module directly and confirm
+  `bindings()` and `drivers()` RAISE rather than return `[]`, and that a run on the restfulbooker corpus produces
+  `not_assessable` with ZERO claims. Then grep the rendered page and the run sentence for the two banned phrases ("no
+  layers found", "could not be tied to a layer"). If either appears, fail.
+- **AC3 by absence of change:** rebuild CotW levels and ReqOverflow duplication from the stored blobs and compare claim
+  counts and verdict splits against the stored runs (94/90/1/1/2 and 17/17). Compare case-page goldens byte-for-byte.
+  Report the exact numbers you get.
+- **AC1 registry honesty:** prove it raises on a duplicate name, on ambiguity, and on no match. Then register a fake
+  ecosystem whose `bindings` raises and confirm the run reports `not_assessable` rather than a crash or an empty result.
+- **AC2:** is the ecosystem recorded per repository in the store, and does it survive a rebuild? Read it back from the
+  store rather than trusting the page.
+- **THE INVENTORY, spot-checked:** pick five numbers from docs/ecosystem-inventory-cucumber-js.md - the 44 declarations,
+  the 16 multi-line layouts, the 11 real custom commands (15 raw minus 4 in comments), the 17 of 43 asserting steps that
+  match, and the 26 that match nothing - and recompute each from the stored blobs yourself. Report each as confirmed or
+  contradicted. This document is what Harry will decide a 6.25-day build on; a wrong count is worse than no document.
+- **Judge the estimate:** 6.25 days itemised. Which line is most likely to be wrong, and in which direction?
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-23/TESTOPS-42A-review.md with: ## Verdict; ## AC5 - unsupported means unsupported;
+  ## AC3 - absence of change; ## AC1 registry; ## AC2 record survives rebuild; ## The inventory, spot-checked;
+  ## The estimate; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 300 words.
