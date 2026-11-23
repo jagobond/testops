@@ -20,7 +20,8 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-6 | The case page — an argument a developer can act on | F1 | done | 111 tests; PR #6 merged as fecfb6e after a PASS review |
 | TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | Ticket now written; blocked on TESTOPS-42 (the suite pins pages T42 may change) |
 | TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | done | Built: wheel installed in a fresh venv, served 4 pages; red run shown; CI runs the marked tests; 557 tests; PR #42 |
-| TESTOPS-48 | The packaging coverage rule accepts a pattern that ships nothing | F1 | ready | From the TESTOPS-8 review: `PurePosixPath.match` right-anchors, so a package-root-relative pattern can 'cover' a file it never ships. Decide coverage from the wheel's namelist |
+| TESTOPS-48 | The packaging coverage rule accepts a pattern that ships nothing | F1 | done | Wheel namelist is the authority; wrong-prefix declaration now fails; 3 red runs; PR #43 |
+| TESTOPS-49 | The packaging coverage test passes when there is nothing to check | F1 | ready | From the TESTOPS-48 review: empty enumeration yields a green test asserting nothing; add non-empty and minimum-count guards |
 | TESTOPS-9 | Stale claim vocabulary — the schema and the docstrings describe verdicts that were abandoned | F1 | done | 514 tests; three places corrected, test bites both ways; PR #36 |
 | TESTOPS-10 | Classification coverage — half the real corpus is unclassifiable | F1 | done | 48 → 0 unplaced, gaps unchanged; PR #4 merged after a PASS review |
 | TESTOPS-11 | Restraint — a claim is not checked because one of its words is familiar | F1 | done | 90 distinct / 1 unplaced / 1 gap / 2 review; PR #5 merged as 1c1fca3 after a PASS review |

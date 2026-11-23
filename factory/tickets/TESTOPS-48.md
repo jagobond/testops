@@ -2,7 +2,7 @@
 id: TESTOPS-48
 title: The packaging coverage rule accepts a pattern that ships nothing
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-8
 ---
