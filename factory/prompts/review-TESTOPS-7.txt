@@ -1,0 +1,39 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-7 - a page-contract suite written blind by a qa-author who
+never saw the implementation. The author is not to be trusted and neither are you; the suite is evidence only if it is
+independent and it actually fails for the reasons it says.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t7 (branch `factory/testops-7-page-contracts`). Work only here.
+Suite:   tests/contracts/test_page_contracts.py (722 lines, 29 tests)
+Brief:   factory/briefs/page-contracts.md (24 promises - the whole specification the author was given)
+Author report: factory/reports/2026-11-23/TESTOPS-7-author-report.md ; raw first run: TESTOPS-7-first-run.txt
+The application is RUNNING at http://100.121.128.21:8791/ with the live store (CotW, ReqOverflow, restfulbooker runs).
+
+HARD RULES
+- **Run the suite yourself** against the running server: `C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m
+  pytest tests/contracts -v -p no:cacheprovider`. Report your own result. If it differs from the author's (6 failed / 20
+  passed / 3 skipped), that difference matters more than either number.
+- **Judge the blindness.** Read the suite and answer: does it know anything it could only have learned from the source,
+  the templates, the goldens or the build reports? Reading the *served HTML* is allowed (it is the artefact under test);
+  reading `testops/web/`, `testops/queries.py`, `tests/`, goldens or reports is not. Look for class names, ids, template
+  structure, internal vocabulary, or assertions that would only make sense to someone who knows the code. State your
+  evidence either way. If the suite asserts on CSS class names, say whether that is legitimate here (P4 asks for
+  uncertainty to be visibly distinct) or whether it makes the suite a hostage to styling decisions.
+- **Triage every failure yourself**, into exactly one of: page breaks the promise / brief promised too much. Do not accept
+  the author's triage - check each one against the served page. Say which you would fix in the product and which in the
+  brief.
+- **Verify the two most serious claims by hand:**
+  1. **P23** - the author says `name=password=hunter2` is accepted and stored/echoed by `/config`, while the `repo` field
+     refuses it. Reproduce it SAFELY: use a throwaway value, and afterwards confirm you have not left a credential-shaped
+     value in the live store - if you must write, use a copy of the store and its own server on a different port, and say
+     which you used. This is a security-adjacent finding and it matters more than any wording.
+  2. **P4** - "Cannot assess" and a settled verdict share the same class/styling. Confirm on a real case page, and say
+     whether the soft/uncertain style exists in the served CSS but is not applied.
+- **The malformed badge markup** the author noticed in passing (`<span class="badge class="hot"">`) - confirm whether it is
+  really served that way, and whether the `hot` class is therefore inert. It was not scored as a failure; say whether it
+  should be a ticket of its own.
+- **No product code changed** by this ticket: `git diff --stat origin/main...HEAD -- testops/` must be empty.
+- Do not edit the suite to make it pass, do not edit product code, do not edit the brief. Write exactly one file:
+  factory/reports/2026-11-23/TESTOPS-7-review.md with: ## Verdict; ## My own run; ## Blindness (evidence); ## Triage of
+  each failure; ## P23 reproduced; ## P4 reproduced; ## The malformed badge; ## No product changes; ## What should become
+  tickets.
+- Reply with the verdict and a summary under 300 words.
