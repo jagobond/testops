@@ -140,9 +140,11 @@ def test_an_unsupported_ecosystem_parses_declarations_but_places_no_claim():
     # T42C-1: the parsing floor reads the declaration ...
     rows = cucumber_js.ECOSYSTEM.bindings(files)
     assert [row.pattern for row in rows] == ["a user is logged in"]
+    # T42C-2 reads the custom commands too - this repository registers none, and the answer to
+    # "which commands are there" is a measured empty, not a refusal ...
+    assert cucumber_js.ECOSYSTEM.drivers(files) == {}
     # ... and nothing above it is wired: the ecosystem stays unsupported, so no claim is placed.
-    with pytest.raises(ecosystems.UnsupportedEcosystem):
-        cucumber_js.ECOSYSTEM.drivers(files)
+    assert ecosystem.supported is False
 
 
 def test_python_bdd_is_detected_and_refused_for_the_same_reason():
@@ -314,7 +316,11 @@ def test_the_restfulbooker_corpus_is_not_assessable_and_not_lied_about(monkeypat
     assert run["assessment"]["state"] == "not_assessable"
     assert "cucumber-js" in run["assessment"]["sentence"]
     assert "cucumber-js is unsupported" in run["assessment"]["sentence"]
-    assert "cannot read" in run["assessment"]["sentence"]
+    # T42C-2 changed what the sentence may claim: the declarations and their call graph are now
+    # read, so "cannot read" would be false. What is still absent is placement.
+    assert "can read JavaScript step definitions" in run["assessment"]["sentence"]
+    assert "not wired yet" in run["assessment"]["sentence"]
+    assert "cannot read" not in run["assessment"]["sentence"]
     assert "44 cucumber-js step-binding declarations" in text
     assert "no support for cucumber-js" in text
     assert "could be tied to a layer" not in text

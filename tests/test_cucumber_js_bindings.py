@@ -163,8 +163,12 @@ def test_ac1_the_corpus_yields_44_bindings_in_five_files():
     assert all(binding.pattern for binding in bindings)
     assert all(binding.line >= 1 for binding in bindings)
     assert all(binding.suite for binding in bindings)
-    assert all(binding.layer == "unknown" for binding in bindings), \
-        "T42C-1 adds no layer vocabulary; a guessed layer would be a claim"
+    # T42C-2 reads the layer of each binding; T42C-1's "every layer is unknown" floor is
+    # superseded. The proof that the two mixed files are not given one layer lives in
+    # tests/test_cucumber_js_inference.py (AC4), which is where the per-command unit is pinned.
+    assert all(binding.layer in stepbindings.LAYER_ORDER or binding.layer == "unknown"
+               for binding in bindings)
+    assert all(binding.layer_reason for binding in bindings if binding.layer == "unknown")
 
     for binding in bindings:
         source = files[binding.path].splitlines()
@@ -244,5 +248,9 @@ def test_ac7_the_ecosystem_is_still_unsupported_so_no_claim_can_be_placed():
     assert ecosystem is not None
     assert ecosystem.supported is False
     assert ecosystem.reason
-    with pytest.raises(UnsupportedEcosystem):
-        cucumber_js.ECOSYSTEM.drivers(_corpus())
+    # T42C-2 reads the custom commands (T42C-1 refused them outright); reading them is not
+    # placement, and the gate that stops a claim is the unsupported flag asserted above.
+    commands = cucumber_js.ECOSYSTEM.drivers(_corpus())
+    assert len(commands) == 11
+    assert all(isinstance(command, cucumber_js.CustomCommand) and command.body
+               for command in commands.values())
