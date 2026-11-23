@@ -23,6 +23,16 @@ this ticket's). Counts were produced by reading the stored blobs, not by reading
 | — Cypress support/config files (of which 1 is `index.d.ts`) | 10 |
 | scenario tags | 6 (`@sanity` 4, `@bug` 2) |
 
+**Counting rule for this table.** One `Scenario:` or `Scenario Outline:` line is one scenario, and
+an `Examples:` row is data, not a scenario; a step line is counted once, not once per example row.
+Step lines inside `Background:` are excluded from the 76: the corpus has **87 step lines**, of which
+11 are Background (6 Given, 5 And) and are preconditions rather than assertions about a scenario's
+outcome. "`.js` / `.ts` files" means every stored file with those extensions, `index.d.ts` included
+(15 files, one of them the type declaration). "Scenario tags" means tags attached to a
+Scenario, Scenario Outline or Examples block; `@login`, `@management`, `@room-management`,
+`@booking` and `@contact` sit above `Feature:` and are feature tags, not scenario tags. Every table
+here can be re-derived read-only with `python tools/ecosystem_inventory_counts.py`.
+
 ## 2. Binding declarations: how many, in which syntaxes
 
 **44 declarations in 5 files.** Keyword split: When 26, Then 13, Given 5, And 0, But 0.
@@ -50,21 +60,24 @@ costing.
 
 **Pattern bodies:** 43 distinct patterns for 44 declarations (one duplicate:
 `Visitor will get validation/mandatory error message: {string}` is declared in both
-`booking.stepdef.js` and `contact.stepdef.js`).
+`booking.stepdef.js` and `contact.stepdef.js`). **Rule:** the table below counts distinct pattern
+texts, so the duplicated text is counted once; a count taken per declaration instead is labelled as
+such.
 
 | pattern content | count |
 |---|---|
-| patterns mentioning `{string}` (86 occurrences in total) | 29 |
+| patterns mentioning `{string}` (86 occurrences in total) | 28 (29 declarations) |
 | patterns mentioning `{int}` (5 occurrences in total) | 5 |
 | patterns with no placeholder at all (a literal sentence) | 15 |
 | regular-expression pattern | 0 |
 | expression interpolation (`${…}`) inside a pattern | 0 |
 
 The rows overlap — a pattern can mention `{string}` and `{int}` — and they cover all 43 distinct
-patterns between them. So the extractor's matching rules are: string literals, `{string}`, `{int}`,
-and nothing else. The existing `stepbindings.pattern_to_regex` already turns `{string}` into a
-permissive group; it would need `{int}` (\d+) and a regex-literal arm only if another corpus has
-them.
+patterns between them: 15 with no placeholder + 28 mentioning `{string}` + 5 mentioning `{int}`,
+minus the 5 that mention both, is 43. So the extractor's matching rules are: string literals,
+`{string}`, `{int}`, and nothing else. The existing `stepbindings.pattern_to_regex` already turns
+`{string}` into a permissive group; it would need `{int}` (\d+) and a regex-literal arm only if
+another corpus has them.
 
 ## 3. How drivers and custom commands are expressed
 
@@ -125,7 +138,7 @@ Measured across the 15 test-arm `.js`/`.ts` files:
 | `.should(` | 17 | ui (an assertion on the browser) | nothing |
 | `cy.request(` | 6 | api (HTTP from the test process) | nothing — `SIGNALS["api"]` has `\brequests\b` (plural, Python) and `\bHttpClient\b`, neither matches |
 | `cy.fixture(` | 5 | data, not a layer | nothing |
-| `cy.wrap(` / `.as(` | 11 / — | state, not a layer | nothing |
+| `cy.wrap(` / `.as(` | 11 / 18 | state, not a layer | nothing |
 | `expect(` | 6 | assertion, not a layer | nothing |
 | `Cypress.Commands` | 15 (11 real) | the driver-definition mechanism | nothing — and not a `*Driver.*` filename, so 0 drivers are found |
 | `playwright` | 0 | — | not present in this corpus |
@@ -151,14 +164,25 @@ Two corrections to the vocabulary beyond "add `cy.`":
 
 ## 5. What a cucumber-js extractor would actually achieve here
 
-Applying the 44 patterns to the 76 steps, with `{string}`/`{int}` as permissive groups:
+**Matching rule.** Each of the 43 distinct patterns is applied to each of the 76 scenario step
+lines: one line is one attempt, `Examples:` rows are not expanded, and Background steps are
+excluded. A pattern matches when every `{name}` placeholder is replaced by one permissive group
+(`(.+?)`), everything else — parentheses included — is literal text, and the result matches the
+whole step case-insensitively. That is exactly what `stepbindings.pattern_to_regex` does today.
+A duplicated pattern changes no count, because the two declarations are identical text.
 
 | quantity | count |
 |---|---|
 | steps that match a declared pattern | 46 of 76 |
-| Given/When steps that match | 29 of 33 |
+| When steps that match | 29 of 33 |
 | **asserting steps that match** | **17 of 43** |
 | asserting steps that match nothing | 26 of 43 |
+
+The two auxiliary rows are sensitive to the rule in a way the bold rows are not. Under stricter
+cucumber-expression semantics — `{string}` matching only a quoted string, `{int}` only an integer,
+`(invalid )` an optional text group — the same corpus gives 38 of 76 and 21 of 33; widen `{int}` to
+a permissive group there and it gives 48 and 31. The asserting rows stay at 17 and 26 under every
+variant, so the conclusion rests on the bold rows and no rule moves them.
 
 The 26 are not a parser failure; they are the suite's own drift. Every one of them names a
 `validation error message` or a `mandatory error message`, while the only bindings that exist are
@@ -230,3 +254,26 @@ JS" — is the lie TESTOPS-39 caught in the first place. The run for this corpus
 
 and makes no claim about the steps. T42-C can be estimated from this document instead of from
 optimism.
+
+## Corrections, 23 November 2026 (TESTOPS-50)
+
+The TESTOPS-42A review could not reproduce three numbers here. Re-derived from the stored blobs,
+read-only, by `tools/ecosystem_inventory_counts.py`:
+
+- **"patterns mentioning `{string}`: 29" was wrong.** The table's unit is distinct pattern texts,
+  and that number is **28**. 29 is the count of declarations, because
+  `Visitor will get validation/mandatory error message: {string}` is declared in two files. The
+  cell now reads 28 (29 declarations). The original mixed two units without saying which it used.
+- **"46 of 76" and "29 of 33" were right, but their rule was never stated** — which, in a document
+  whose argument is "counts, not estimates", is the same defect. Under the rule now written beside
+  the table (placeholders become permissive groups, everything else literal, whole-step
+  case-insensitive match — the repository's existing `pattern_to_regex`), they reproduce exactly:
+  46, 29, 17, 26. The reviewer's 38/21 and 48/31 are the same corpus under cucumber-expression
+  semantics, where `(invalid )` is an optional group and `{string}` means a quoted string; §5 now
+  records that variant. The asserting rows are 17 and 26 under every rule tried.
+- **§1's 76 did not show what it excluded.** It now states the exclusion: 87 step lines in the
+  corpus, 11 of them Background, 76 in scenario bodies.
+
+No count the review confirmed has changed. 44 declarations, 16 multi-line, 11 real custom commands,
+17 of 43 asserting steps and 26 matching nothing all stand, and each now has its rule printed beside
+it.
