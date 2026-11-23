@@ -10,7 +10,8 @@ from .analysers import duplication, level_fitness
 from .surfaces import discover as surface_discovery
 from .collectors import github, jira
 from .config import Project, load_env
-from .extract import csproj, gherkin, stepbindings
+from .extract import csproj, gherkin
+from .extract import ecosystems
 from . import cases, config, services, sources
 from .store import db
 
@@ -66,6 +67,80 @@ def _analyser_record(analyser) -> dict:
     """
     return {analyser.name: {"needs": sorted(analyser.NEEDS),
                             "consults": sorted(analyser.CONSULTS)}}
+
+
+def _ecosystem_record(role: str, slug: str, texts: dict[str, str]) -> tuple[dict, object | None]:
+    """Which ecosystem one repository arm was read as, and the module that reads it (AC2).
+
+    ``unknown`` is a recorded fact, not a fallback: it means no marker this build knows was found
+    in the files the run actually read. A repository recognised as two ecosystems is also recorded
+    as unknown, with the reason, because naming one of them would be a guess.
+    """
+    try:
+        module, ecosystem = ecosystems.registry().match(texts)
+    except (ecosystems.UnknownEcosystem, ecosystems.AmbiguousEcosystem) as exc:
+        return ({"role": role, "repository": slug, "ecosystem": "unknown",
+                 "evidence": [], "reason": str(exc)}, None)
+    return ({"role": role, "repository": slug, **ecosystem.record()}, module)
+
+
+def _ecosystem_records(project: Project,
+                       texts_by_role: dict[str, dict[str, str]]) -> tuple[dict, object | None]:
+    """The ecosystem record per repository arm, and the module the test arm's analysis uses.
+
+    The test arm decides the analysis: an ecosystem this build cannot read stops it (AC4). The
+    product arm is recorded because the question is per repository, but its ecosystem never stops a
+    run - a product is not a suite, and "its files are not step definitions" is not a fault.
+    """
+    records: dict = {}
+    module: object | None = None
+    for role, texts in texts_by_role.items():
+        repo = project.product if role == "product" else project.test
+        record, found = _ecosystem_record(role, repo.slug if repo is not None else "", texts)
+        records[role] = record
+        if role == "test":
+            module = found
+    return records, module
+
+
+def _unsupported(records: dict) -> sources.BlindSpot | None:
+    """The ecosystem blind spot this run's record carries, or ``None`` when it can be analysed."""
+    spot = ecosystems.unsupported_spot(records)
+    if spot is None:
+        return None
+    return sources.BlindSpot(spot["source"], spot["title"], spot["state"], spot["reason"])
+
+
+def _assessable(assessment: sources.Assessment, records: dict) -> sources.Assessment:
+    """Not assessable when the suite's ecosystem is detected and this build cannot read it.
+
+    The sources were available and were read - the readings travel unchanged, because they are
+    true - and the reason no claim can be made about the steps is named beside them. This is the
+    difference between "we looked and there was nothing" and "we cannot look", applied to a
+    vocabulary rather than a source.
+    """
+    spot = _unsupported(records)
+    if spot is None:
+        return assessment
+    return sources.Assessment(assessment.capabilities, sources.NOT_ASSESSABLE,
+                              observed=assessment.observed,
+                              blind_spots=assessment.blind_spots + (spot,),
+                              readings=assessment.readings)
+
+
+def _bindings_by_path(module, texts: dict[str, str]) -> dict[str, list]:
+    """The module's bindings, grouped by the file they were declared in.
+
+    Grouped rather than flattened because the run stores one observation per binding against its
+    own artefact, in the order the files are read - the same order the pre-seam pipeline used, so
+    a run's observation ids do not move because of a refactor.
+    """
+    out: dict[str, list] = {}
+    if module is None:
+        return out
+    for binding in module.bindings(texts):
+        out.setdefault(binding.path, []).append(binding)
+    return out
 
 
 def _service_meta(project: Project, conn) -> dict:
@@ -248,6 +323,18 @@ def run_duplication(project: Project, token: str,
     versions = {project.test.slug: test_repo.commit}
     if product:
         versions[project.product.slug] = product.commit
+
+    # Read the text before the snapshot is written: which ecosystem each repository was read as is
+    # part of the snapshot's own record (AC2), and whether the test arm's is one this build can read
+    # decides whether there is an analysis to record at all (AC4).
+    texts = {path: blobs.text(sha) for path, (sha, _kind) in test_repo.files.items()}
+    product_texts = ({path: blobs.text(sha) for path, (sha, _kind) in product.files.items()}
+                     if product else {})
+    ecosystems_record, module = _ecosystem_records(
+        project, {"test": texts, **({"product": product_texts} if product else {})})
+    assessment = _assessable(assessment, ecosystems_record)
+    readable = _unsupported(ecosystems_record) is None
+
     # The registry is recorded with the snapshot, so a reader can reconstruct what this run could
     # and could not consult without probing anything. No "arms" here: a duplication snapshot is not
     # a level-fitness rebuild, and recording arms would invite one to be attempted.
@@ -256,16 +343,15 @@ def run_duplication(project: Project, token: str,
                        meta={"sources_missing": missing_sources,
                              "sources": declared.record(),
                              "reads": {role: collected.record() for role, collected in arms},
+                             "ecosystems": ecosystems_record,
                              "analysers": _analyser_record(duplication),
                              **_service_meta(project, conn)})
 
     # 2. artefacts + observations
-    texts = {}
     artefact_ids = {}
     for path, (sha, kind) in test_repo.files.items():
         uri = f"github:{project.test.slug}@{test_repo.commit}:{path}"
         artefact_ids[path] = db.add_artefact(conn, snapshot_id, uri, kind, sha)
-        texts[path] = blobs.text(sha)
 
     if product:
         for path, (sha, kind) in product.files.items():
@@ -279,7 +365,7 @@ def run_duplication(project: Project, token: str,
         if test_repo.files[path][1] == "build":
             excludes.extend(csproj.excluded_patterns(text))
 
-    driver_map = stepbindings.build_driver_map(texts)
+    parsed_by_path = _bindings_by_path(module, texts) if readable else {}
     features, bindings, dormant = [], [], []
     # (binding path, verb, pattern) -> observation id. The analyser never sees the store; it is given
     # the row ids by key so a duplication claim can carry the evidence its reader needs inline.
@@ -297,7 +383,7 @@ def run_duplication(project: Project, token: str,
                     db.add_observation(conn, artefact_ids[path], "gherkin", "1.0.0", f"scenario:{sc.name}",
                                        {"line": sc.line, "steps": len(sc.steps), "signature": sc.signature})
         elif kind == "stepdef":
-            parsed = stepbindings.parse_file(path, text, driver_map)
+            parsed = parsed_by_path.get(path, [])
             bindings.extend(parsed)
             for binding in parsed:
                 observation = db.add_observation(
@@ -328,9 +414,11 @@ def run_duplication(project: Project, token: str,
     def uri_for_path(path: str) -> str:
         return f"github:{project.test.slug}@{test_repo.commit}:{path}"
 
-    claims = duplication.analyse(features, bindings, uri_for_path,
-                                 sources_missing=missing_sources, assessment=assessment,
-                                 commit=test_repo.commit, support_index=support_index)
+    claims: list = []
+    if readable:
+        claims = duplication.analyse(features, bindings, uri_for_path,
+                                     sources_missing=missing_sources, assessment=assessment,
+                                     commit=test_repo.commit, support_index=support_index)
 
     # 5. persist
     run_id = f"{project.key}-dup-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%S}"
@@ -391,6 +479,7 @@ def run_duplication(project: Project, token: str,
                             "dormant_features": len(dormant), "jira_issues": jira_count,
                             "excludes": excludes, "claims": len(claims),
                             "cases": len(case_ids),
+                            "ecosystems": ecosystems_record,
                             "read": _counts(arms), "skipped": _skips(arms)})
 
 
@@ -449,6 +538,16 @@ def run_level_fitness(project: Project, token: str,
         discovery = surface_discovery.discover(product_texts)
     surfaces = list(discovery.surfaces)
 
+    # Which ecosystem each repository was read as (AC2). The test arm's answer decides whether the
+    # analyser has a vocabulary to read the suite with at all (AC4): a detected ecosystem this build
+    # does not support makes every claim unmakeable, and saying so is not the same as saying the
+    # suite has a problem.
+    texts = {path: blobs.text(sha) for path, (sha, _kind) in sorted(test_repo.files.items())}
+    ecosystems_record, module = _ecosystem_records(
+        project, {"test": texts, **({"product": product_texts} if product is not None else {})})
+    assessment = _assessable(assessment, ecosystems_record)
+    readable = _unsupported(ecosystems_record) is None
+
     versions = {project.test.slug: test_repo.commit}
     if product is not None and project.product is not None:
         versions[project.product.slug] = product.commit
@@ -463,14 +562,13 @@ def run_level_fitness(project: Project, token: str,
                                          if project.product is not None else {})},
                              "sources": declared.record(),
                              "reads": {role: collected.record() for role, collected in arms},
+                             "ecosystems": ecosystems_record,
                              "surfaces": discovery.record(),
                              "analysers": _analyser_record(level_fitness),
                              **_service_meta(project, conn)})
 
-    texts = {}
     artefact_ids: dict[str, int] = {}
     for path, (sha, kind) in sorted(test_repo.files.items()):
-        texts[path] = blobs.text(sha)
         artefact_ids[path] = db.add_artefact(
             conn, snapshot_id, f"github:{project.test.slug}@{test_repo.commit}:{path}",
             kind, sha, {"role": "test"})
@@ -484,7 +582,7 @@ def run_level_fitness(project: Project, token: str,
         if test_repo.files[path][1] == "build":
             excludes.extend(csproj.excluded_patterns(text))
 
-    driver_map = stepbindings.build_driver_map(texts)
+    parsed_by_path = _bindings_by_path(module, texts) if readable else {}
     features, bindings = [], []
     # (binding path, verb, pattern) -> observation id. The analyser never sees the store; it is
     # given the row ids by key so a claim can say which rows it rests on.
@@ -501,7 +599,7 @@ def run_level_fitness(project: Project, token: str,
                                        {"line": sc.line, "steps": len(sc.steps),
                                         "signature": sc.signature})
         elif kind == "stepdef":
-            parsed = stepbindings.parse_file(path, text, driver_map)
+            parsed = parsed_by_path.get(path, [])
             bindings.extend(parsed)
             for binding in parsed:
                 observation = db.add_observation(
@@ -516,11 +614,13 @@ def run_level_fitness(project: Project, token: str,
         return f"github:{project.test.slug}@{test_repo.commit}:{path}"
 
     budget = {"calls": 0, "tokens_in": 0, "tokens_out": 0}
-    claims = level_fitness.analyse(features, bindings, surfaces, uri_for_path, budget,
-                                   sources_missing=missing_sources,
-                                   assessment=assessment,
-                                   commit=test_repo.commit,
-                                   support_index=support_index)
+    claims: list = []
+    if readable:
+        claims = level_fitness.analyse(features, bindings, surfaces, uri_for_path, budget,
+                                       sources_missing=missing_sources,
+                                       assessment=assessment,
+                                       commit=test_repo.commit,
+                                       support_index=support_index)
 
     run_id = f"{project.key}-levels-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%S}"
     db.start_run(conn, run_id, project.key, snapshot_id, level_fitness.name, _now())
@@ -584,5 +684,6 @@ def run_level_fitness(project: Project, token: str,
                             # beside the count.
                             "surfaces_state": discovery.state,
                             "surfaces_reason": discovery.reason,
+                            "ecosystems": ecosystems_record,
                             "read": _counts(arms), "skipped": _skips(arms), "budget": budget})
 

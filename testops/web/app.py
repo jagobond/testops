@@ -60,6 +60,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .. import cases, queries, services, sources
 from ..analysers import cover, is_registered
+from ..extract.ecosystems import UNSUPPORTED as ECOSYSTEM_UNSUPPORTED
 from ..extract.stepbindings import LAYER_ORDER
 from ..store import db
 
@@ -1441,9 +1442,19 @@ def _blind_spot_lines(run: dict) -> list[str]:
     spots = run.get("blind_spots") or []
     if not spots:
         return ['<p>Its recorded source registry names no source it could not consult.</p>']
-    absent = [spot for spot in spots if spot.get("state") != sources.NOT_READABLE]
+    # TESTOPS-42A. An ecosystem is not a source that was never connected: the tests are there and
+    # the vocabulary to read them is not. It gets its own lead-in so "not connected" is never said
+    # about a repository the run fetched and read.
+    unsupported = [spot for spot in spots if spot.get("state") == ECOSYSTEM_UNSUPPORTED]
+    absent = [spot for spot in spots
+              if spot.get("state") not in (sources.NOT_READABLE, ECOSYSTEM_UNSUPPORTED)]
     unread = [spot for spot in spots if spot.get("state") == sources.NOT_READABLE]
     lines: list[str] = []
+    if unsupported:
+        lines.append('<p>Written in a vocabulary this run cannot read:</p>')
+        lines.extend(f'<p>{esc(_blind_spot_sentence(spot))}</p>' for spot in unsupported)
+        lines.append('<p>The files are there and were read; what does not exist is support for '
+                     'reading them as steps. Nothing here says they are wrong.</p>')
     if absent:
         lines.append('<p>Not connected when this run looked:</p>')
         lines.extend(f'<p>{esc(_blind_spot_sentence(spot))}</p>' for spot in absent)
@@ -1563,17 +1574,81 @@ def _names(items: list[str]) -> str:
 
 
 def run_sources_sentence(run: dict) -> str:
-    """What the run could not consult, in one line - or which absence stops it being said."""
+    """What the run could not consult, in one line - or which absence stops it being said.
+
+    TESTOPS-42A adds the ecosystem to the same sentence, because "we read it as X" is the other
+    half of "what we could not consult": a reader who is told only that GitHub was available has
+    not been told whether the suite's steps could be read at all.
+    """
+    read_as = _ecosystem_clause(run)
     if not run.get("registry_recorded"):
-        return "Recorded no source registry, so what it could not consult is unknown."
-    if not run.get("assessment_recorded"):
-        return ("Recorded its sources but not what this analysis needed, so what it could not "
+        line = "Recorded no source registry, so what it could not consult is unknown."
+    elif not run.get("assessment_recorded"):
+        line = ("Recorded its sources but not what this analysis needed, so what it could not "
                 "consult is unknown.")
-    spots = run.get("blind_spots") or []
-    if not spots:
-        return "Its recorded registry names no source it could not consult."
-    names = [spot.get("title") or spot.get("source") or "a source" for spot in spots]
-    return f"Could not consult {_names(names)}."
+    else:
+        spots = run.get("blind_spots") or []
+        # The ecosystem is not a source that was not connected: it was detected and this build
+        # cannot read it, and the ecosystem clause below already says so. Counting it as an
+        # unconsulted source would be the mislabel AC4 forbids, in a different sentence.
+        spots = [spot for spot in spots if (spot.get("source") or "") != "ecosystem"]
+        if not spots:
+            line = "Its recorded registry names no source it could not consult."
+        else:
+            names = [spot.get("title") or spot.get("source") or "a source" for spot in spots]
+            line = f"Could not consult {_names(names)}."
+    return f"{line} {read_as}" if read_as else line
+
+
+def _ecosystem_clause(run: dict) -> str:
+    """Which ecosystem the test repository was read as, or ``""`` when the snapshot did not say."""
+    record = run.get("ecosystems")
+    if not isinstance(record, dict):
+        return ""
+    test = record.get("test")
+    if not isinstance(test, dict):
+        return ""
+    name = test.get("ecosystem") or ""
+    if name == "unknown":
+        return ("No ecosystem this build recognises was detected in its test repository, so its "
+                "tests were read as no particular ecosystem.")
+    title = test.get("title") or name
+    if test.get("supported") is False:
+        return (f"Its tests are written for {title}, which this build has no support for, so no "
+                f"claim was made about its steps.")
+    return f"Its test repository was read as {title}."
+
+
+def ecosystem_block(run: dict) -> list[str]:
+    """What each repository was read as, and the counted evidence, on the run's own page (AC2)."""
+    record = run.get("ecosystems")
+    if not isinstance(record, dict):
+        return []
+    out: list[str] = []
+    for role in ("test", "product"):
+        entry = record.get(role)
+        if not isinstance(entry, dict):
+            continue
+        out.append(f'<p class="meta">{esc(_repository_read_as(role, entry))}</p>')
+    return out
+
+
+def _repository_read_as(role: str, entry: dict) -> str:
+    """One repository's ecosystem, in the reader's words - with counts, never an adjective."""
+    repo = entry.get("repository") or ""
+    where = (f"the {role} repository {repo}" if repo else f"the {role} repository")
+    name = entry.get("ecosystem") or "unknown"
+    evidence = "; ".join(entry.get("evidence") or [])
+    if name == "unknown":
+        reason = (entry.get("reason") or "").strip().rstrip(".")
+        return (f"{where[0].upper()}{where[1:]} was read as no ecosystem this build recognises"
+                f"{': ' + reason if reason else ''}.")
+    title = entry.get("title") or name
+    counted = f" ({evidence})" if evidence else ""
+    if entry.get("supported") is False:
+        return (f"{where[0].upper()}{where[1:]} is written for {title}{counted}. This build has no "
+                f"support for {title}, so it made no claim about its steps.")
+    return f"{where[0].upper()}{where[1:]} was read as {title}{counted}."
 
 
 def runs_index(conn) -> bytes:
@@ -1645,6 +1720,7 @@ def run_response(conn, run_id: str) -> tuple[bytes, int]:
             f' · Ran {esc(age(run.get("finished_at")))}'
             f'{" at " + esc(versions) if versions else ""}'
             f' · <span class="code">{esc(run_id)}</span></p>']
+    body.extend(ecosystem_block(run))
 
     if not (run.get("findings") or 0):
         # The TESTOPS-22 page, unchanged: the run described as a run.

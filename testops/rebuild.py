@@ -25,7 +25,8 @@ from dataclasses import dataclass, field
 
 from . import blobs, sources
 from .analysers import level_fitness
-from .extract import csproj, gherkin, stepbindings
+from .extract import csproj, gherkin
+from .extract import ecosystems
 from .links import GITHUB
 from .surfaces import discover as surface_discovery
 
@@ -161,7 +162,18 @@ def rebuild(conn, snapshot_id: str) -> tuple[list, dict, Snapshot]:
         if kinds[path] == "build":
             excludes.extend(csproj.excluded_patterns(text))
 
-    driver_map = stepbindings.build_driver_map(texts)
+    # TESTOPS-42A: a rebuild reads the suite with the same ecosystem the run would have detected,
+    # so a snapshot the run refused to analyse cannot be rebuilt into claims it never made. A
+    # repository no module recognises keeps the behaviour it had: nothing is read from it.
+    try:
+        match = ecosystems.registry().match(texts)
+    except (ecosystems.UnknownEcosystem, ecosystems.AmbiguousEcosystem):
+        match = None
+    readable = match is not None and match[1].supported
+    by_path: dict[str, list] = {}
+    if match is not None and readable:
+        for binding in match[0].bindings(texts):
+            by_path.setdefault(binding.path, []).append(binding)
     features, bindings = [], []
     for path, text in sorted(texts.items()):
         if kinds[path] == "feature":
@@ -171,17 +183,21 @@ def rebuild(conn, snapshot_id: str) -> tuple[list, dict, Snapshot]:
             if feature:
                 features.append(feature)
         elif kinds[path] == "stepdef":
-            bindings.extend(stepbindings.parse_file(path, text, driver_map))
+            bindings.extend(by_path.get(path, []))
 
     discovery = surface_discovery.discover(snap.product_texts)
-    claims = level_fitness.analyse(
-        features, bindings, list(discovery.surfaces),
-        lambda path: f"github:{snap.test_slug}@{snap.test_commit}:{path}",
-        {"calls": 0, "tokens_in": 0, "tokens_out": 0},
-        sources_missing=snap.sources_missing, assessment=snap.assessment,
-        commit=snap.test_commit, support_index=snap.support_index,
-    )
+    claims: list = []
+    if readable:
+        claims = level_fitness.analyse(
+            features, bindings, list(discovery.surfaces),
+            lambda path: f"github:{snap.test_slug}@{snap.test_commit}:{path}",
+            {"calls": 0, "tokens_in": 0, "tokens_out": 0},
+            sources_missing=snap.sources_missing, assessment=snap.assessment,
+            commit=snap.test_commit, support_index=snap.support_index,
+        )
     stats = {"features": len(features), "bindings": len(bindings),
              "scenarios": sum(len(f.scenarios) for f in features),
-             "surfaces": len(discovery.surfaces), "surfaces_state": discovery.state}
+             "surfaces": len(discovery.surfaces), "surfaces_state": discovery.state,
+             "ecosystem": match[1].name if match is not None else "unknown",
+             "ecosystem_supported": bool(readable)}
     return claims, stats, snap

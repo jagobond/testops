@@ -591,6 +591,11 @@ def _source_facts(conn, run_id: str, analyser: str | None) -> dict:
              # was skipped", which is the same mistake in a different place.
              "reads": meta.get("reads") if isinstance(meta, dict) else None,
              "surfaces": meta.get("surfaces") if isinstance(meta, dict) else None,
+             # TESTOPS-42A: which ecosystem each repository was read as. ``None`` means the
+             # snapshot predates the record - not "no ecosystem was needed".
+             "ecosystems": (meta.get("ecosystems")
+                            if isinstance(meta, dict)
+                            and isinstance(meta.get("ecosystems"), dict) else None),
              "service_states": (meta.get("service_states")
                                 if isinstance(meta, dict)
                                 and isinstance(meta.get("service_states"), list) else None)}

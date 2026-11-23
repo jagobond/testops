@@ -17,6 +17,7 @@ dev = ["pytest>=8", "setuptools>=68", "wheel"]
 # not a package, and naming it here made an editable install import-fail; `testops.web` and
 # `testops.scripts` are packages and must be named or the UI is absent from the install.
 packages = ["testops", "testops.store", "testops.collectors", "testops.extract",
+            "testops.extract.ecosystems",
             "testops.surfaces", "testops.analysers", "testops.judgement",
             "testops.score", "testops.web", "testops.scripts"]
 
