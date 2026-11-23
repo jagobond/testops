@@ -68,6 +68,9 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-47 | Each analyser states the cover of its own decision, and states identity rather than promising an event | F2 | done | From the TESTOPS-40 review: one global sentence is wrong for duplication and over-promises on net-zero twin edits |
 | TESTOPS-51 | `password=hunter2` was stored and echoed by `/config`; a project cannot be deleted | F1 | ready | From T7: the screen exists per-field, so every field inherits the hole. One shared check, plus a project delete route |
 | TESTOPS-52 | "Cannot assess" wears the alarm colour, and 32+ badges have malformed class attributes | F1 | ready | From T7: the soft style exists in CSS and is applied to nothing; `class="badge class="hot""` makes `hot` inert |
+| TESTOPS-53 | Running `pytest` writes to the live store | F2 | ready | From T52's disclosure: `tests/contracts` defaults to the live server and POSTs a project. Give it its own temp server and store, and make it a CI gate |
+| TESTOPS-54 | A case does not link to its run; `/config` is reachable from nowhere | F1 | ready | From T7 P5: no dead ends, no page that only exists if you know the URL |
+| TESTOPS-55 | The front page states no totals; the run page gives no per-kind read counts | F1 | ready | From T7 P7/P10: a reader cannot state what exists or what was read, and never sees an explicit zero |
 
 |----|-------|---------|--------|------|
 
