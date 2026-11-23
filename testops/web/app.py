@@ -63,6 +63,8 @@ from ..analysers import cover, is_registered
 from ..extract.ecosystems import UNSUPPORTED as ECOSYSTEM_UNSUPPORTED
 from ..extract.stepbindings import LAYER_ORDER
 from ..store import db
+from . import tone
+
 
 # What is true of each verdict, as a reader meets it (TESTOPS-23, AC7). The old vocabulary named an
 # absence - "Browser not needed", "Never actually proved" - and left the reader to invert it into a
@@ -127,9 +129,12 @@ ul.cases li a:hover { background:#f6f4f0; }
          border:1px solid var(--line); border-radius:99px; padding:.1rem .55rem; color:var(--dim); }
 .badge.hot { border-color:var(--bad); color:var(--bad); }
 /* The verdict beside the case state (TESTOPS-33): a claim that could not be placed wears a dashed
-   badge, so "Cannot tell" never looks as settled as "Checked". */
+   badge, so "Cannot tell" never looks as settled as "Checked".
+   TESTOPS-52: a verdict that asserts a problem wears the same alarm as any other warning, and a
+   verdict that asserts nothing is wrong wears neither. The tone is declared in web/tone.py. */
 .badge.verdict { border-color:var(--accent); color:var(--accent); }
 .badge.verdict.soft { border-style:dashed; border-color:var(--dim); color:var(--dim); }
+.badge.verdict.hot { border-color:var(--bad); color:var(--bad); }
 blockquote.assertion { margin:.6rem 0 .5rem; padding:.6rem .9rem; background:#fff;
                        border-left:3px solid var(--accent); font-size:1.12rem; }
 .code { font-family: ui-monospace, Consolas, monospace; font-size:.8rem; color:var(--dim); }
@@ -148,7 +153,12 @@ form.decide input[type=text] { font:inherit; padding:.45rem .6rem; border:1px so
         border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:6px; }
 p.judgement { margin:0 0 .5rem; }
 p.judgement strong.verdict { font-size:1.32rem; font-weight:700; line-height:1.25; }
+/* TESTOPS-52: the headline wears the verdict's declared tone, not one alarm for everything.
+   Alarm red is for a verdict that asserts a problem; a conclusion the tool could not reach is
+   dim and dashed; "checked, nothing wrong" is the ordinary ink. */
 p.judgement strong.verdict.hot { color:var(--bad); }
+p.judgement strong.verdict.soft { color:var(--dim);
+                                   border-bottom:1px dashed var(--dim); padding-bottom:.05rem; }
 p.wrong { margin:0 0 .85rem; font-size:1.06rem; line-height:1.6; }
 /* The font puts more of its line box above the baseline than below, so equal padding leaves the
    descenders closer to the box's bottom edge. The half-leading is paid on the bottom instead, so
@@ -534,10 +544,15 @@ def argument_block(claim: dict) -> list[str]:
     assessment = claim.get("assessment") or {}
     not_assessable = assessment.get("state") == sources.NOT_ASSESSABLE
     label = "Cannot assess" if not_assessable else verdict_label(claim)
-    hot = " hot" if not_assessable or claim.get("verdict") in ("gap", "review", "duplicate") else ""
+    # TESTOPS-52: the tone is declared per verdict in web/tone.py; a claim nobody could consult
+    # says the tool did not conclude, so it wears the soft treatment whatever its stored verdict.
+    verdict = claim.get("verdict")
+    assert isinstance(verdict, str)          # claim.verdict is NOT NULL
+    tone_name = tone.NOT_ASSESSABLE_TONE if not_assessable else tone.tone_of(verdict)
     quote = quoted_assertion(claim)
     return ['<section class="scan">',
-            f'<p class="judgement"><strong class="verdict{hot}">{esc(label)}</strong></p>',
+            f'<p class="judgement"><strong class="verdict{tone.class_suffix(tone_name)}">'
+            f'{esc(label)}</strong></p>',
             f'<p class="wrong">{wrong_sentence(claim, quote)}</p>',
             f'<p class="action"><span class="act">What to do</span> '
             f'{rich_prose(action_line(claim, quote))}</p>',
@@ -795,18 +810,22 @@ HEADLINE_SEP = " \u2014 "
 
 # States whose badge wears the "hot" class, on the list and on the case page.
 HOT_STATES = ("Open", "Needs a fix")
+# Run badges that state a quiet or closed run, and therefore do not wear the alarm. Every other run
+# badge counts findings, which is the alarm.
+QUIET_RUN_BADGES = (NO_FINDINGS_LABEL, ALL_DECIDED_LABEL)
 
 
-def badge_classes(label: str, base: str = "badge") -> str:
+def badge_classes(label: str, hot: bool, base: str = "badge") -> str:
     """A badge's ``class`` attribute, built as a list and joined once.
 
     The row used to interpolate a whole attribute into another - ``f'class="badge{hot}"'`` with
     ``hot = ' class="hot"'`` - which rendered ``class="badge class="hot""``: the browser took
-    ``badge`` and silently dropped ``hot`` (TESTOPS-33 review, defect 1). A class is appended to
-    a list, never spliced into an attribute string.
+    ``badge`` and silently dropped ``hot`` (TESTOPS-33 review, defect 1; the same pattern survived
+    on the run pages until TESTOPS-52). A class is appended to a list, never spliced into an
+    attribute string, and ``hot`` is passed by the caller so no page inherits a default.
     """
     classes = [base]
-    if label in HOT_STATES:
+    if hot:
         classes.append("hot")
     return " ".join(classes)
 
@@ -997,14 +1016,19 @@ def row_headline(row: dict) -> str:
 
 
 def verdict_badge(row: dict) -> str:
-    """The row's verdict badge - dashed and muted when the claim could not be placed (AC5)."""
+    """The row's verdict badge, wearing the verdict's declared tone (TESTOPS-52, AC1/AC5).
+
+    A verdict that could not conclude is dashed and muted; a verdict that asserts a problem wears
+    the alarm; a settled verdict wears neither. The tone comes from web/tone.py, never from a
+    default that catches whatever the judgement vocabulary left over.
+    """
     judgement = list_judgement(row.get("verdict"))
     if not judgement:
         return ""
     verdict = row.get("verdict")
-    soft = verdict not in LIST_JUDGEMENT or verdict == "unplaced"
-    cls = "badge verdict soft" if soft else "badge verdict"
-    return f'<span class="{cls}">{esc(judgement)}</span> '
+    assert isinstance(verdict, str)          # list_judgement returned a judgement, so it exists
+    suffix = tone.class_suffix(tone.tone_of(verdict))
+    return f'<span class="badge verdict{suffix}">{esc(judgement)}</span> '
 
 
 # ---------------------------------------------------------------- home screen
@@ -1041,7 +1065,7 @@ def index(conn) -> bytes:
             for r in group:
                 n = r["findings"]
                 shown = display_state(r["state"], n)
-                badge_class = badge_classes(shown)
+                badge_class = badge_classes(shown, shown in HOT_STATES)
                 # TESTOPS-33: the link text is a judgement and a subject, never the raw assertion
                 # fragment. A row whose step text is all there is falls back to its normalised step,
                 # and the badge beside it says which verdict the headline is stating.
@@ -1774,11 +1798,11 @@ def runs_index(conn) -> bytes:
     body.append('<ul class="cases">')
     for run in rows:
         badge = run_badge(run)
-        hot = ' class="hot"' if badge not in (NO_FINDINGS_LABEL, ALL_DECIDED_LABEL) else ""
+        badge_class = badge_classes(badge, badge not in QUIET_RUN_BADGES)
         versions = versions_text(run.get("versions"))
         body.append(
             f'<li><a href="/run/{esc(run["id"])}">'
-            f'<div><span class="badge{hot}">{esc(badge)}</span> '
+            f'<div><span class="{badge_class}">{esc(badge)}</span> '
             f'<span class="meta">{esc(run["project"])} · '
             f'{esc(analyser_text(run.get("analyser")))} · '
             f'{_count(run.get("claims") or 0, "claim")} · '
@@ -1794,11 +1818,11 @@ def runs_index(conn) -> bytes:
 def _case_line(conn, case: dict) -> str:
     """One case on the run page: what it asserts, its badge, and the way in."""
     shown = display_state(case["state"], case["findings"])
-    hot = ' class="hot"' if shown in ("Open", "Needs a fix") else ""
+    badge_class = badge_classes(shown, shown in HOT_STATES)
     text = (queries.case_assertion(conn, case["id"]) or queries.case_statement(conn, case["id"])
             or "No claim recorded for this case.")
     return (f'<li><a href="/case/{esc(case["id"])}">'
-            f'<div><span class="badge{hot}">{esc(shown)}</span> '
+            f'<div><span class="{badge_class}">{esc(shown)}</span> '
             f'<span class="meta">{_count(case["findings"], "finding")} · '
             f'{esc(age(case["created_at"]))} · '
             f'<span class="code">{esc(case["id"])}</span></span></div>'
@@ -1824,11 +1848,11 @@ def run_response(conn, run_id: str) -> tuple[bytes, int]:
 
     versions = versions_text(run.get("versions"))
     badge = run_badge(run)
-    hot = ' class="hot"' if badge not in (NO_FINDINGS_LABEL, ALL_DECIDED_LABEL) else ""
+    badge_class = badge_classes(badge, badge not in QUIET_RUN_BADGES)
     body = ['<p class="meta"><a href="/">← all cases</a> · '
             '<a href="/runs">all runs</a></p>',
             f'<h1>{esc(run["project"])} · {esc(analyser_text(run.get("analyser")))}</h1>',
-            f'<p class="meta"><span class="badge{hot}">{esc(badge)}</span>'
+            f'<p class="meta"><span class="{badge_class}">{esc(badge)}</span>'
             f' · Ran {esc(age(run.get("finished_at")))}'
             f'{" at " + esc(versions) if versions else ""}'
             f' · <span class="code">{esc(run_id)}</span></p>']
@@ -2058,7 +2082,7 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
     body = [f'<p class="meta"><a href="/">\u2190 all cases</a> \u00b7 '
             f'<a href="/runs">all runs</a></p>',
             f'<h1>{esc(row["project"])} \u00b7 {esc(analyser_text(row["analyser"]))}</h1>']
-    badge_class = badge_classes(state_label)
+    badge_class = badge_classes(state_label, state_label in HOT_STATES)
     body.append(f'<p class="meta"><span class="{badge_class}">'
                 f'{esc(state_label)}</span>'
                 f' \u00b7 Analysed {esc(age(row["created_at"]))}'

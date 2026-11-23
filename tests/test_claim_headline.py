@@ -250,7 +250,9 @@ def test_the_list_groups_by_project_and_marks_an_unplaced_claim(tmp_path):
     # The verdict badge says what the headline's judgement is, and an unplaced claim reads as one.
     assert '<span class="badge verdict soft">Cannot tell</span>' in body
     assert '<span class="badge verdict">Checked</span>' in body
-    assert '<span class="badge verdict">Not proved</span>' in body
+    # "Not proved" asserts a problem, so it carries the alarm tone (TESTOPS-52): a verdict that
+    # says something is wrong must look like the warning it is.
+    assert '<span class="badge verdict hot">Not proved</span>' in body
 
 
 # --------------------------------------------------------------------------- AC6
