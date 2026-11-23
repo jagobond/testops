@@ -2,7 +2,7 @@
 id: TESTOPS-59
 title: A real token pasted inside a sentence is stored, and the identifier boundary cannot explain itself
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-56
 ---

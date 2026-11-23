@@ -76,6 +76,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-58 | `TMPDIR` can move the root the disposable-store check trusts | F2 | done | From the T53 review: the refusal is structural but relative. Refuse an env temp root under the repo/home, pin the root, and state what is actually guaranteed |
 | TESTOPS-59 | A token pasted inside a sentence is stored; `session-token` is wrongly refused | F1 | ready | From the T56 review: scan for credential shapes at any position (not just prefix), give every prefix a real body floor, and make the identifier boundary state itself |
 | TESTOPS-60 | The unplaced section is a 93KB wall at 220 entries, and its anchors are positional | F1 | ready | From the T57 review: group by reason, disclose or cap with an honest count, state the reason once, and anchor on the claim id |
+| TESTOPS-61 | The grammatical rule reads the first word and the last part only | F1 | ready | From the T59 review: `this-is-not-a-password` refused, `acme-their-password` accepted; `github_pat_` truncation goes green silently; drop the vendor appeal |
 
 |----|-------|---------|--------|------|
 
