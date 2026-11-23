@@ -1,0 +1,32 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-50 - the ticket that had to make every number in the
+inventory derivable or plainly corrected.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t50 (branch `factory/testops-50-derivable`). Work only here.
+A store copy is in `data/` (gitignored) so the blobs are readable.
+Ticket:  factory/tickets/TESTOPS-50.md
+Build:   factory/reports/2026-11-23/TESTOPS-50-build.md
+Prior review: factory/reports/2026-11-23/TESTOPS-42A-review.md, "The inventory, spot-checked" - your own earlier findings.
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+The build's answer to "46 of 76 reproduces under no rule" is: it reproduces under the repository's own
+`pattern_to_regex` (every `{name}` becomes one permissive `(.+?)`, parentheses literal), while YOUR numbers (38, 21) come
+from cucumber-expression semantics (`{string}` as a quoted string, `(invalid )` as an optional group). Both are now
+supposed to be printed by the tool. Either that reconciles the disagreement or it is a convenient story.
+
+HARD RULES
+- Run `tools/ecosystem_inventory_counts.py` against the store copy yourself. Does it print 44, 16, 11, 28 (29
+  declarations), 46, 29, 38, 21, 48, 31, 17, 26? Report any integer it fails to produce.
+- **Re-derive two of them by hand, independently of both regex implementations** - pick the 16 multi-line layouts and the
+  11 custom commands, and count them with your own scan. If the tool and the document agree with each other but not with
+  the blobs, that is the failure this ticket exists to prevent.
+- **Check the arithmetic claims:** 15 + 28 + 5 − 5 = 43 union; 87 step lines = 11 Background (6 Given + 5 And) + 76
+  scenario steps. Both must be true of the corpus, not just of the document.
+- **The corrections section:** is it honest? It should say plainly which number was wrong and which was merely unstated,
+  without rewriting the original claim out of existence. Quote it.
+- **Read-only claim:** hash `data/testops.db` before and after the tool run and confirm identical, no `-wal`/`-shm`.
+- **Scope:** confirm no product code changed (`git diff --stat origin/main...HEAD -- testops/` empty), the §7 estimate is
+  untouched, and the suite is green.
+- Do not edit product code, the ticket or the document. Write exactly one file:
+  factory/reports/2026-11-23/TESTOPS-50-review.md with: ## Verdict; ## The tool reproduces; ## Two counted by hand;
+  ## The arithmetic; ## Corrections, honest or tidy; ## Read-only; ## Scope; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 300 words.
