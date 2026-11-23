@@ -2,7 +2,7 @@
 id: TESTOPS-57
 title: The claims the tool could not place have no page of their own
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-52
 ---
