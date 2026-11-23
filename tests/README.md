@@ -16,11 +16,27 @@ From the repository root:
 The stripped environment matters: with an inherited `PYTHONPATH` or a different interpreter the
 result is an environment error, not a pass.
 
+## Fast lane
+
+Three tests build a wheel and a venv to prove the package works when *installed*
+(`test_distribution.py`, TESTOPS-8). They reach no network but take ~20s, and they are marked:
+
+    ... -m "not distribution"
+
+CI runs the whole suite; the fast lane skips them by marker, never by deleting them.
+
 ## What the suite covers
 
 The suite is deliberately small. It pins the invariants later tickets depend on:
 
 - the packaging declaration matches the packages that exist (`test_packaging.py`);
+- `package-data` covers every non-Python file the app resolves at runtime - checked against
+  `db.SCHEMA` itself, so a new template or static directory is a failing test rather than a 500 on
+  an installed copy (`test_packaging.py`, TESTOPS-8 AC5);
+- a wheel built from a copy of the tree, installed into a fresh venv, imports from that venv's
+  site-packages (never the checkout) and serves `/`, `/runs`, `/config` and a case page with 200
+  from a store it created - proving `schema.sql` and the prompt files shipped (`test_distribution.py`,
+  TESTOPS-8 AC1/AC2);
 - `store/schema.sql` creates the tables the pipeline uses (`test_store_schema.py`);
 - the schema version is recorded per snapshot, and a v2 claim records 2 (`test_schema_version.py`);
 - applying the schema twice leaves an identical structure (`test_schema_idempotent.py`);
