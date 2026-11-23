@@ -10,7 +10,8 @@ The ticket's shape, in tests:
     the absence of change (the corpus tests over the real store cover the rest).
   * AC4 - a detected, unsupported ecosystem reports ``not_assessable`` with its name, and never
     "none of its steps could be tied to a layer". Proven on the restfulbooker corpus in the store.
-  * AC5 - cucumber-js raises instead of returning an empty binding list.
+  * AC5 - cucumber-js is unsupported: its declarations parse (T42C-1), its drivers do not, and
+    the gate that keeps claims from being placed is still on.
   * AC7 - detection is total for recognisable markers, and an unrecognised repository is `unknown`.
 
 Nothing here reads the network. The corpus tests read the build store read-only and skip when it
@@ -131,13 +132,15 @@ def test_the_reqnroll_module_is_the_old_extractor():
 
 # --------------------------------------------------------------------------- AC5: no half-extractor
 
-def test_an_unsupported_ecosystem_refuses_rather_than_returning_an_empty_list():
+def test_an_unsupported_ecosystem_parses_declarations_but_places_no_claim():
     files = {"cypress/e2e/login.stepdef.js": "Then('a user is logged in', () => {});"}
     ecosystem = cucumber_js.ECOSYSTEM.detect(files)
     assert ecosystem is not None and ecosystem.supported is False
     assert ecosystem.reason
-    with pytest.raises(ecosystems.UnsupportedEcosystem):
-        cucumber_js.ECOSYSTEM.bindings(files)
+    # T42C-1: the parsing floor reads the declaration ...
+    rows = cucumber_js.ECOSYSTEM.bindings(files)
+    assert [row.pattern for row in rows] == ["a user is logged in"]
+    # ... and nothing above it is wired: the ecosystem stays unsupported, so no claim is placed.
     with pytest.raises(ecosystems.UnsupportedEcosystem):
         cucumber_js.ECOSYSTEM.drivers(files)
 

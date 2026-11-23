@@ -1,0 +1,36 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-42C-1 - part 1 of 3: the cucumber-js parsing floor.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t42c1 (branch `factory/testops-42c1-bindings`). Work only here.
+A store copy is in `data/` (gitignored) so the corpus blobs are readable.
+Ticket:  factory/tickets/TESTOPS-42C-1.md
+Build:   factory/reports/2026-11-23/TESTOPS-42C-1-build.md
+Reference: docs/ecosystem-inventory-cucumber-js.md, tools/ecosystem_inventory_counts.py
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Run the suite from this worktree with the interpreter above.
+- **Count from the blobs yourself**, with your own scan - not the module, not the tool. Expect 44 declarations in 5
+  files: 26 When, 13 Then, 5 Given; 28 same-line, 16 next-line; 43 distinct patterns. Report what you get.
+- **The 16 next-line declarations are the point of the ticket.** Construct a test that would prove the implementation is
+  not line-oriented: feed a declaration where `Given(` and the quote are separated by TWO newlines and leading
+  whitespace, and another where the pattern itself is split across a concatenation. Say whether it parses, and if not
+  whether that is a legitimate limitation for this corpus or a fragility that will bite on the next one.
+- **AC3 honesty:** this corpus has 0 regex-literal declarations. The build makes `bindings()` raise on one. Is that the
+  right behaviour, or does it throw away a readable suite because one file uses a form the module cannot handle? Judge
+  it, and check the refusal names `path:line`.
+- **AC5 two directions:** the duplicate pattern must resolve to `booking.stepdef.js` for a booking feature and to
+  `contact.stepdef.js` for a contact feature, and fall back for a suite that owns neither. Verify by calling the module.
+- **THE BUILD'S CLAIM AGAINST THE INVENTORY:** it says the inventory's "stem rule works on 5 of 5 files" is wrong - that
+  `suite_of` strips `js` but not `stepdef`, giving `bookingstepdef`, so 0 of 5 match - and that the directory
+  co-location rule is what actually works. Verify this independently against `testops/extract/stepbindings.py`. If the
+  build is right, the inventory needs correcting (it is the document Harry costed T42C from) and you should say so.
+- **AC7 no half-wiring:** confirm the pipeline and analysers have no diff, `detect().supported is False`, `drivers()`
+  still refuses, and the corpus run is still `not_assessable` with zero claims. A part that quietly places claims would
+  be worse than no part.
+- **AC8:** CotW 94/90/1/1/2, ReqOverflow 17/17, goldens byte-identical. The `{int}` change touches a matcher .NET also
+  uses - confirm no .NET pattern regressed.
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-23/TESTOPS-42C-1-review.md with: ## Verdict; ## Counted from blobs; ## The 16; ## Regex
+  literals; ## Duplicate both ways; ## The stem-rule claim; ## No half-wiring; ## .NET parity; ## Three sharpest
+  concerns.
+- Reply with the verdict and a summary under 300 words.

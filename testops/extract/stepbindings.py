@@ -121,9 +121,15 @@ def parse_file(path: str, text: str, driver_map: dict[str, str] | None = None) -
 
 
 def pattern_to_regex(pattern: str) -> re.Pattern:
-    """Reqnroll placeholders ({string}, {int}, (.*)) become permissive groups."""
+    """Step text -> the pattern that matches it, anchored and case-insensitive.
+
+    ``{int}`` is one or more digits; every other placeholder (``{string}`` included) is a
+    permissive group; everything else - parentheses, dots, slashes - is literal text. The
+    ``(.*)`` form Reqnroll writes is the same permissive group under another name.
+    """
     p = re.escape(pattern)
-    p = re.sub(r"\\\{[^}]+\\\}", "(.+?)", p)
+    p = re.sub(r"\\\{int\\\}", r"\\d+", p)
+    p = re.sub(r"\\\{[^}]+\}", "(.+?)", p)
     p = p.replace(r"\(\.\*\)", "(.+?)")
     return re.compile("^" + p + "$", re.I)
 
