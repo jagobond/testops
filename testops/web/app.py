@@ -1770,7 +1770,8 @@ def analysis_scope_block(run: dict) -> list[str]:
         quoted = " and ".join(f'<span class="code">{esc(pattern)}</span>' for pattern in nearly[:2])
         out.append(f"<p>The {unplaced} matched no binding because no binding matches these words: "
                    f"they name messages the suite never declared. The two nearest patterns are "
-                   f"{quoted}; each unplaced case names the step it could not place.</p>")
+                   f"{quoted}; each unplaced claim is listed below with the step it could not "
+                   f"place.</p>")
     unreadable = placement.get("unreadable") or []
     if unreadable:
         out.append(f"<p>{_count(len(unreadable), 'declaration')} could not be read. Nothing was "
@@ -1782,6 +1783,47 @@ def analysis_scope_block(run: dict) -> list[str]:
                        f'{esc(entry.get("reason") or "")}.</p>')
     else:
         out.append("<p>Every declaration in the suite was readable.</p>")
+    return out
+
+
+def unplaced_block(conn, run: dict) -> list[str]:
+    """The claims the run could not place, each with its own anchor and its own soft badge.
+
+    TESTOPS-57. An unplaced claim is the one verdict whose point is "I could not tell", and it is
+    the most actionable thing the run produces: the suite and the code do not meet. It does not
+    become a case - a case per unplaced claim would bury the real findings in near-identical
+    pages - so the run page gives the claims a section of their own instead. The count and the
+    entries are both derived from the same list, so the sentence cannot disagree with the list.
+    """
+    entries = queries.unplaced_claims(conn, run["id"])
+    if not entries:
+        return []
+    count = len(entries)
+    out = ['<h2 class="section">What this run could not place</h2>',
+           f"<p>{_count(count, 'step')} in this run {'was' if count == 1 else 'were'} not "
+           f"assessed. They are not absent from the run: each is a claim the suite recorded but "
+           f"could not place, so the tool reached no conclusion about it.</p>",
+           '<ul class="unplaced">']
+    for number, entry in enumerate(entries, start=1):
+        text = entry.get("assertion_text") or entry.get("statement") or ""
+        nearest = [pattern for pattern in entry.get("nearly") or [] if pattern]
+        reason = (entry.get("established_by") or "").strip().rstrip(".")
+        if "no binding matches these words" in reason:
+            reason = "no binding matches these words"
+        out.append(f'<li id="unplaced-{number}">')
+        out.append(f'{verdict_badge({"verdict": "unplaced"})}'
+                   f'<p class="claimtext">{esc(text)}</p>')
+        if nearest:
+            quoted = " and ".join(f'<span class="code">{esc(pattern)}</span>'
+                                  for pattern in nearest)
+            out.append(f'<p class="meta">The nearest declared patterns are {quoted}; none of '
+                       f'them matches these words, so no binding places the step.</p>')
+        else:
+            out.append('<p class="meta">This run declared no binding patterns to compare with.</p>')
+        if reason:
+            out.append(f'<p class="meta">Why it was not assessed: {esc(reason)}.</p>')
+        out.append("</li>")
+    out.append("</ul>")
     return out
 
 
@@ -1920,6 +1962,7 @@ def run_response(conn, run_id: str) -> tuple[bytes, int]:
     body.extend(ecosystem_block(run))
     body.extend(read_counts_block(run))
     body.extend(analysis_scope_block(run))
+    body.extend(unplaced_block(conn, run))
 
     if not (run.get("findings") or 0):
         # The TESTOPS-22 page, unchanged: the run described as a run.

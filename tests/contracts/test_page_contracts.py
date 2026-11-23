@@ -593,13 +593,30 @@ def test_P19_decision_form_and_its_coverage_are_present(first_case_url):
 # P20 — unplaced claim looks less settled
 # --------------------------------------------------------------------------
 
-@pytest.mark.skip(reason="P20: no case page in the store represents a claim that could "
-                         "not be placed (the 26 unplaced steps in the restfulbooker run "
-                         "created no case), so the required contrast between an unplaced "
-                         "claim and a placed one cannot be observed. See factory-report.md (d).")
-def test_P20_unplaced_claim_looks_less_settled(case_urls):
-    """P20: a claim that could not be placed must look less settled, without a legend."""
-    ...
+def test_P20_unplaced_claims_are_rendered_with_the_soft_tone(first_run_html):
+    """P20: a claim that could not be placed must look less settled, without a legend.
+
+    P20 was skipped while unplaced claims were only a count. TESTOPS-57 gives them a section of
+    their own on the run page, so the soft badge is now rendered on a served page. This asserts
+    the section exists, that its count and its entries agree, and that every entry carries the
+    soft badge - not the alarm red a placed finding wears.
+    """
+    page = first_run_html
+    marker = "What this run could not place"
+    assert marker in page, "the run page does not give unplaced claims a section of their own"
+    section = page.split(marker, 1)[1].split("<h2", 1)[0]
+    entries = re.findall(r'<li id="unplaced-\d+">', section)
+    assert entries, "the unplaced section lists no entries"
+    count = re.search(r"(\d+) steps? in this run (?:was|were) not assessed", text(section))
+    assert count, "the unplaced section does not say how many claims it lists"
+    assert int(count.group(1)) == len(entries), (
+        f"the section says {count.group(1)} but lists {len(entries)} entries")
+    assert "not assessed" in text(section).lower()
+    assert "badge verdict soft" in section, "an unplaced entry does not wear the soft tone"
+    assert "badge verdict hot" not in section, "an unplaced entry wears the alarm tone"
+    assert "unsupported ecosystem" not in section.lower()
+    assert "could not be tied to a layer" not in section.lower()
+    assert "nearest declared patterns" in section.lower()
 
 
 # --------------------------------------------------------------------------

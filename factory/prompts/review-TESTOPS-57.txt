@@ -1,0 +1,33 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-57 - the claims the tool could not place finally get a page
+of their own, and the soft tone gets its first witness on a served page. This is the ticket that decides whether "I could
+not tell" is visible at all, so the bar is that a reader can act on it and that nothing about it implies a conclusion.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t57 (branch `factory/testops-57-unplaced-section`). Only here.
+Ticket: factory/tickets/TESTOPS-57.md ; Build: factory/reports/2026-11-24/TESTOPS-57-build.md
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Never write to the live store or contact port 8791. Copy `data/`, serve on a free port.
+- **Read the section cold, as a developer who has been told their tests are at the wrong level.** Quote it verbatim for the
+  restfulbooker run. Does it tell them what is wrong, which step, and what to do? Does any phrase imply the tool reached a
+  conclusion it did not reach? "Not assessed" must not read like "passed" or like "absent".
+- **The nearest patterns:** are they genuinely the nearest, or decorative? Take five entries and rank the declared patterns
+  yourself with your own similarity measure; if a nearer pattern exists than the two shown, that is a finding. Also check
+  what happens when a run has **no** declared patterns (an empty binding list) - does the section still make sense, or does
+  it claim nearest patterns it does not have?
+- **Anchors:** confirm `/run/<id>#unplaced-<n>` resolves to the right entry, that ids are stable when a new claim is
+  appended, and that two different runs cannot collide on the same anchor. Report what an anchor looks like for a claim
+  that is the 200th in its run.
+- **The soft tone, witnessed:** confirm the served page carries `badge verdict soft` and NOT `hot`, and that the CSS rule
+  it depends on actually produces a different look from the alarm class (read the served CSS, not the Python).
+- **AC3/AC4:** the count sentence and the number of entries must agree on a store you build with 0, 1 and many unplaced
+  claims (0 is the case that usually breaks). Case-page goldens byte-identical; CotW 94/90/1/1/2 and ReqOverflow 17/17.
+- **P20 in the contract suite:** the build replaced P20's skip with a real assertion. Read that assertion and judge whether
+  it tests the promise or merely that the word "unplaced" appears. A vacuous P20 is worse than a skip.
+- **Volume:** the store holds 351 unplaced claims. Render a run page for a hypothetical large run (or the real one) and
+  say whether the section is usable at 26 and at 200+ entries - a wall of 351 items with no grouping is a page nobody
+  reads.
+- Write exactly one file: factory/reports/2026-11-24/TESTOPS-57-review.md with: ## Verdict; ## The section, read cold;
+  ## The nearest patterns, checked; ## Anchors; ## The soft tone, witnessed; ## Zero and many; ## P20, judged; ## Three
+  sharpest concerns.
+- Reply with the verdict and a summary under 250 words.
