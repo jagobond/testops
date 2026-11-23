@@ -2,7 +2,7 @@
 id: TESTOPS-42C-3
 title: cucumber-js places 17 of 43 assertions, and says why the other 26 are not placed
 feature: F2
-status: blocked
+status: ready
 autonomy: build
 depends_on: TESTOPS-42C-2
 ---
@@ -24,3 +24,5 @@ reason.** A run that claims 43 is wrong about the corpus.
 | AC6 | Duplication analyser runs on the corpus without crashing and its output is honest about what it could and could not see (pairing JS features with JS steps only). |
 | AC7 | .NET and Python unchanged: CotW 94/90/1/1/2, ReqOverflow 17/17, goldens byte-identical, suite green. |
 | AC8 | Report the placed/unplaced split with counts in the build report, and state plainly that 26 of 43 is a corpus problem, not a tool problem. |
+| AC9 | **Record-and-continue for unreadable declarations** (TESTOPS-42C-2 review recommendation): a regex-literal or concatenated declaration must NOT make the whole suite refuse. Record the declaration as unreadable with `path:line` and the reason, place nothing for it, and let the rest of the suite analyse. The run states how many declarations were unreadable and why. Refusing a whole suite for one file costs more than it protects - the honesty requirement is that the cost is *visible*, not that it is fatal. |
+| AC10 | The 11 `Step(this, …)` delegations stay `unknown` with their recorded reason. They are When-steps, so they do not move the 17/43 asserting figure; do not invent a resolution to raise it. |
