@@ -14,10 +14,12 @@ particular colour.
 Run:
     C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest tests -v
 
-Point at another instance with TESTOPS_BASE.
+The suite starts and owns the server it talks to (TESTOPS-53): ``conftest.py`` launches the product
+in a child process on a port the kernel chooses, over a disposable store built under the temp
+directory from ``seed/``. There is no base URL to configure and no environment variable that can
+point it at another deployment; a run that cannot start its own server skips and says why.
 """
 
-import os
 import re
 import time
 import uuid
@@ -27,7 +29,17 @@ import urllib.request
 
 import pytest
 
-BASE = os.environ.get("TESTOPS_BASE", "http://100.121.128.21:8791").rstrip("/")
+import harness
+
+
+def base_url() -> str:
+    """The address of the server this session started. There is no default: no server, no URL."""
+    server = getattr(harness, "SERVER", None)
+    assert server is not None, (
+        "the contract server was not started, so there is no address to talk to. The suite does "
+        "not fall back to a configured or live URL."
+    )
+    return server.base_url
 
 
 # --------------------------------------------------------------------------
@@ -37,7 +49,7 @@ BASE = os.environ.get("TESTOPS_BASE", "http://100.121.128.21:8791").rstrip("/")
 def _request(path, data=None):
     """GET (data None) or form-encoded POST. Returns (status, body) for HTTP
     errors too, so a refusal page can be inspected instead of raised."""
-    url = BASE + path if path.startswith("/") else path
+    url = base_url() + path if path.startswith("/") else path
     body = None
     if data is not None:
         body = urllib.parse.urlencode(data).encode("utf-8")
@@ -113,12 +125,12 @@ def verdict_text(case_html):
 # --------------------------------------------------------------------------
 
 @pytest.fixture(scope="session")
-def front():
+def front(contract_server):
     return get("/")
 
 
 @pytest.fixture(scope="session")
-def runs():
+def runs(contract_server):
     return get("/runs")
 
 

@@ -55,8 +55,23 @@ jobs:
           # The same command a developer runs locally, with the interpreter from the matrix in
           # place of .venv/Scripts/python.exe. The environment is stripped for the same reason:
           # an inherited PYTHONPATH makes the result an environment error, not a pass.
+          #
+          # TESTOPS-53: this run includes tests/contracts. That suite starts and owns a server on
+          # an ephemeral port over a disposable store built under the runner's temp directory, so
+          # it reads and writes nothing the product is running from.
           env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
             python -m pytest -q | tee "$RUNNER_TEMP/pytest-${{ matrix.python }}.log"
+
+      - name: Page-contract gate (the suite's own temporary server and store)
+        shell: bash
+        run: |
+          set -o pipefail
+          # TESTOPS-53 AC5. The page promises are a gate, not a report: this step is named on its
+          # own so a red check says which promises broke, and a non-zero exit fails the build.
+          # TESTOPS-54/55 own the promises still red at the time of writing (P5, P7, P10); this
+          # step stays red until they land - that is the point.
+          env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
+            python -m pytest tests/contracts -q | tee "$RUNNER_TEMP/contracts-${{ matrix.python }}.log"
 
       - name: Status line naming the interpreter
         if: always()

@@ -1,0 +1,42 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-53 - the contract suite now starts and owns its own
+server over a disposable store, because a bare `pytest` used to write to the live store. This ticket is about a hazard
+that already bit three times, so the bar is: make it structurally impossible, and show the gate can fail.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t53 (branch `factory/testops-53-self-contained-contracts`). Only here.
+Ticket: factory/tickets/TESTOPS-53.md ; Build: factory/reports/2026-11-23/TESTOPS-53-build.md
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Do not write to the live store (`C:/Users/Chester/Projects/testops/data/testops.db`) or contact the live server on 8791.
+  Reading the live db with `file:...?mode=ro` is allowed and expected for the before/after check.
+- **The claim to break:** that no environment variable, default or fallback can point the suite's server at a persistent
+  store. Attack it: set `TESTOPS_DATA`, `TESTOPS_ENV`, `TESTOPS_BASE`, `PYTHONPATH`, `PYTHONHOME` and an inherited
+  `TESTOPS_TMP`-looking variable in the parent before running, and try to make the suite read or write a store outside a
+  temp dir. Read `tests/contracts/harness.py` and `conftest.py` first and say whether the refusal is structural (a check
+  on the resolved path) or advisory (a variable it happens to unset today).
+- **Port 0 only:** confirm the child binds an ephemeral port and the parent reads it, and that a fixed-port hijack cannot
+  silently substitute another store. The build reports two unrelated `cotw.panel` processes had bound 8811 and were
+  answering requests - if true, that is a real observed hazard and worth confirming by running the suite twice
+  concurrently (two `pytest tests/contracts` at once) and reporting that both pass against their own stores.
+- **AC2:** prove the skip path by making the server unable to start (scratch copy) and report the skip reason text.
+- **AC4:** run the full suite yourself and report the live db sha256 before/after plus the project list. Note: the live
+  db's sha256 changed between two earlier reviews today (48ac05fe... then 6b0d38bd...) with identical logical content -
+  that is consistent with SQLite WAL checkpointing, NOT with a write. Say which explanation the evidence supports, and
+  whether a raw file hash is therefore a strong enough proof or the review should prefer `select count(*)` plus a
+  content digest (`select ... order by` dump hash). Judge the method, not just the result.
+- **AC5/AC6:** read `.github/workflows/ci.yml` and confirm the gate step really runs the contracts and really fails the
+  build (not `|| true`, not a filtered deselection). Then reproduce AC6 yourself: in a scratch copy set
+  `NOT_ASSESSABLE_TONE = ALARM` and confirm `test_P04_uncertain_verdict_is_not_styled_as_settled` fails with a useful
+  message. Report the assertion text.
+- **The honest red:** the build says the local run is red on five promises owned by 52/54/55, and that it did NOT weaken
+  any assertion. Check no contract assertion, skip or xfail was added, softened or deselected:
+  `git diff origin/main...HEAD -- tests/contracts/test_page_contracts.py` should show setup changes only. List every
+  changed line you find and judge whether it could hide a failure.
+- **Seed honesty:** the fixture store is built from `seed/seed.json` (3 runs, 103 claims, 21 cases). Say whether it is
+  representative enough for the promises it is asked to witness, and name any promise that passes vacuously because the
+  seed lacks the data it needs (the 18 unplaced claims with no case is exactly this shape - the build admits it).
+- Write exactly one file: factory/reports/2026-11-23/TESTOPS-53-review.md with: ## Verdict; ## Can the store be
+  redirected (my attempts); ## Port ownership; ## Skip path; ## The live db, before and after (and whether file sha256 is
+  proof); ## The gate, and the gate failing; ## Did any assertion get softened; ## Seed honesty; ## Three sharpest
+  concerns.
+- Reply with the verdict and a summary under 300 words.
