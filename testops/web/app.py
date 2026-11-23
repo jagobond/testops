@@ -1045,12 +1045,30 @@ def verdict_badge(row: dict) -> str:
 
 # ---------------------------------------------------------------- home screen
 
+def totals_line(totals: dict) -> str:
+    """What the store holds, counted and labelled, so a newcomer can say what exists.
+
+    TESTOPS-55. The three numbers are the store's own counts, read when the page is rendered -
+    never a text literal. Each number carries the noun it counts, and the sentence says what each
+    noun means here, because "47 runs" is only useful if a reader knows a run is one analysis.
+    """
+    projects = int(totals.get("projects") or 0)
+    runs = int(totals.get("runs") or 0)
+    cases = int(totals.get("cases") or 0)
+    return (f'<p class="totals">The store holds <strong>{_count(projects, "project")}</strong>, '
+            f'<strong>{_count(runs, "run")}</strong> and <strong>{_count(cases, "case")}</strong>. '
+            f'A project is a set of repositories this tool is set up to analyse; a run is one '
+            f'analysis of a project at a fixed commit; a case is one finding waiting for a '
+            f'decision.</p>')
+
+
 def index(conn) -> bytes:
     fr = queries.freshness(conn)
     rows, older = queries.latest_per_analyser(conn)
     body = ["<h1>TestOps</h1>",
             '<p class="meta"><a href="/runs">all runs</a></p>',
-            freshness_line(fr)]
+            freshness_line(fr),
+            totals_line(queries.store_totals(conn))]
     if not rows:
         if fr.get("ever_run"):
             versions = versions_text(fr.get("versions"))
@@ -1799,6 +1817,37 @@ def _repository_read_as(role: str, entry: dict) -> str:
     return f"{where[0].upper()}{where[1:]} was read as {title}{counted}."
 
 
+def read_counts_block(run: dict) -> list[str]:
+    """How many files of each kind each repository gave this run, zeroes included (TESTOPS-55).
+
+    A run page used to say "27 files read" per repository and list skipped files by kind, so a
+    reader could not tell an unread kind from a kind that was read and held nothing. Every kind
+    this collector reads is named with its count, and ``0`` is a real answer. The skipped list is
+    a different section with different words: a kind here is a file the reader opened; a kind
+    there is a file it could not.
+    """
+    entries = run.get("read_counts")
+    if not entries:
+        return []
+    out = ['<h2 class="section">What this run read</h2>',
+           '<p class="meta">Files this run read, per repository and per kind. A 0 is a kind this '
+           'reader handles and that repository holds none of. Files it could not read are '
+           'counted in their own section further down the page.</p>']
+    for entry in entries:
+        role = entry.get("role") or "repository"
+        repo = entry.get("repository") or ""
+        where = f'the {esc(role)} repository' + (f' ({esc(repo)})' if repo else '')
+        out.append(f'<p>From {where} it read {_kind_counts(entry.get("counts") or {})}.</p>')
+    return out
+
+
+def _kind_counts(counts: dict) -> str:
+    """Kinds with their counts, biggest first, zeroes last, each kind carrying its unit."""
+    order = {kind: index for index, kind in enumerate(counts)}
+    ranked = sorted(counts.items(), key=lambda item: (-int(item[1]), order[item[0]]))
+    return _names([_count(int(n), f"{kind} file") for kind, n in ranked])
+
+
 def runs_index(conn) -> bytes:
     """Every run in the store, newest first - the view a run that raised nothing is reachable from."""
     rows = queries.list_runs(conn)
@@ -1869,6 +1918,7 @@ def run_response(conn, run_id: str) -> tuple[bytes, int]:
             f'{" at " + esc(versions) if versions else ""}'
             f' · <span class="code">{esc(run_id)}</span></p>']
     body.extend(ecosystem_block(run))
+    body.extend(read_counts_block(run))
     body.extend(analysis_scope_block(run))
 
     if not (run.get("findings") or 0):
