@@ -15,9 +15,11 @@ Run:
     C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest tests -v
 
 The suite starts and owns the server it talks to (TESTOPS-53): ``conftest.py`` launches the product
-in a child process on a port the kernel chooses, over a disposable store built under the temp
-directory from ``seed/``. There is no base URL to configure and no environment variable that can
-point it at another deployment; a run that cannot start its own server skips and says why.
+in a child process on a port the kernel chooses, over a disposable store built under a temp
+directory discovered from the OS (not from ``TMPDIR``; TESTOPS-58 skips when that variable points
+into the repository, the home directory or a checkout's ``data/``). There is no base URL to
+configure and no environment variable that can point it at another deployment; a run that cannot
+start its own server skips and says why.
 """
 
 import re

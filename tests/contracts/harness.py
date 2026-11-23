@@ -9,12 +9,25 @@ about it:
     ``seed/`` - never opened from ``data/`` and never read from an environment variable;
   * the server is a **child process** launched with ``TESTOPS_DATA`` set to that temp directory
     and every inherited ``TESTOPS_*`` variable stripped, so nothing in the parent's environment
-    can redirect it;
+    can redirect it; ``PYTHONHOME`` and its relatives are stripped as well, because they stop the
+    child before the harness can say anything useful;
   * the child binds port **0** and reports the port it was given, so the suite talks to the socket
     it opened rather than to a port it guessed (on Windows a second binder on a chosen port can
     silently receive the traffic - the reason this is not "pick a free port, then connect");
   * :func:`require_disposable_store` refuses any store that is not under the system temp
-    directory, and :func:`start_contract_server` calls it before it launches anything.
+    directory, and :func:`start_contract_server` calls it before it launches anything;
+  * the temp root itself is **discovered without environment variables** (the OS known folder on
+    Windows, the platform defaults elsewhere) and captured once at import, because
+    ``tempfile.gettempdir()`` honours ``TMPDIR``/``TEMP``/``TMP`` - TESTOPS-58.
+
+The claim this module makes is deliberately narrower than TESTOPS-53's first draft. What is
+guaranteed: the suite cannot be pointed at a **persistent evidence store** - the store path is
+handed to the child by the fixture, never read from the environment, and a temp variable that
+resolves into the repository, the user's home or any checkout's ``data/`` makes the suite skip.
+What is *not* guaranteed: the choice of junk directory. A ``TMPDIR`` pointing at some other
+persistent directory (say ``D:/scratch``) still moves the store there, because the operating
+system has no temp directory besides the one it names; the worst outcome is a disposable store
+left behind in a directory nobody treats as evidence.
 
 When the server cannot start, :class:`ServerUnavailable` says why and the suite skips. It never
 falls back to a URL it was not given, and never guesses a host.
@@ -76,25 +89,165 @@ class ServerUnavailable(RuntimeError):
     """The suite could not start the server it owns; the reason is the message."""
 
 
+# The variables ``tempfile.gettempdir()`` consults. They are checked for *poisoning*, not trusted
+# to name the root (TESTOPS-58): the T53 review moved the root with TMPDIR and the suite built its
+# store inside the Projects directory.
+TEMP_VARIABLES = ("TMPDIR", "TEMP", "TMP")
+
+# Variables that redirect or break the *interpreter* in the child. PYTHONHOME makes the child die
+# before it can bind ("No module named 'encodings'"), which reads like a harness failure; the T53
+# review found it is not stripped. PYTHONPATH is dropped here and set again explicitly below.
+_LAUNCHER_ENV_DROP = (
+    "PYTHONHOME",
+    "PYTHONPATH",
+    "PYTHONSTARTUP",
+    "PYTHONUSERBASE",
+    "PYTHONOPTIMIZE",
+    "PYTHONEXECUTABLE",
+)
+
+
+def _windows_temp_root() -> Path:
+    """``%LocalAppData%\\Temp`` via the shell known folder, which ignores TMPDIR/TEMP/TMP."""
+    import ctypes
+    import struct
+    import uuid
+
+    class _GUID(ctypes.Structure):
+        _fields_ = [("Data1", ctypes.c_uint32), ("Data2", ctypes.c_uint16),
+                    ("Data3", ctypes.c_uint16), ("Data4", ctypes.c_ubyte * 8)]
+
+    guid = _GUID()
+    known = uuid.UUID("{F1B32785-6FBA-4FCF-9D55-7B8E7F157091}")  # FOLDERID_LocalAppData
+    guid.Data1, guid.Data2, guid.Data3 = struct.unpack("<IHH", known.bytes_le[:8])
+    ctypes.memmove(guid.Data4, known.bytes[8:], 8)
+
+    address = ctypes.c_wchar_p()
+    result = ctypes.windll.shell32.SHGetKnownFolderPath(
+        ctypes.byref(guid), 0, None, ctypes.byref(address))
+    if result != 0 or not address.value:
+        raise OSError(0xFFFF & result, "SHGetKnownFolderPath(LocalAppData) failed")
+    try:
+        return Path(address.value) / "Temp"
+    finally:
+        ctypes.windll.ole32.CoTaskMemFree(address)
+
+
+def _posix_temp_root() -> Path:
+    """The platform default, asked with TMPDIR/TEMP/TMP removed from the environment."""
+    saved = {name: os.environ.pop(name) for name in TEMP_VARIABLES if name in os.environ}
+    previous = tempfile.tempdir
+    tempfile.tempdir = None
+    try:
+        return Path(tempfile.gettempdir())
+    finally:
+        os.environ.update(saved)
+        tempfile.tempdir = previous
+
+
+def _discover_temp_root() -> tuple["Path | None", "str | None"]:
+    try:
+        candidate = _windows_temp_root() if os.name == "nt" else _posix_temp_root()
+    except Exception as exc:  # noqa: BLE001 - any failure means "cannot name a temp root"
+        return None, ("the system temp directory could not be discovered without environment "
+                      "variables: %r" % (exc,))
+    if not candidate.is_absolute():
+        return None, "the system temp directory resolved to a relative path: %r" % (candidate,)
+    return candidate.resolve(), None
+
+
+# Discovered once, at import, before pytest or anything else has a chance to move it. A test pins
+# that moving TMPDIR afterwards leaves this value alone.
+TRUSTED_TEMP_ROOT, TEMP_ROOT_ERROR = _discover_temp_root()
+
+
+def _checkout_data_dirs() -> list[Path]:
+    """``data/`` of this checkout and of any sibling checkout of the same repository."""
+    dirs = [ROOT / "data"]
+    try:
+        siblings = sorted(ROOT.parent.glob("testops*"))
+    except OSError:
+        siblings = []
+    for sibling in siblings:
+        if sibling.resolve() != ROOT.resolve() and (sibling / "data").is_dir():
+            dirs.append(sibling / "data")
+    return [path.resolve() for path in dirs]
+
+
+def _forbidden_reason(path: Path) -> "str | None":
+    """Why ``path`` is not a disposable location, or ``None`` when it is one."""
+    root = ROOT.resolve()
+    if path == root or root in path.parents:
+        return "the repository under test (%s)" % root
+    for data in _checkout_data_dirs():
+        if path == data or data in path.parents:
+            return "a checkout's data/ directory (%s)" % data
+    home = Path.home().resolve()
+    if TRUSTED_TEMP_ROOT is not None and (
+            path == TRUSTED_TEMP_ROOT or TRUSTED_TEMP_ROOT in path.parents):
+        return None  # the OS's own temp directory lives under home on Windows; it is allowed
+    if path == home or home in path.parents:
+        return "the user's home directory (%s)" % home
+    return None
+
+
+def temp_root_problem(environ=None) -> "str | None":
+    """The refusal message when a temp variable points at a persistent location, else ``None``.
+
+    AC1 of TESTOPS-58. ``environ`` exists so a test can prove the decision for a mapping without
+    mutating the process environment; the suite calls it with the real environment.
+    """
+    env = os.environ if environ is None else environ
+    for name in TEMP_VARIABLES:
+        raw = env.get(name)
+        if not raw:
+            continue
+        try:
+            resolved = Path(raw).expanduser().resolve()
+        except OSError:
+            continue
+        reason = _forbidden_reason(resolved)
+        if reason:
+            return ("%s=%r resolves to %s, inside %s. The contract suite builds a disposable store "
+                    "and refuses to build one there." % (name, raw, resolved, reason))
+    return None
+
+
+# Captured once at import, so the fixture can skip before pytest creates a temp directory.
+TEMP_ROOT_PROBLEM = temp_root_problem()
+
+
+def temp_root() -> Path:
+    """The temp root the suite trusts: discovered from the OS, never from a variable."""
+    if TRUSTED_TEMP_ROOT is None:
+        raise StoreNotDisposable(TEMP_ROOT_ERROR or "the system temp directory is unknown")
+    return TRUSTED_TEMP_ROOT
+
+
 def under_temp(path) -> bool:
-    """True when ``path`` resolves inside the system temp directory."""
-    root = Path(tempfile.gettempdir()).resolve()
+    """True when ``path`` resolves inside the trusted temp root."""
+    root = temp_root()
     target = Path(path).resolve()
     return target == root or root in target.parents
 
 
 def require_disposable_store(data_dir) -> Path:
-    """Refuse a store that is not under the temp directory.
+    """Refuse a store that is not under the trusted temp directory.
 
     This is the fixture's own gate, not a warning: a disposable store is one the test run may
-    create and delete, and only the system temp directory is guaranteed to be that.
+    create and delete, and only the system temp directory is guaranteed to be that. A temp
+    variable that has been moved into the repository, the home directory or a checkout's
+    ``data/`` is refused before the path check, and the refusal names the variable and the path.
     """
+    problem = temp_root_problem()
+    if problem:
+        raise StoreNotDisposable("refusing to start the contract suite: %s" % problem)
     target = Path(data_dir).resolve()
     if not under_temp(target):
         raise StoreNotDisposable(
-            "refusing to point the contract suite at %s: it is not under the system temp "
-            "directory (%s). The suite builds its own disposable store; it does not run against "
-            "a persistent one." % (target, Path(tempfile.gettempdir()).resolve()))
+            "refusing to point the contract suite at %s: it is not under the trusted temp "
+            "directory (%s), which this run discovered from the operating system rather than "
+            "from an environment variable." % (target, temp_root()))
     return target
 
 
@@ -237,8 +390,11 @@ def start_contract_server(data_dir, argv: list[str] | None = None) -> Server:
 
     command = argv or [sys.executable, str(HERE / "_server.py")]
     # Every inherited TESTOPS_* variable is dropped, not overridden: a parent shell pointing at a
-    # persistent store must not be able to reach the child at all.
-    env = {key: value for key, value in os.environ.items() if not key.startswith("TESTOPS_")}
+    # persistent store must not be able to reach the child at all. PYTHONHOME and its relatives
+    # are dropped too (TESTOPS-58 AC4): PYTHONHOME makes the child die before it can bind, which
+    # looks like a harness failure rather than the environment error it is.
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith("TESTOPS_") and key not in _LAUNCHER_ENV_DROP}
     env.update({
         "TESTOPS_DATA": str(store_dir),
         "TESTOPS_ENV": str(store_dir / "no-such.env"),

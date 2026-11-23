@@ -110,14 +110,29 @@ product runs from, so a bare `pytest` wrote to the Product Owner's evidence. It 
 - `conftest.py` starts a child process (`_server.py`) that serves the product on **port 0** - the
   kernel chooses the port and the child prints it, so the suite cannot collide with, or be
   silently hijacked by, another binder;
-- the child's store is built under pytest's temp directory from `tests/contracts/seed/` by
+- the child's store is built under a temp directory discovered **from the operating system**
+  (`%LocalAppData%\Temp` through the shell known folder on Windows; the platform defaults
+  elsewhere) and captured once at harness import, from `tests/contracts/seed/` by
   `harness.build_seed_store`; the seed is fixture input, not a copy of `data/`;
+- `TMPDIR`/`TEMP`/`TMP` are treated as poison, not as the root: if one resolves into the
+  repository, the user's home (outside the OS temp directory) or any checkout's `data/`, the
+  suite **skips** and the reason names the variable and the resolved path (TESTOPS-58);
 - every inherited `TESTOPS_*` variable is stripped from the child and `TESTOPS_DATA` is set to that
-  temp directory, so the parent's environment cannot redirect it;
-- `harness.require_disposable_store` refuses any store outside the temp directory, and the child is
-  never launched before that check;
+  temp directory, so the parent's environment cannot redirect it; `PYTHONHOME` and its relatives
+  are stripped too, because they stop the child before the harness can report anything useful;
+- `harness.require_disposable_store` refuses any store outside the trusted temp directory, and the
+  child is never launched before that check;
 - a server that cannot start raises `ServerUnavailable`, which the session fixture turns into
   `pytest.skip` with the reason. There is no fallback URL and no default host.
+
+The guarantee is about the **evidence store**, not about the choice of junk directory. The store
+is handed to the child by the fixture and never read from an environment variable, and a test may
+not open `data/` for writing, so no variable can point the suite at the store the product runs
+from. A temp variable aimed at some other persistent directory (say `D:/scratch`) still moves the
+disposable store there: the OS has no temp directory besides the one it names, and the worst case
+is a store left behind in a directory nobody treats as evidence. TESTOPS-58 states this rather
+than denying it.
+
 
 `test_contract_harness.py` pins all of it, including a source scan that fails if a live address or
 `TESTOPS_BASE` is written back into the suite. Regenerate the seed with
