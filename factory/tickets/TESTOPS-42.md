@@ -2,7 +2,7 @@
 id: TESTOPS-42
 title: The tool reads one ecosystem, and says nothing when it does not
 feature: F2
-status: blocked
+status: done
 autonomy: build
 depends_on: TESTOPS-41
 ---

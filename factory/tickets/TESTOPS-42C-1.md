@@ -2,7 +2,7 @@
 id: TESTOPS-42C-1
 title: cucumber-js reads its own bindings - 44 declarations, both layouts, two placeholder kinds
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-42A, TESTOPS-50
 ---
