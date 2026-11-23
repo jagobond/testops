@@ -262,7 +262,8 @@ def _claim(member: _Member, other: _Member, *, cheapest: str, same_level: bool, 
 
 def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding],
             uri_for_path, *, sources_missing=None, assessment=None, commit: str = "",
-            support_index: dict[tuple[str, str, str], int] | None = None) -> list[Claim]:
+            support_index: dict[tuple[str, str, str], int] | None = None,
+            suite_of=None, extractor: str = "") -> list[Claim]:
     """Group scenarios by normalised step signature and judge the surplus copies.
 
     ``sources_missing`` and ``assessment`` are the caller's registry-derived records, copied onto
@@ -274,27 +275,36 @@ def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding
     ``(path, verb, pattern)`` to the observation row the caller recorded for it. Both are handed in
     by the caller: this module never touches the store, so a claim's provenance and evidence are
     facts the run recorded, not values guessed here.
+
+    ``suite_of`` is the ecosystem's own suite rule (TESTOPS-42C-3, AC6). Without it the .NET rule -
+    the top-level path segment - is used, which is exactly right for ``ReqOverflow.Specs.API``. A
+    JavaScript suite lives under one ``cypress`` directory, so that rule would pair every feature
+    with every step definition; the cucumber module supplies directory co-location instead, and a
+    claim records which JS suite it paired. ``extractor`` names the vocabulary the pairing used, so
+    a reader knows the analysis saw JS features and JS steps and nothing else.
     """
     assessed = sources_missing is not None
     missing = list(sources_missing) if assessed else None
     assessment_record = None if assessment is None else assessment.record()
     support_index = support_index or {}
+    suite_rule = suite_of or _suite
     groups: dict[str, list[_Member]] = defaultdict(list)
 
     # Each suite defines its own step bindings for the same step text. Matching globally meant every step
     # resolved to whichever suite happened to be parsed first, which collapsed the layering entirely.
     by_suite: dict[str, list[stepbindings.Binding]] = defaultdict(list)
     for b in bindings:
-        by_suite[_suite(b.path)].append(b)
+        by_suite[suite_rule(b.path)].append(b)
 
     for feat in features:
-        suite_bindings = by_suite.get(_suite(feat.path)) or bindings
+        suite = suite_rule(feat.path)
+        suite_bindings = by_suite.get(suite) or bindings
         for sc in feat.scenarios:
             if not sc.steps:
                 continue
             bound_for: dict[int, stepbindings.Binding] = {}
             for step in sc.steps:
-                b = stepbindings.match_step(suite_bindings, step.text)
+                b = stepbindings.match_step(suite_bindings, step.text, suite)
                 if b:
                     bound_for[step.line] = b
             layer = stepbindings.highest([b.layer for b in bound_for.values()]) \
@@ -312,10 +322,17 @@ def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding
         known = {l for l in layers if l != "unknown"}
 
         def make(member: _Member, other: _Member, *, cheapest: str, same_level: bool) -> Claim:
-            return _claim(member, other, cheapest=cheapest, same_level=same_level,
-                          signature=signature, group_size=len(members), commit=commit,
-                          assessed=assessed, missing=missing,
-                          assessment_record=assessment_record, uri_for_path=uri_for_path)
+            claim = _claim(member, other, cheapest=cheapest, same_level=same_level,
+                           signature=signature, group_size=len(members), commit=commit,
+                           assessed=assessed, missing=missing,
+                           assessment_record=assessment_record, uri_for_path=uri_for_path)
+            if extractor:
+                # What vocabulary paired these two scenarios, and the suite whose step definitions
+                # placed this copy. A reader can see the analysis compared JS features with JS
+                # steps, and which suite's declarations it read (AC6).
+                claim.detail["extractor"] = extractor
+                claim.detail["suite"] = suite_rule(member.feature.path)
+            return claim
 
         if len(known) > 1:
             cheapest = min(known, key=stepbindings.LAYER_ORDER.index)

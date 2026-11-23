@@ -1346,6 +1346,7 @@ def claim_sections(c: dict) -> tuple[list[str], int]:
     number += 1
     out.extend(argument_block(c))
     out.extend(provenance_line(c))
+    out.extend(binding_provenance_block(c))
     out.extend(assessment_note(c))
     out.extend(pass_aside(c))
     out.extend(also_reported_block(c))
@@ -1619,6 +1620,117 @@ def _ecosystem_clause(run: dict) -> str:
     return f"Its test repository was read as {title}."
 
 
+def binding_provenance_block(claim: dict) -> list[str]:
+    """What placed this claim, and how to walk from it to the call that does the work (AC4).
+
+    TESTOPS-42C-3. A layer reached through a custom command is only checkable if the reader can
+    open the command; this block names the extractor, the step binding's own ``path:line``, the
+    chain it followed, and every command's own coordinates.
+    """
+    detail = claim.get("detail") or {}
+    provenance = detail.get("provenance")
+    if not isinstance(provenance, dict) or not provenance.get("extractor"):
+        return []
+    binding = provenance.get("binding")
+    if not isinstance(binding, dict):
+        return []
+    extractor = esc(provenance["extractor"])
+    where = esc(f'{binding.get("path")}:{binding.get("line")}')
+    layer = esc(binding.get("layer") or "unknown")
+    out = [f'<p class="meta"><span class="fn">What placed this claim:</span> the {extractor} '
+           f"extractor read the step binding at <span class=\"code\">{where}</span>, which reaches "
+           f"the {layer} layer."]
+    via = [str(step) for step in binding.get("via") or []]
+    if via:
+        out.append(f'<p class="meta">The chain it followed: <span class="code">'
+                   f'{esc(" then ".join(via))}</span>.</p>')
+    for command in binding.get("commands") or []:
+        if not isinstance(command, dict):
+            continue
+        command_where = esc(f'{command.get("path")}:{command.get("line")}')
+        reaches = ", ".join(str(token) for token in command.get("via") or [])
+        out.append(f'<p class="meta"><span class="code">cy.{esc(command.get("name") or "")}()</span>'
+                   f" is defined at <span class=\"code\">{command_where}</span>"
+                   f'{f", and its own body reaches {esc(reaches)}" if reaches else ""}.</p>')
+    # The scenario's other bindings: the background is where an API command usually sits, and a
+    # claim's verdict is a fact about the whole scenario. Only chains that pass through a command
+    # are shown - a direct cy.get chain is already above and would repeat.
+    own = (binding.get("path"), binding.get("line"), binding.get("pattern"))
+    for other in provenance.get("scenario_bindings") or []:
+        if not isinstance(other, dict):
+            continue
+        if (other.get("path"), other.get("line"), other.get("pattern")) == own:
+            continue
+        commands = [command for command in other.get("commands") or [] if isinstance(command, dict)]
+        if not commands:
+            continue
+        other_where = esc(f'{other.get("path")}:{other.get("line")}')
+        out.append(f'<p class="meta">This scenario also runs the step definition at '
+                   f'<span class="code">{other_where}</span> ({esc(other.get("pattern") or "")}), '
+                   f'which reaches the {esc(other.get("layer") or "unknown")} layer:</p>')
+        for command in commands:
+            command_where = esc(f'{command.get("path")}:{command.get("line")}')
+            reaches = ", ".join(str(token) for token in command.get("via") or [])
+            out.append(f'<p class="meta">— <span class="code">cy.{esc(command.get("name") or "")}()</span> '
+                       f'at <span class="code">{command_where}</span>'
+                       f'{f", and its own body reaches {esc(reaches)}" if reaches else ""}.</p>')
+    return out
+
+
+def analysis_scope_block(run: dict) -> list[str]:
+    """What this run placed, what it did not, and why - in the same voice as the other analyzers.
+
+    TESTOPS-42C-3 (AC3). Read from the snapshot's own ``placement`` record, so a page opened
+    months later says the same thing. A snapshot without one renders nothing: silence, not a zero.
+    """
+    placement = run.get("placement")
+    if not isinstance(placement, dict):
+        # A run that does not place claims (duplication) can still have hit an unreadable
+        # declaration. Its cost is visible here too: nothing was claimed for it, and the run says
+        # so rather than refusing the suite (AC9).
+        unreadable = run.get("unreadable_declarations") or []
+        if not unreadable:
+            return []
+        out = ['<h2 class="section">What this run could not read</h2>',
+               f"<p>{_count(len(unreadable), 'declaration')} could not be read. Nothing was "
+               f"claimed for {'it' if len(unreadable) == 1 else 'them'}, and the rest of the "
+               f"suite was analysed:</p>"]
+        for entry in unreadable:
+            where = esc(f'{entry.get("path")}:{entry.get("line")}')
+            out.append(f'<p class="meta"><span class="code">{where}</span> — '
+                       f'{esc(entry.get("reason") or "")}.</p>')
+        return out
+    extractor = placement.get("extractor") or "the extractor"
+    asserting = int(placement.get("asserting") or 0)
+    placed = int(placement.get("placed") or 0)
+    unplaced = int(placement.get("unplaced") or 0)
+    layers = placement.get("layers") or {}
+    split = ", ".join(f"{count} {layer}" for layer, count in sorted(layers.items()))
+    out = ['<h2 class="section">What this run placed</h2>']
+    out.append(f"<p>The suite was read as {esc(extractor)}. Of its {_count(asserting, 'asserting step')}, "
+               f"{placed} {'was' if placed == 1 else 'were'} placed on a layer"
+               f"{f' ({esc(split)})' if split else ''} and {unplaced} "
+               f"matched no step binding.</p>")
+    nearly = [pattern for pattern in placement.get("nearly") or [] if pattern]
+    if unplaced and nearly:
+        quoted = " and ".join(f'<span class="code">{esc(pattern)}</span>' for pattern in nearly[:2])
+        out.append(f"<p>The {unplaced} matched no binding because no binding matches these words: "
+                   f"they name messages the suite never declared. The two nearest patterns are "
+                   f"{quoted}; each unplaced case names the step it could not place.</p>")
+    unreadable = placement.get("unreadable") or []
+    if unreadable:
+        out.append(f"<p>{_count(len(unreadable), 'declaration')} could not be read. Nothing was "
+                   f"placed for {'it' if len(unreadable) == 1 else 'them'}, and the rest of the "
+                   f"suite was analysed:</p>")
+        for entry in unreadable:
+            where = esc(f'{entry.get("path")}:{entry.get("line")}')
+            out.append(f'<p class="meta"><span class="code">{where}</span> — '
+                       f'{esc(entry.get("reason") or "")}.</p>')
+    else:
+        out.append("<p>Every declaration in the suite was readable.</p>")
+    return out
+
+
 def ecosystem_block(run: dict) -> list[str]:
     """What each repository was read as, and the counted evidence, on the run's own page (AC2)."""
     record = run.get("ecosystems")
@@ -1721,6 +1833,7 @@ def run_response(conn, run_id: str) -> tuple[bytes, int]:
             f'{" at " + esc(versions) if versions else ""}'
             f' · <span class="code">{esc(run_id)}</span></p>']
     body.extend(ecosystem_block(run))
+    body.extend(analysis_scope_block(run))
 
     if not (run.get("findings") or 0):
         # The TESTOPS-22 page, unchanged: the run described as a run.

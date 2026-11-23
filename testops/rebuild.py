@@ -188,12 +188,16 @@ def rebuild(conn, snapshot_id: str) -> tuple[list, dict, Snapshot]:
     discovery = surface_discovery.discover(snap.product_texts)
     claims: list = []
     if readable:
+        module = match[0] if match is not None else None
+        unmatched = getattr(module, "explain_unmatched", None)
+        extractor = module.name if unmatched is not None and module is not None else ""
         claims = level_fitness.analyse(
             features, bindings, list(discovery.surfaces),
             lambda path: f"github:{snap.test_slug}@{snap.test_commit}:{path}",
             {"calls": 0, "tokens_in": 0, "tokens_out": 0},
             sources_missing=snap.sources_missing, assessment=snap.assessment,
             commit=snap.test_commit, support_index=snap.support_index,
+            extractor=extractor, unmatched=unmatched,
         )
     stats = {"features": len(features), "bindings": len(bindings),
              "scenarios": sum(len(f.scenarios) for f in features),
