@@ -2,7 +2,7 @@
 id: TESTOPS-42C
 title: cucumber-js, built as a module with its own vocabulary and command model
 feature: F2
-status: in-progress
+status: done-progress
 autonomy: build
 depends_on: TESTOPS-42A, TESTOPS-50
 ---

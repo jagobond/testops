@@ -2,7 +2,7 @@
 id: TESTOPS-42C-3
 title: cucumber-js places 17 of 43 assertions, and says why the other 26 are not placed
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-42C-2
 ---
