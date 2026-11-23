@@ -1,0 +1,34 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-58 - pinning the trusted temp root so `TMPDIR` cannot move
+it, so the suite's "disposable store" guarantee stops being self-referential. You proved the original attack; now prove
+this fix closes it without breaking clean runs.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t58 (branch `factory/testops-58-pinned-temp-root`). Only here.
+Ticket: factory/tickets/TESTOPS-58.md ; Build: factory/reports/2026-11-24/TESTOPS-58-build.md
+Your earlier finding: factory/reports/2026-11-23/TESTOPS-53-review.md, section "Can the store be redirected".
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Never write to the live store (`C:/Users/Chester/Projects/testops/data/testops.db`) or contact port 8791. Reading it
+  `mode=ro` for the before/after comparison is fine.
+- **Re-run your exact original attack:** `TMPDIR=C:/Users/Chester/Projects/attack-tmp` (directory pre-created), then
+  `pytest tests/contracts -q -rs`. It must SKIP with a reason naming TMPDIR and the path, and must leave no `.db` under
+  `attack-tmp`. Report the skip line verbatim. Then delete nothing - just say what you created, if anything.
+- **Try to move the root another way:** `TEMP`, `TMP`, all three at once, a relative `TMPDIR` (`TMPDIR=../attack`), a
+  `TMPDIR` that is a symlink/junction pointing into the repo, a `TMPDIR` set to the OS temp dir's parent, and (POSIX-style)
+  `TMPDIR` with a trailing separator. For each: refused with the variable named, or silently accepted? Report a table.
+- **The honest deviation:** the build enforces "under the user's home" as "under home EXCEPT the OS temp directory",
+  because on Windows the OS temp dir lives under home and a strict reading would skip every clean run. Judge that: is the
+  exception safe, is it stated, and can you construct a poisoned TMPDIR that hides inside the OS temp directory's own name
+  to get a persistent store that looks disposable? Distinguish "persistent" (survives reboot, is not cleaned) from
+  "in temp but attacker-chosen".
+- **AC2/AC4:** confirm the root is discovered without env vars and captured at import; then confirm the child no longer
+  dies on an inherited `PYTHONHOME` (the earlier review found `ModuleNotFoundError: No module named 'encodings'`).
+- **AC3 both directions:** clean environment → the same pass/fail set as main (report it; the contract suite should now be
+  fully green on main). Poisoned → skip, not run.
+- **AC5:** read the rewritten claim in `tests/README.md` and the ticket. Does it now say only what is true - "cannot be
+  pointed at a persistent evidence store, and the residual ability to choose a junk directory is stated"? If it still
+  overstates anywhere, quote the sentence.
+- Write exactly one file: factory/reports/2026-11-24/TESTOPS-58-review.md with: ## Verdict; ## My original attack, re-run;
+  ## Other ways to move the root; ## The home exception; ## The claim, as rewritten; ## Clean-run parity; ## Three
+  sharpest concerns.
+- Reply with the verdict and a summary under 250 words.
