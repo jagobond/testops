@@ -8,7 +8,9 @@ dependencies = []
 # Development install (documented in tests/README.md):
 #   pip install -e ".[dev]"
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+# setuptools and wheel are the build backend the distribution test uses with
+# --no-build-isolation, so building a wheel needs no network.
+dev = ["pytest>=8", "setuptools>=68", "wheel"]
 
 [tool.setuptools]
 # Every entry must be a package that exists on disk. `testops.cases` is a module (testops/cases.py),
@@ -23,3 +25,6 @@ packages = ["testops", "testops.store", "testops.collectors", "testops.extract",
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# TESTOPS-8 AC4: the distribution check is in the ordinary suite and reaches no network, but it
+# builds a wheel and a venv (~20s), so the fast lane skips it by name and CI runs everything.
+markers = ["distribution: builds a wheel, installs it into a fresh venv and serves pages from it; needs no network, takes ~20s"]
