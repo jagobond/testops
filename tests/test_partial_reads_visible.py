@@ -274,9 +274,18 @@ def test_a_lost_file_makes_the_sentence_partial_and_the_page_still_lists_it(monk
 # --------------------------------------------------------------------------- AC5: wording lives once
 
 def test_no_page_module_builds_the_assessment_sentence():
-    """AC5: the sentence is constructed in `sources.py`; no template composes its own."""
+    """AC5: the sentence is constructed in `sources.py`; no template composes its own.
+
+    TESTOPS-49: the walk of the page modules is checked before it is trusted. An empty walk would
+    check zero modules and pass, which is a pass about nothing - so it is named and refused.
+    """
     web = ROOT / "testops" / "web"
-    for module in web.glob("*.py"):
+    modules = sorted(web.glob("*.py"))
+    assert modules, (
+        f"the page-module walk of {web} found no .py files at all; this test would otherwise "
+        "check zero modules and pass vacuously"
+    )
+    for module in modules:
         source = module.read_text(encoding="utf-8")
         assert "consulted and returned" not in source, \
             f"{module.name} builds the assessment sentence; that wording belongs in sources.py"

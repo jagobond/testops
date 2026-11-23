@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from support import (install_store_guard, repository_snapshot, snapshot_difference)
+from support import (ROOT, install_store_guard, repository_snapshot, snapshot_difference)
 from wheel_build import build_wheel_for_session
 
 
@@ -30,6 +30,12 @@ def store_guard():
 def repo_guard():
     """Session-wide guard against writes to the repository or to ``data/``."""
     before = repository_snapshot()
+    # TESTOPS-49: a walk that found no files would make the comparison below vacuously empty, so
+    # the snapshot is refused when it is empty and the directory it walked is named.
+    assert before, (
+        f"the repository walk of {ROOT} found no files at all; the write guard would compare "
+        "nothing with nothing and pass vacuously"
+    )
     yield before
     difference = snapshot_difference(before, repository_snapshot())
     assert not any(difference.values()), f"a test wrote into the repository: {difference}"
