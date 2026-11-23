@@ -19,7 +19,9 @@ result is an environment error, not a pass.
 ## Fast lane
 
 Three tests build a wheel and a venv to prove the package works when *installed*
-(`test_distribution.py`, TESTOPS-8). They reach no network but take ~20s, and they are marked:
+(`test_distribution.py`, TESTOPS-8). The wheel is built once per session and shared with the
+packaging check (`test_packaging.py`, TESTOPS-48), so there is one build, not one per test. They
+reach no network but take ~20s, and the distribution tests are marked:
 
     ... -m "not distribution"
 
@@ -30,9 +32,9 @@ CI runs the whole suite; the fast lane skips them by marker, never by deleting t
 The suite is deliberately small. It pins the invariants later tickets depend on:
 
 - the packaging declaration matches the packages that exist (`test_packaging.py`);
-- `package-data` covers every non-Python file the app resolves at runtime - checked against
-  `db.SCHEMA` itself, so a new template or static directory is a failing test rather than a 500 on
-  an installed copy (`test_packaging.py`, TESTOPS-8 AC5);
+- `package-data` ships every non-Python file in the package - the built wheel's namelist is the
+  authority, so a new template or static directory is a failing test rather than a 500 on an
+  installed copy (`test_packaging.py`, TESTOPS-8 AC5 / TESTOPS-48);
 - a wheel built from a copy of the tree, installed into a fresh venv, imports from that venv's
   site-packages (never the checkout) and serves `/`, `/runs`, `/config` and a case page with 200
   from a store it created - proving `schema.sql` and the prompt files shipped (`test_distribution.py`,
