@@ -1,0 +1,35 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-59 - the credential screen now searches inside a value
+instead of matching from position 0, and the identifier rule claims to state itself grammatically. Both changes are the
+kind that quietly overreach: a scanner that finds a "token" in every sentence, and a rule that refuses names by grammar.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t59 (branch `factory/testops-59-prose-scan`). Only here.
+Ticket: factory/tickets/TESTOPS-59.md ; Build: factory/reports/2026-11-24/TESTOPS-59-build.md
+The finding it fixes: factory/reports/2026-11-24/TESTOPS-56-review.md, "False negatives" and "Three sharpest concerns".
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Never write to the live store or contact port 8791. Copy `data/`, serve on a free port.
+- **The leak, closed:** confirm `the key is ghp_<36>`, `aws id AKIA<16>`, `the jwt is <3 segments>`, a PEM block inside a
+  sentence, and `notes: name=token=abc123` are all REFUSED over HTTP, with the value echoed nowhere and nothing stored.
+- **Overreach - the risk this creates.** Push at least twenty ordinary values through the Name field and say which are
+  refused: `the token is validated in middleware`, `our password policy is documented`, `Bearer tokens are refreshed
+  hourly`, `secrets are rotated weekly`, `jwt.decode lives in lib/auth.py`, `no token needed for this endpoint`,
+  `docs/how-to-reset-your-password.md`, `pat-notes.md`, `gh_workflows/`, `akia-notes`, `xox-not-a-slack-token`,
+  `the private key is in vault`, `my-password-manager` (should be refused or not?), `session-token`, `vault-token`,
+  `password-list`, `passwords-list`, `token-refresh-service`, `the-token-service`, `my-secret-store`. For each, accepted or
+  refused, and whether that would be right for a real user. Every refusal of ordinary prose is a finding - a scanner that
+  refuses sentences gets turned off.
+- **The grammatical rule:** read `_names_a_credential` and `_DETERMINERS`. Judge whether "opens with a determiner or
+  possessive and ends in a credential word" genuinely distinguishes a particular instance (`my-password`) from a kind of
+  thing (`session-token`), or whether it is a different list wearing a grammar. Try to construct a name where the rule is
+  clearly wrong in either direction, and report the best two.
+- **False negatives again:** a real token of each format at its real body shape must still be refused - `ghp_` 36 and 40,
+  `github_pat_` full 82, `AKIA`+16 uppercase, `xoxb-` realistic, `glpat-` 20, JWT, RSA/EC PEM. Then try a slight variation
+  of each (one digit changed, a shorter body) and say whether it is correctly accepted as "not a real token".
+- **Editing still works:** every settings field for every service kind round-trips (create, edit, read back) - report the
+  matrix. Then confirm an unknown key is refused, not dropped.
+- **Contract + suite:** contract suite green; full suite green; no case-page golden changed.
+- Write exactly one file: factory/reports/2026-11-24/TESTOPS-59-review.md with: ## Verdict; ## The leak, closed;
+  ## Overreach, my twenty; ## The grammatical rule, judged; ## False negatives; ## Editing; ## Contract suite; ## Three
+  sharpest concerns.
+- Reply with the verdict and a summary under 250 words.
