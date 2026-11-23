@@ -223,7 +223,7 @@ def age(iso: str | None) -> str:
 SITE_NAV = ('<nav class="site" aria-label="All pages">'
             '<a href="/">\u2190 all cases</a> \u00b7 '
             '<a href="/runs">all runs</a> \u00b7 '
-            '<a href="/config">projects and services</a></nav>')
+            '<a href="/config">configure projects and services</a></nav>')
 
 
 def page(title: str, body: str) -> bytes:
@@ -2100,14 +2100,26 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
                 f' \u00b7 Analysed {esc(age(row["created_at"]))}'
                 f'{" at " + esc(versions) if versions else ""}</p>')
 
+    # A case row can outlive its run: retention deletes them together today, but a hand-imported
+    # row or a future change to that path leaves the case and not the run. The link is therefore
+    # emitted only when the store still holds the run; otherwise the page names the run and says it
+    # is gone, so a 200 page never points at a 404 (TESTOPS-54 review, the unguarded run link).
+    run_present = bool(row.get("run_id")) and queries.run_read(conn, row["run_id"]) is not None
+
     if findings and row.get("run_id"):
         # AC1 of TESTOPS-54: the case's own run, named by the link, not a bare "back". The run
         # index says which runs exist; this says which one raised the case under a reader's eyes.
         run_id = row["run_id"]
-        body.append(f'<p class="meta">Raised by the run '
-                    f'<a href="/run/{esc(run_id)}">{esc(run_id)}</a>'
-                    f' <span class="quiet">\u2014 what that run analysed, and what it could not '
-                    f'consult.</span></p>')
+        if run_present:
+            body.append(f'<p class="meta">Raised by the run '
+                        f'<a href="/run/{esc(run_id)}">{esc(run_id)}</a>'
+                        f' <span class="quiet">\u2014 what that run analysed, and what it could not '
+                        f'consult.</span></p>')
+        else:
+            body.append(f'<p class="meta">Raised by the run '
+                        f'<span class="code">{esc(run_id)}</span>'
+                        f' <span class="quiet">\u2014 which is not in the store any more, so what it '
+                        f'analysed, and what it could not consult, cannot be read.</span></p>')
 
     if not findings:
         # A run that raised nothing is described as a run: what it examined, and what it could not
@@ -2118,9 +2130,14 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
         # case list. The run is the record, and its page is the way in. The row stays where it is -
         # the URL that was shared still explains what it was - and this line names where to go.
         if row.get("run_id"):
-            body.append(f'<p class="meta">This row raised no finding, so it is not a case. '
-                        f'The run it recorded is <a href="/run/{esc(row["run_id"])}">'
-                        f'{esc(row["run_id"])}</a>.</p>')
+            if run_present:
+                body.append(f'<p class="meta">This row raised no finding, so it is not a case. '
+                            f'The run it recorded is <a href="/run/{esc(row["run_id"])}">'
+                            f'{esc(row["run_id"])}</a>.</p>')
+            else:
+                body.append(f'<p class="meta">This row raised no finding, so it is not a case. '
+                            f'The run it recorded is <span class="code">{esc(row["run_id"])}'
+                            f'</span>, which is not in the store any more.</p>')
         body.extend(quiet_run_block(run))
     if decision is not None:
         body.extend(decision_block(decision))
@@ -2292,6 +2309,16 @@ def _service_from_payload(conn, payload: dict, service_id: int | None = None):
                                    settings=settings)
 
 
+# The addresses only a form posts to. They are real addresses, so a GET on one answers 405 - the
+# page exists, the method does not - rather than 404: a dead-end sweep has to be able to tell "a
+# form posts here" from "no such page" (TESTOPS-54 review, AC4's blindness to form actions).
+CONFIG_POSTS = tuple(re.compile(p) for p in (
+    r"/config/projects", r"/config/services", r"/config/service/\d+",
+    r"/config/service/\d+/delete", r"/config/project/[^/]+/delete"))
+CASE_POST = re.compile(r"/case/([^/]+)/state")
+POST_ONLY = CONFIG_POSTS + (CASE_POST,)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "TestOps/0.1"
 
@@ -2333,6 +2360,11 @@ class Handler(BaseHTTPRequestHandler):
             if m:
                 body, code = run_response(conn, urllib.parse.unquote(m.group(1)))
                 self._send(body, code)
+                return
+            if any(p.fullmatch(path) for p in POST_ONLY):
+                self._send(page("Method not allowed",
+                                '<h1>TestOps</h1><p>This address answers a form, not a page.</p>'),
+                           405, {"Allow": "POST"})
                 return
             self._not_found()
         finally:

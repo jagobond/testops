@@ -120,3 +120,69 @@ TESTOPS-53 exists to close, and the reason every contract run here was on a copy
 - `testops/web/app.py` — `SITE_NAV` + footer in `page()`; the case page's run line.
 - `tests/test_navigation.py` — new, 4 tests (AC1–AC4).
 - `tests/fixtures/projects_services/*.html` — 15 goldens, links only.
+
+## Amendment (review, 2026-11-24) — three changes, nothing else touched
+
+The review passed the ticket with three amendments. All three are made here; the contract suite's
+assertions are untouched, and every run below used a temp store on an ephemeral port.
+
+**(1) Wording: "configure projects and services".** The nav read "projects and services", which
+named the page's content rather than the action. One string in `SITE_NAV`; all 14 goldens
+regenerated (`index.html`, `runs.html`, `case-page-01..12.html`) from `before_v3.db` with `age`
+frozen, exactly as `test_projects_services.py` renders them. Visible-text diff, extracted with
+`html.parser` and compared token by token against the committed goldens: **one token added per
+page, nothing else added or removed**:
+
+```
+== case-page-01.html: 385 tokens -> 386
+   +configure
+```
+
+…and identically for the other 13 pages (`case-page-02` 387→388, `case-page-09` 171→172, and so
+on). No page changed in any other way.
+
+**(2) The unguarded run link.** `case_response` now asks the store whether the run is still there
+(`queries.run_read`) and emits the `/run/<id>` anchor only when it is:
+
+```
+run_present = bool(row.get("run_id")) and queries.run_read(conn, row["run_id"]) is not None
+```
+
+The findings branch and the "this row raised no finding" branch both consult it. When the run is
+gone the page still answers 200 — the case row is what the address is about — and says the run is
+not in the store any more, in place of the link, so a reader is never sent to a 404.
+
+New test `test_a_case_whose_run_is_gone_says_so_instead_of_linking_a_dead_page` manufactures the
+orphan exactly as the review did: it seeds two cases (one with findings, one without), then points
+both `run_id`s at `run-deleted-forever` with `PRAGMA foreign_keys = OFF` on a connection to the
+temp store. It asserts each page answers 200, carries no `/run/run-deleted-forever` href, names the
+run, says it is gone, and that **no href on either page answers anything but 200**.
+
+Witness: with `testops/web/app.py` stashed (product code as merged before this amendment) the test
+fails on `assert '/run/run-deleted-forever' not in hrefs(body)` — the reviewer's exact finding.
+
+**(3) AC4 now sweeps form actions.** `test_every_internal_link_on_every_page_resolves` keeps the
+href crawl and adds a form sweep: every `<form action>` on every page the crawl reached (plus the
+five fixed pages) must be an internal address, and a GET on it must not be 404 or 5xx — a POST-only
+target may answer 405, since the address exists and only the method does not.
+
+That required one product change to be true rather than merely asserted: the POST-only addresses
+(`/config/projects`, `/config/services`, `/config/service/<id>`, `/config/service/<id>/delete`,
+`/config/project/<slug>/delete`, `/case/<id>/state`) previously answered **404** to a GET. They now
+answer **405** with `Allow: POST`, from one tuple of patterns (`POST_ONLY`) beside `Handler`.
+Nothing about the POST behaviour itself changed; `do_POST` still dispatches on the same paths.
+
+Witness: with `app.py` stashed, the form sweep fails with six lines of the form
+`the page /config posts a post form to /config/project/cotw/delete, which returned HTTP 404`.
+
+**Suite after the amendment:** `pytest -q --ignore=tests/contracts` → **698 passed** (the 697 from
+the build plus the new orphan test). No contract test was run against any live server.
+
+**Files touched by the amendment**
+
+- `testops/web/app.py` — nav wording; the `run_read` guard on both run-link branches; `POST_ONLY`
+  and the 405 answer for a GET on a form target.
+- `tests/test_navigation.py` — `_Forms`/`form_actions` parsers, the `served` fixture split so a
+  test can manufacture the orphan (the `live` fixture now takes its URL), the form sweep in AC4,
+  and the orphan test.
+- `tests/fixtures/projects_services/*.html` — 14 goldens, the word "configure" only.

@@ -17,6 +17,7 @@ it).
 """
 from __future__ import annotations
 
+import sqlite3
 import threading
 import urllib.error
 import urllib.request
@@ -77,6 +78,29 @@ def hrefs(markup: str) -> list[str]:
     return [href for href, _text in links(markup)]
 
 
+class _Forms(HTMLParser):
+    """Every ``<form action>`` on a page: the address a reader's button posts to."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.actions: list[tuple[str, str]] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag != "form":
+            return
+        attrs = dict(attrs)
+        action = attrs.get("action")
+        if action:
+            self.actions.append((action, (attrs.get("method") or "get").lower()))
+
+
+def form_actions(markup: str) -> list[tuple[str, str]]:
+    parser = _Forms()
+    parser.feed(markup)
+    parser.close()
+    return parser.actions
+
+
 def internal(markup: str) -> list[str]:
     """In-page links only: an external repository link is not this tool's to keep alive."""
     seen: list[str] = []
@@ -113,8 +137,12 @@ def store(tmp_path):
 
 
 @pytest.fixture()
-def live(tmp_path, monkeypatch):
-    """A server on an ephemeral port over a temp store - never the live one (TESTOPS-53's rule)."""
+def served(tmp_path, monkeypatch):
+    """A temp store and a server on an ephemeral port - never the live store or 8791 (TESTOPS-53).
+
+    Yields ``(store path, base url)`` so a test can put the store into a state the product's own
+    writes cannot reach (the orphaned case below) and still fetch the rendered page over HTTP.
+    """
     path = tmp_path / "served.db"
     _seeded(path).close()
     monkeypatch.setattr(app.db, "connect", _connect_factory(path))
@@ -122,10 +150,15 @@ def live(tmp_path, monkeypatch):
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     try:
-        yield f"http://127.0.0.1:{httpd.server_address[1]}"
+        yield path, f"http://127.0.0.1:{httpd.server_address[1]}"
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+@pytest.fixture()
+def live(served):
+    return served[1]
 
 
 def _get(base: str, path: str) -> tuple[int, str]:
@@ -208,17 +241,65 @@ def test_run_to_case_and_back_to_the_same_run(live):
         f"the run page {back[0]} does not list the case {case_href} it was reached through")
 
 
+# --------------------------------------------------------------------------- the orphaned run
+
+def test_a_case_whose_run_is_gone_says_so_instead_of_linking_a_dead_page(served):
+    """A case can outlive its run; the page must say so, not link a 404.
+
+    The review manufactured this state in a store copy: a case row whose ``run_id`` names a run
+    that is not there. No product write reaches it today (retention deletes case and run together,
+    and the foreign key refuses the rest), so it is manufactured here the same way - with the
+    foreign key off on this connection - and the assertion is the reviewer's: HTTP 200, no link to
+    ``/run/<missing>``, and no href on the page answering 404.
+    """
+    path, base = served
+    conn = db.connect(path)
+    try:
+        rows._seed_case(conn, case_id="case-orphan", findings=1)
+        rows._seed_case(conn, case_id="case-orphan-empty", findings=0)
+    finally:
+        conn.close()
+
+    store = sqlite3.connect(path)
+    store.execute("PRAGMA foreign_keys = OFF")
+    store.execute("UPDATE case_ SET run_id = 'run-deleted-forever' WHERE id LIKE 'case-orphan%'")
+    store.commit()
+    store.close()
+
+    for case_id in ("case-orphan", "case-orphan-empty"):
+        status, body = _get(base, f"/case/{case_id}")
+        assert status == 200, f"/case/{case_id} answered HTTP {status}; the case row is still there"
+        assert "/run/run-deleted-forever" not in hrefs(body), (
+            f"the case page {case_id} links a run the store does not hold, so the reader lands on "
+            f"a 404 (the unguarded run link the review found)")
+        assert "run-deleted-forever" in body, (
+            f"the case page {case_id} does not name the run it was raised by at all")
+        assert "not in the store any more" in body, (
+            f"the case page {case_id} does not say the run it names is gone")
+        for href in internal(body):
+            code, _ = _get(base, href)
+            assert code == 200, f"the case page {case_id} links {href}, which returned HTTP {code}"
+
+
 # --------------------------------------------------------------------------- AC4
 
 def test_every_internal_link_on_every_page_resolves(live):
-    """AC4: front, runs, run, case and config - every internal href answers 200."""
+    """AC4: every internal href and every form action on every page resolves to a live address.
+
+    The href sweep follows the crawl. The form sweep checks each ``<form action>``, because a
+    button that posts to a 404 is the same dead end as a link that does (TESTOPS-54 review,
+    concern 3). A POST-only address answers 405 on a GET - the address exists, the method does
+    not - so a form target must be *not 404*, not necessarily 200.
+    """
     frontier, seen, broken = ["/"], {"/"}, []
+    pages_html: dict[str, str] = {}
     while frontier:
         path = frontier.pop(0)
         status, body = _get(live, path)
         if status != 200:
             broken.append(f"{path} (linked from another page) returned HTTP {status}")
             continue
+        pages_html[path] = body
         for href in internal(body):
             if href not in seen:
                 seen.add(href)
@@ -229,9 +310,23 @@ def test_every_internal_link_on_every_page_resolves(live):
     for kind, path in kinds.items():
         status, body = _get(live, path)
         assert status == 200, f"the {kind} page returned HTTP {status}"
+        pages_html.setdefault(path, body)
         for href in internal(body):
             code, _ = _get(live, href)
             if code != 200:
                 broken.append(f"the {kind} page links {href}, which returned HTTP {code}")
 
+    forms = 0
+    for path, body in pages_html.items():
+        for action, method in form_actions(body):
+            forms += 1
+            if not action.startswith("/"):
+                broken.append(f"the page {path} posts a form to {action!r}, which is not this tool")
+                continue
+            code, _ = _get(live, action)
+            if code == 404 or code >= 500:
+                broken.append(f"the page {path} posts a {method} form to {action}, which returned "
+                              f"HTTP {code}")
+
+    assert forms, "no form action was found on any page; the form sweep proved nothing"
     assert not broken, "pages with dead ends:\n" + "\n".join(sorted(set(broken)))
