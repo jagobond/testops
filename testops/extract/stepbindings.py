@@ -62,6 +62,10 @@ class Binding:
     # Why the layer is "unknown". Empty when it resolved. TESTOPS-42C-2: an unknown without a
     # reason is the dead end this product refuses to print.
     layer_reason: str = ""
+    # TESTOPS-42C-3. The custom commands the chain passed through, as (name, path, line, via):
+    # enough for a reader to walk from the claim to the command's own body. Empty for the .NET
+    # reader, which resolves drivers by class and needs no command table.
+    layer_commands: tuple[tuple[str, str, int, tuple[str, ...]], ...] = ()
 
 
 def highest(layers) -> str:

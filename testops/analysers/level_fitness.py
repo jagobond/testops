@@ -622,9 +622,60 @@ def _proposed_action(interaction: str, clause: str, verdict: str, why: str = "")
     return f'No change: keep the step "{clause}" at the cheapest level that establishes it.'
 
 
+def _unbound_statement(unbound: dict) -> str:
+    """A step nothing binds, in the ecosystem's own words (TESTOPS-42C-3, AC2).
+
+    It names the step text and the patterns that came closest, so a reader can see that the suite
+    drifted from its own bindings rather than being told the tool could not see the test.
+    """
+    nearly = [f'"{pattern}"' for pattern in unbound.get("nearly") or ()]
+    nearest = ""
+    if len(nearly) == 2:
+        nearest = f" The two nearest patterns are {nearly[0]} and {nearly[1]}."
+    elif nearly:
+        nearest = f" The nearest pattern is {nearly[0]}."
+    return (f'The step reads "{unbound.get("step", "")}", but no binding matches these words.'
+            f"{nearest}")
+
+
+def _unbound_reason_text(unbound: dict) -> str:
+    nearly = ", ".join(f'"{pattern}"' for pattern in unbound.get("nearly") or ())
+    return ("no binding matches these words" + (f"; the nearest declared patterns are {nearly}"
+                                                if nearly else ""))
+
+
+def _unbound_action(unbound: dict) -> str:
+    nearly = [f'"{pattern}"' for pattern in unbound.get("nearly") or ()]
+    if len(nearly) == 2:
+        return (f"Rewrite the step so it matches {nearly[0]} or {nearly[1]}, or add a step "
+                f"definition for these words, then re-run.")
+    return "Rewrite the step so it matches a declared pattern, or add a step definition for these words, then re-run."
+
+
+def _binding_provenance(binding) -> dict:
+    """The binding a layer came from, and the commands/helpers on its chain (AC4).
+
+    ``path:line`` lets a reader open the step definition. ``via`` is the chain that reached the
+    signal; ``commands`` names every custom command on it with the command's own ``path:line`` and
+    the tokens its body reached, so a claim can be walked to ``cy.request`` in the command file.
+    """
+    return {
+        "path": binding.path,
+        "line": binding.line,
+        "verb": binding.verb,
+        "pattern": binding.pattern,
+        "layer": binding.layer,
+        "suite": binding.suite,
+        "via": list(binding.layer_via),
+        "commands": [{"name": name, "path": path, "line": line, "via": list(via)}
+                     for name, path, line, via in getattr(binding, "layer_commands", ())],
+    }
+
+
 def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = None, *,
             sources_missing=None, assessment=None, commit: str = "",
-            support_index: dict[tuple[str, str, str], int] | None = None) -> list[Claim]:
+            support_index: dict[tuple[str, str, str], int] | None = None,
+            extractor: str = "", unmatched=None) -> list[Claim]:
     """One claim per asserting step, in deterministic order.
 
     ``sources_missing`` is the caller's record of which sources were never connected, and *whether*
@@ -644,6 +695,14 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
     caller recorded for it. It is how a claim learns *which rows* back it without this module ever
     touching the store. When it is omitted - or holds no row for a binding - the claim's support is
     an explicit empty list: nothing was recorded, which is the truth, not zero evidence.
+
+    ``extractor`` and ``unmatched`` are the ecosystem seam (TESTOPS-42C-3). When a caller names the
+    extractor, every claim records the binding its layer came from - path, line, layer and the
+    commands/helpers the chain passed through - and the scenario's background steps join the span,
+    because a scenario does run its background. ``unmatched`` is the ecosystem's own explanation of
+    a step it could not bind: when it is supplied, an asserting step with no binding of its own is
+    **unplaced for that reason**, never rescued by a sibling step's layer. The .NET path supplies
+    neither, so its claims are exactly what they were.
     """
     assessed = sources_missing is not None
     missing = list(sources_missing) if assessed else None
@@ -652,11 +711,22 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
     claims: list[Claim] = []
 
     for feat in features:
+        # The background belongs to every scenario in the file, and a scenario executes it. It is
+        # only read into the span on the ecosystem path, so the .NET counts cannot move (AC7).
+        background: list = []
+        if extractor:
+            for block in getattr(feat, "backgrounds", ()) or ():
+                for step in block.steps:
+                    bound = stepbindings.match_step(bindings, step.text,
+                                                    stepbindings.suite_of(feat.path))
+                    if bound is not None:
+                        background.append(bound)
         for sc in feat.scenarios:
             if not sc.steps:
                 continue
             suite = stepbindings.suite_of(feat.path)
             matched = [b for step in sc.steps if (b := stepbindings.match_step(bindings, step.text, suite))]
+            matched = matched + background
             steps = asserting_steps(sc.steps)
             assert_binding = {step.line: stepbindings.match_step(bindings, step.text, suite)
                               for step in steps}
@@ -674,17 +744,27 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
             classified = []
             for step in steps:
                 binding = assert_binding.get(step.line)
+                # A step with no binding of its own is not placed by a sibling's layer when the
+                # ecosystem says placement is per step: the reason is the ecosystem's, and the
+                # claim is unplaced (AC2). Without the seam this is exactly the old behaviour.
+                unbound = (unmatched(step.text, bindings, suite)
+                           if unmatched is not None and binding is None else None)
+                own_layer = binding.layer if binding is not None else "unknown"
                 interaction, why = classify_with_instrument(
-                    step.text, binding.layer if binding else "unknown", sc.name,
-                    uses_browser=uses_browser)
-                classified.append((step, binding, interaction, why,
+                    step.text, own_layer, sc.name, uses_browser=uses_browser)
+                if unbound is not None:
+                    # Nothing binds this step, so nothing can be said about the instrument the
+                    # claim needs: the code is the honest "unclear", and the reason is the
+                    # ecosystem's own sentence naming the nearest patterns.
+                    interaction, why = "U", unbound["reason"]
+                classified.append((step, binding, interaction, why, unbound,
                                    f"{interaction}|{normalise(step.text)}"))
             occurrences: dict[str, int] = {}
             for entry in classified:
-                occurrences[entry[4]] = occurrences.get(entry[4], 0) + 1
+                occurrences[entry[5]] = occurrences.get(entry[5], 0) + 1
             seen: dict[str, int] = {}
 
-            for step, binding, interaction, why, base_key in classified:
+            for step, binding, interaction, why, unbound, base_key in classified:
                 # The assertion's own binding first: that is what the reader is pointed at. The
                 # scenario's other matched steps follow, because the span and the instrument - and
                 # therefore the verdict - are a fact about the whole scenario.
@@ -697,7 +777,11 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                         support.append(observation)
 
                 clause = _clause(step.text)
-                if instrument == "unknown" or interaction == "U":
+                if unbound is not None:
+                    # The ecosystem's own account of why nothing placed this step. The claim is
+                    # unplaced for that reason, whoever else was bound in the scenario.
+                    verdict = "unplaced"
+                elif instrument == "unknown" or interaction == "U":
                     verdict = "unplaced"
                 elif interaction in NEEDS_BROWSER and not uses_browser:
                     verdict = "gap"
@@ -721,18 +805,21 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                 detail = {
                     "claim": interaction,
                     "interaction_code": interaction,
-                    "interaction_label": _label(interaction, instrument),
+                    "interaction_label": _label(interaction, "unknown" if unbound is not None
+                                                else instrument),
                     "assertion_text": step.text,
                     "assertion_path": feat.path,
                     "assertion_line": step.line,
                     "assertion_commit": commit,
                     "span": span,
-                    "instrument": instrument,
-                    "established_by": why,
+                    "instrument": "unknown" if unbound is not None else instrument,
+                    "placed": unbound is None,
+                    "established_by": (_unbound_reason_text(unbound) if unbound is not None else why),
                     "sources_assessed": assessed,
                     "sources_missing": list(missing) if assessed else None,
                     "assessment": assessment_record,
-                    "proposed_action": _proposed_action(interaction, clause, verdict, why),
+                    "proposed_action": (_unbound_action(unbound) if unbound is not None
+                                        else _proposed_action(interaction, clause, verdict, why)),
                     "support": support,
                     "evidence_key": evidence_key,
                     "uses_browser": uses_browser,
@@ -741,9 +828,33 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                     "why": why,
                     "stage": "rule",
                 }
+                if unbound is not None:
+                    detail["unbound"] = unbound
+                if extractor:
+                    # What placed this claim, and where to go to check it (AC4): the extractor's
+                    # name, the binding's own path:line, the chain it followed, and for every
+                    # custom command on that chain the command's path:line so a reader can walk
+                    # from the claim to the command's body and the cy.* call in it. The scenario's
+                    # other matched bindings - the background included - travel too: the verdict is
+                    # a fact about the whole scenario, and the background is where an API command
+                    # such as createRoomViaApi (and its cy.request) usually sits.
+                    scenario_bindings: list[dict] = []
+                    seen_bindings: set[tuple[str, str, str]] = set()
+                    for bound in matched:
+                        key = (bound.path, bound.verb, bound.pattern)
+                        if key in seen_bindings:
+                            continue
+                        seen_bindings.add(key)
+                        scenario_bindings.append(_binding_provenance(bound))
+                    detail["provenance"] = {
+                        "extractor": extractor,
+                        "binding": (_binding_provenance(binding) if binding is not None else None),
+                        "scenario_bindings": scenario_bindings,
+                    }
                 claims.append(Claim(
                     subject_ref=ref,
-                    statement=_statement(interaction, clause, verdict, instrument, why),
+                    statement=(_unbound_statement(unbound) if unbound is not None else
+                               _statement(interaction, clause, verdict, instrument, why)),
                     verdict=verdict,
                     confidence=0.8,
                     evidence=[Evidence(uri=uri_for_path(feat.path), line=step.line, note=step.text)],

@@ -1,0 +1,35 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-42C-3 - the ticket where cucumber-js becomes supported and
+the number Harry will judge the whole of T42C by appears.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t42c3 (branch `factory/testops-42c3-placement`). Work only here.
+Store copy in `data/` (gitignored) - read blobs via `tools/ecosystem_inventory_counts.load_files`.
+Ticket:  factory/tickets/TESTOPS-42C-3.md
+Build:   factory/reports/2026-11-23/TESTOPS-42C-3-build.md
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Run the suite from this worktree with the interpreter above.
+- **17 of 43 is a claim, not a fact until you produce it.** Build your own count: take the 43 asserting steps from the
+  features, apply the 44 patterns yourself with your own matcher, and count how many match. Compare with the tool's
+  number. If you get 16 or 18, say so and find out why - and say which number is right.
+- **Then audit the 17 for correctness, not just for count.** For a sample of at least five placed claims, walk the chain
+  yourself: claim → binding → command → `cy.*` call, and confirm the layer is what that call actually is. A right count
+  of wrong layers is worse than a low one.
+- **The 26 unplaced.** Read a sample of the statements as a reader who did not build the tool. Do they say what is wrong
+  and what to do? Are the two "nearest patterns" genuinely the nearest, or decorative? Any banned phrase anywhere?
+- **AC9 record-and-continue:** build a store copy with a synthetic regex-literal declaration and a concatenated one, run
+  the pipeline, and confirm the suite still analyses, the declarations are named with `path:line`, and the count is
+  visible on the page. Then confirm the strict switch still refuses for audit use.
+- **AC5 wrong-layer guard:** reintroduce per-file layer inference in a scratch copy and confirm a test fails. A guard
+  nobody has seen fail is not a guard.
+- **AC6 duplication:** 0 claims - is that honest ("no two scenarios share a signature") or a silent failure? Verify by
+  checking whether the corpus genuinely has no duplicate signature, and that the analyser would report one if it existed
+  (construct a synthetic duplicate pair).
+- **AC7 .NET parity:** CotW 94/90/1/1/2, ReqOverflow 17/17, case-page goldens byte-identical. The new `extractor`/
+  `unmatched` seam is optional - prove that supplying neither leaves .NET output byte-identical (not merely equal counts).
+- **Overclaiming:** read the run page and the claim statements for anything that promises more than was done.
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-23/TESTOPS-42C-3-review.md with: ## Verdict; ## 17 of 43, produced independently; ## The 17,
+  audited; ## The 26, read as a user; ## Record and continue; ## Wrong-layer guard; ## Duplication honesty; ## .NET
+  parity; ## Overclaiming; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 300 words.

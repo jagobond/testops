@@ -356,23 +356,42 @@ def test_ac5_the_module_states_which_signals_are_dotnet_only_and_the_tables_are_
 
 # ------------------------------------------------------- the carried-over concatenation defect
 
-def test_a_pattern_split_across_a_concatenation_is_refused_never_truncated():
+def test_a_pattern_split_across_a_concatenation_is_recorded_never_truncated():
+    """TESTOPS-42C-3 (AC9): the concatenation is visible, skipped, and the suite still analyses."""
     files = {"cypress/e2e/front/booking/booking.stepdef.js": (
         "When('Visitor will get validation/' +\n"
         "     'mandatory error message: {string}', (message) => {\n"
         "  cy.get('div.alert');\n"
+        "});\n"
+        "Then('a readable step', () => {\n"
+        "  cy.get('div.alert').should('be.visible');\n"
         "});\n")}
 
     declarations = cucumber_js.parse_declarations(files)
-    assert len(declarations) == 1
+    assert len(declarations) == 2
     assert declarations[0].concatenated is True, "the truncation must be recorded at parse time"
+    assert declarations[0].unreadable is True
+    assert declarations[1].unreadable is False
 
+    records = cucumber_js.ECOSYSTEM.unreadable(files)
+    assert len(records) == 1
+    assert records[0]["kind"] == "concatenation"
+    assert records[0]["line"] == 1
+    assert "concatenation" in records[0]["reason"]
+    # The half that was readable is named, so a reader can find the line.
+    assert records[0]["pattern"] == "Visitor will get validation/"
+
+    # Record-and-continue: nothing is placed for the unreadable half, the rest becomes a binding.
+    bindings = cucumber_js.ECOSYSTEM.bindings(files)
+    assert [binding.pattern for binding in bindings] == ["a readable step"]
+    assert bindings[0].layer == "ui"
+
+    # The strict audit still refuses loudly with the path:line and the readable half.
     with pytest.raises(UnsupportedEcosystem) as caught:
-        cucumber_js.ECOSYSTEM.bindings(files)
+        cucumber_js.ECOSYSTEM.bindings(files, strict=True)
     message = str(caught.value)
     assert "concatenation" in message
     assert "booking.stepdef.js:1" in message
-    # The refusal names the half that was readable, so a reader can find the line.
     assert "Visitor will get validation/" in message
 
     ecosystem = cucumber_js.ECOSYSTEM.detect(files)
@@ -390,12 +409,18 @@ def test_a_concatenation_that_is_not_at_a_declaration_is_untouched():
     assert bindings[0].layer == "ui"
 
 
-# --------------------------------------------------------------------------- AC6: no placement
+# --------------------------------------------------------------------------- AC6: placement
 
 @requires_store
-def test_ac6_the_ecosystem_is_still_unsupported_so_the_layers_claim_nothing():
+def test_ac6_the_ecosystem_is_supported_and_places_the_declarations():
     ecosystem = cucumber_js.ECOSYSTEM.detect(_corpus())
 
     assert ecosystem is not None
-    assert ecosystem.supported is False
+    assert ecosystem.supported is True
     assert any("11 Cypress custom commands (6 api, 5 ui)" == line for line in ecosystem.evidence)
+    # T42C-2's floor is unchanged: the declarations and their layers are read, and the 11
+    # Step(this, ...) delegations stay unknown rather than being guessed (AC10).
+    bindings = cucumber_js.ECOSYSTEM.bindings(_corpus())
+    assert len(bindings) == 44
+    assert sum(1 for binding in bindings if binding.layer == "unknown") == 11
+    assert cucumber_js.ECOSYSTEM.unreadable(_corpus()) == []

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import json
 from dataclasses import dataclass, field
 
 from . import blobs
@@ -141,6 +142,79 @@ def _bindings_by_path(module, texts: dict[str, str]) -> dict[str, list]:
     for binding in module.bindings(texts):
         out.setdefault(binding.path, []).append(binding)
     return out
+
+
+def _ecosystem_hooks(module) -> tuple[str, object | None, object | None]:
+    """The optional placement hooks a module exposes: (extractor, unmatched, suite_of).
+
+    A module that can place claims per step says so by exposing ``explain_unmatched``; the .NET
+    module does not, so it keeps the old behaviour exactly (TESTOPS-42C-3, AC7). ``suite_of`` is
+    the module's own suite rule where one exists - cucumber-js co-locates a suite in a directory,
+    so the .NET top-level-segment rule would pair every JS feature with every step definition.
+    """
+    if module is None or not hasattr(module, "explain_unmatched"):
+        return "", None, None
+    return (module.name, module.explain_unmatched, getattr(module, "suite_of_path", None))
+
+
+def _unreadable(module, texts: dict[str, str]) -> list[dict]:
+    """The declarations a module recorded but could not read, as the run page prints them (AC9)."""
+    reader = getattr(module, "unreadable", None)
+    return list(reader(texts)) if callable(reader) else []
+
+
+def _placement(claims: list, module, texts: dict[str, str]) -> dict | None:
+    """What a run placed, what it did not, and why - a record a page can read months later.
+
+    Only a module that places per step contributes one (AC3). Every number is counted from the
+    run's own claims: a claim whose detail names the binding it rests on was placed; an unplaced
+    claim carries the ecosystem's own explanation, which is aggregated here by the nearest patterns
+    it named.
+    """
+    extractor, _unmatched, _suite = _ecosystem_hooks(module)
+    if not extractor:
+        return None
+    placed = [claim for claim in claims if claim.detail.get("placed") is not False]
+    layers: dict[str, int] = {}
+    for claim in placed:
+        layer = (claim.detail.get("provenance") or {}).get("binding", {}).get("layer")
+        if layer:
+            layers[layer] = layers.get(layer, 0) + 1
+    unplaced = [claim for claim in claims if claim.detail.get("placed") is False]
+    nearly: list[str] = []
+    for claim in unplaced:
+        for pattern in (claim.detail.get("unbound") or {}).get("nearly") or ():
+            if pattern not in nearly:
+                nearly.append(pattern)
+    return {
+        "extractor": extractor,
+        "asserting": len(claims),
+        "placed": len(placed),
+        "unplaced": len(unplaced),
+        "layers": dict(sorted(layers.items())),
+        "unplaced_reason": ("no binding matches these words" if unplaced else ""),
+        "nearly": nearly,
+        "unreadable": _unreadable(module, texts),
+    }
+
+
+def _record_placement(conn, snapshot_id: str, placement: dict) -> None:
+    """Add the placement facts to a snapshot's meta after the claims that produce them exist.
+
+    The snapshot is written before analysis so its id can key the artefacts; this updates only the
+    ``placement`` key, so a page can still state what was placed when it reads the store months
+    later. ``INSERT OR REPLACE`` is not reused here: recreating the snapshot row could orphan the
+    artefacts keyed by its id.
+    """
+    row = conn.execute("SELECT meta FROM snapshot WHERE id = ?", (snapshot_id,)).fetchone()
+    if row is None:
+        return
+    try:
+        meta = json.loads(row["meta"] or "{}")
+    except (TypeError, ValueError):
+        return
+    meta["placement"] = placement
+    conn.execute("UPDATE snapshot SET meta = ? WHERE id = ?", (json.dumps(meta), snapshot_id))
 
 
 def _service_meta(project: Project, conn) -> dict:
@@ -416,9 +490,19 @@ def run_duplication(project: Project, token: str,
 
     claims: list = []
     if readable:
+        extractor, _unmatched, suite_of = _ecosystem_hooks(module)
         claims = duplication.analyse(features, bindings, uri_for_path,
                                      sources_missing=missing_sources, assessment=assessment,
-                                     commit=test_repo.commit, support_index=support_index)
+                                     commit=test_repo.commit, support_index=support_index,
+                                     suite_of=suite_of, extractor=extractor)
+    # A declaration this build recorded but could not read is visible on the run, and nothing is
+    # claimed for it (AC9). The rest of the suite was analysed above.
+    unreadable = _unreadable(module, texts) if readable else []
+    if unreadable:
+        meta = json.loads(conn.execute("SELECT meta FROM snapshot WHERE id = ?",
+                                       (snapshot_id,)).fetchone()["meta"] or "{}")
+        meta["unreadable_declarations"] = unreadable
+        conn.execute("UPDATE snapshot SET meta = ? WHERE id = ?", (json.dumps(meta), snapshot_id))
 
     # 5. persist
     run_id = f"{project.key}-dup-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%S}"
@@ -615,12 +699,21 @@ def run_level_fitness(project: Project, token: str,
 
     budget = {"calls": 0, "tokens_in": 0, "tokens_out": 0}
     claims: list = []
+    extractor, unmatched, _suite_of = _ecosystem_hooks(module)
     if readable:
         claims = level_fitness.analyse(features, bindings, surfaces, uri_for_path, budget,
                                        sources_missing=missing_sources,
                                        assessment=assessment,
                                        commit=test_repo.commit,
-                                       support_index=support_index)
+                                       support_index=support_index,
+                                       extractor=extractor, unmatched=unmatched)
+
+    # What this run placed, what it did not, and why - recorded with the snapshot so the run page
+    # can still say it months later (AC3), and so an unreadable declaration is visible rather than
+    # fatal (AC9). A .NET run has no placement record and its page is unchanged.
+    placement = _placement(claims, module, texts) if readable else None
+    if placement is not None:
+        _record_placement(conn, snapshot_id, placement)
 
     run_id = f"{project.key}-levels-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%S}"
     db.start_run(conn, run_id, project.key, snapshot_id, level_fitness.name, _now())
@@ -685,5 +778,6 @@ def run_level_fitness(project: Project, token: str,
                             "surfaces_state": discovery.state,
                             "surfaces_reason": discovery.reason,
                             "ecosystems": ecosystems_record,
+                            "placement": placement,
                             "read": _counts(arms), "skipped": _skips(arms), "budget": budget})
 

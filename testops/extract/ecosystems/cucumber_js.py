@@ -1,30 +1,34 @@
 """cucumber-js: the declarations, the commands they call, and the layer that happens in.
 
-TESTOPS-42C-2 is part 2 of 3. Part 1 (T42C-1) read the 44 declarations in both layouts. Part 2
-answers the question the inventory's §3 raises: the layer is **per command, not per file.**
-``room-management.js`` holds ``createRoom`` (browser) beside ``createRoomViaApi`` (HTTP), and
-``login.js`` holds ``loginViaUI`` beside ``loginViaApi``. A file-level answer would be wrong for
-one of each pair whichever way it fell, so this module resolves a layer for every command and
-every declaration separately, by following:
+TESTOPS-42C-3 is part 3 of 3. Part 1 read the 44 declarations in both layouts; part 2 resolved a
+layer **per command, not per file** - ``room-management.js`` holds ``createRoom`` (browser) beside
+``createRoomViaApi`` (HTTP), so a file-level answer would be wrong for one of each pair whichever
+way it fell. This part **placements**: every declaration carries the layer its call graph resolves
+to, the analyser turns that into a claim, and a step that matches no declaration is reported as
+exactly that.
 
     step body -> ``cy.<customCommand>(...)`` -> one level of module-local helper -> the JS signal
 
 Where the chain does not reach a signal the answer is ``unknown`` and the reason is recorded on
-the row - never a guess. Placement is still switched off: ``detect`` returns an unsupported
-ecosystem, so the pipeline keeps the run ``not_assessable`` and the analysers are unchanged. The
-claim wiring is T42C-3's.
+the row - never a guess.
 
 Why the parse is not line-oriented: 16 of the 44 declarations put the opening parenthesis at the
 end of a line and the pattern on the next. A line-oriented scan reports 28, which is the defect
 that made counting-before-costing necessary (docs/ecosystem-inventory-cucumber-js.md §2).
 
-Refusals, not truncations. Three declaration shapes cannot be read honestly by this build and are
-refused loudly rather than returned short:
+**Record and continue (TESTOPS-42C-3, AC9).** Two declaration shapes cannot be read honestly by
+this build:
 
 * a regular-expression literal (``Given(/^...$/)``) - this corpus has none;
 * a pattern split across a string concatenation (``'half/' + 'rest {string}'``) - this corpus has
-  none, but the first attempt at part 1 returned the first half silently, so the refusal is here
-  before it can happen to the next corpus. The review of T42C-1 recorded that probe.
+  none, but the first attempt at part 1 returned the first half silently.
+
+Neither makes the suite refuse. The declaration is recorded as unreadable with ``path:line`` and
+the reason, **nothing is placed for it**, and the other declarations are analysed normally. The
+review of T42C-2 recorded why: a concatenation yields a wrong pattern (a false negative wearing
+coverage's clothes) and a regex literal yields a missing row (an honest gap); in both cases the
+cost of one unreadable corner must be *visible*, not fatal. ``bindings(..., strict=True)`` keeps
+the old loud refusal as an audit switch.
 
 The JS/TS vocabulary is **not** ``stepbindings.SIGNALS``. That table names .NET types, and two of
 its entries fire on JavaScript by accident - see :data:`DOTNET_ONLY_SIGNALS`. ``LAYER_ORDER``
@@ -35,12 +39,14 @@ Two measured qualifications of the signal table, both required by this corpus:
 * ``cy.get('@alias')`` retrieves a value stored with ``.as()``, and ``cy.get(<array>)`` iterates
   data; neither touches the page. Only a **selector literal** is a browser command. Without that
   distinction ``createRoomViaApi`` reads as ``ui`` because of its ``cy.get('@roomIds')`` plumbing,
-  and the per-command test would have nothing to prove.
+  and the per-command test would have nothing to prove. A dynamic template selector
+  (``cy.get(`#id${x}`)``) is a selector literal and reads as ``ui`` - the same judgement, stated.
 * ``Step(this, '...')`` re-invokes another step by text that is assembled at run time. It is not
   followed, and the row says so instead of inheriting a layer from anywhere.
 """
 from __future__ import annotations
 
+import difflib
 import re
 from dataclasses import dataclass
 from typing import Mapping
@@ -50,9 +56,6 @@ from . import Ecosystem, UnsupportedEcosystem
 
 NAME = "cucumber-js"
 TITLE = "cucumber-js"
-REASON = ("this build can read JavaScript step definitions and follow them to the call that does the "
-          "work, but placing a cucumber-js claim is not wired yet, so it will not guess what they do")
-
 KEYWORDS = ("Given", "When", "Then", "And", "But")
 SPACE = " \t\r\n"
 
@@ -177,6 +180,14 @@ class Declaration:
     # alone is a pattern that matches nothing, and returning it silently is the undercount this
     # module exists to prevent.
     concatenated: bool = False
+    # Why this declaration cannot be read, in the reader's words. Empty when it can be read.
+    # TESTOPS-42C-3 (AC9): an unreadable declaration is recorded and skipped, never allowed to
+    # refuse the whole suite.
+    unreadable_reason: str = ""
+
+    @property
+    def unreadable(self) -> bool:
+        return bool(self.unreadable_reason)
 
 
 @dataclass(frozen=True)
@@ -422,21 +433,44 @@ def _is_concatenated(text: str, close: int, quote: str) -> bool:
     return stripped.startswith("+")
 
 
+def _unreadable_reason(quote: str, concatenated: bool) -> str:
+    """Why a declaration cannot be placed, in the reader's words. Empty when it can be read."""
+    if quote == "/":
+        return ("the declaration is a regular-expression literal, which this build cannot turn "
+                "back into a step pattern; nothing is placed for it")
+    if concatenated:
+        return ("the pattern is split across a string concatenation, so only its first half is "
+                "readable and that half would match nothing; nothing is placed for it")
+    return ""
+
+
 def _declarations_in(path: str, text: str) -> list[Declaration]:
     cleaned = _strip_comments(text)
     out: list[Declaration] = []
     for match in DECLARATION.finditer(cleaned):
         quote = match.group("quote")
         start = match.end()
-        close = _regex_close(cleaned, start) if quote == "/" else _string_close(cleaned, start, quote)
+        line = cleaned.count("\n", 0, match.start()) + 1
+        try:
+            close = _regex_close(cleaned, start) if quote == "/" else _string_close(cleaned, start, quote)
+        except ValueError as exc:
+            # A literal that does not terminate is unreadable for the same reason a regex is: the
+            # text after it cannot be trusted, so this declaration is recorded and skipped.
+            out.append(Declaration(
+                verb=match.group("verb"), pattern="", path=path, line=line, quote=quote,
+                layout="next-line" if "\n" in match.group("gap") else "same-line",
+                regex=quote == "/", world_style=bool(match.group("this")), body="",
+                unreadable_reason=f"the {exc.args[0] if exc.args else 'literal'} at this line"))
+            continue
         concatenated = _is_concatenated(cleaned, close, quote)
         body = "" if concatenated else _command_body(cleaned, close + 1)
         out.append(Declaration(
             verb=match.group("verb"), pattern=cleaned[start:close], path=path,
-            line=cleaned.count("\n", 0, match.start()) + 1, quote=quote,
+            line=line, quote=quote,
             layout="next-line" if "\n" in match.group("gap") else "same-line",
             regex=quote == "/", world_style=bool(match.group("this")),
-            body=body, concatenated=concatenated))
+            body=body, concatenated=concatenated,
+            unreadable_reason=_unreadable_reason(quote, concatenated)))
     return out
 
 
@@ -448,6 +482,20 @@ def parse_declarations(files: Mapping[str, str]) -> list[Declaration]:
             continue
         out.extend(_declarations_in(path, text))
     return out
+
+
+def unreadable_declarations(files: Mapping[str, str]) -> list[dict]:
+    """Every declaration this build records but cannot place, with ``path:line`` and the reason.
+
+    TESTOPS-42C-3 (AC9). The cost of an unreadable corner is visible here and on the run page; it
+    is never fatal to the suite. Nothing is returned for a declaration that can be read.
+    """
+    return [{"path": declaration.path, "line": declaration.line, "verb": declaration.verb,
+             "pattern": declaration.pattern,
+             "kind": ("regex-literal" if declaration.regex else
+                      "concatenation" if declaration.concatenated else "unterminated-literal"),
+             "reason": declaration.unreadable_reason}
+            for declaration in parse_declarations(files) if declaration.unreadable]
 
 
 # ------------------------------------------------------------------ the JS/TS layer vocabulary
@@ -489,12 +537,15 @@ def _local_signals(body: str, helpers: Mapping[str, str]) -> tuple[list[tuple[st
 
 
 def _reason_and_layer(body: str, helpers: Mapping[str, str], commands: Mapping[str, CustomCommand],
-                      known_commands: frozenset[str]) -> tuple[str, str, tuple[str, ...]]:
-    """``(layer, reason, via)`` for one body. ``reason`` is empty when the layer resolved.
+                      known_commands: frozenset[str]
+                      ) -> tuple[str, str, tuple[str, ...], tuple[tuple[str, str, int, tuple[str, ...]], ...]]:
+    """``(layer, reason, via, commands)`` for one body. ``reason`` is empty when the layer resolved.
 
     ``commands`` is the resolved index a caller wants followed (declarations: all of it);
     ``known_commands`` is every registered name, so a body that calls a command *without* it being
-    followed says so instead of reporting that nothing was called.
+    followed says so instead of reporting that nothing was called. The fourth element names every
+    command the chain passed through, with the command's own ``path:line`` and the tokens its body
+    reached - what a reader needs to walk from the claim to ``cy.request`` (AC4).
     """
     found, helpers_called = _local_signals(body, helpers)
     layers = [layer for layer, _token in found]
@@ -505,6 +556,7 @@ def _reason_and_layer(body: str, helpers: Mapping[str, str], commands: Mapping[s
     command_calls = [name for name in cy_calls if name in known_commands]
     called_and_followed = [name for name in command_calls if name in commands]
     called_and_unknown: list[tuple[str, str]] = []
+    through: list[tuple[str, str, int, tuple[str, ...]]] = []
     for name in called_and_followed:
         command = commands[name]
         if command.layer == "unknown":
@@ -512,34 +564,36 @@ def _reason_and_layer(body: str, helpers: Mapping[str, str], commands: Mapping[s
             continue
         layers.append(command.layer)
         via.extend([f"cy.{name}()", *(f"cy.{name}() -> {step}" for step in command.via)])
+        through.append((command.name, command.path, command.line, command.via))
 
     if layers:
-        return highest(layers), "", tuple(dict.fromkeys(via))
+        return (highest(layers), "", tuple(dict.fromkeys(via)), tuple(through))
 
     if not body.strip():
-        return "unknown", "the body could not be read from the source: no {...} block follows it", ()
+        return ("unknown", "the body could not be read from the source: no {...} block follows it",
+                (), ())
     if STEP_DELEGATION.search(body):
         return ("unknown", "the body re-invokes another step by text (Step(this, ...)); the text is "
-                           "assembled at run time, so this build does not follow it", tuple(via))
+                           "assembled at run time, so this build does not follow it", tuple(via), ())
     if called_and_unknown:
         detail = "; ".join(f"cy.{name}(): {reason}" for name, reason in called_and_unknown)
         return ("unknown", f"the body calls {', '.join('cy.' + n + '()' for n, _ in called_and_unknown)}"
                            f", which this build could not resolve to a cy.* signal ({detail})",
-                tuple(via))
+                tuple(via), ())
     if command_calls:
         return ("unknown", f"the body calls {', '.join('cy.' + n + '()' for n in command_calls)}, "
                            "another custom command; a command's own body is the unit here, so it "
-                           "contributes no signal", tuple(via))
+                           "contributes no signal", tuple(via), ())
     if helpers_called:
         return ("unknown", f"the body calls the module-local helpers "
                            f"{', '.join(name + '()' for name in helpers_called)}, which reach no "
-                           "JS signal", tuple(via))
+                           "JS signal", tuple(via), ())
     if cy_calls:
         return ("unknown", f"the body calls {', '.join('cy.' + n + '()' for n in cy_calls)}, none "
                            "of which matches a JS signal and none of which is a registered "
-                           "Cypress command", tuple(via))
+                           "Cypress command", tuple(via), ())
     return ("unknown", "the body calls no cy.* command, no custom command and no module-local "
-                       "helper", ())
+                       "helper", (), ())
 
 
 def _commands(files: Mapping[str, str]) -> dict[str, CustomCommand]:
@@ -569,7 +623,8 @@ def _commands(files: Mapping[str, str]) -> dict[str, CustomCommand]:
     for name, draft in index.items():
         # A command's own body is the unit: other commands are resolved separately, so none is
         # followed from here. `names` is still passed so a body that calls one says so.
-        layer, reason, via = _reason_and_layer(draft.body, helpers.get(draft.path, {}), {}, names)
+        layer, reason, via, _through = _reason_and_layer(
+            draft.body, helpers.get(draft.path, {}), {}, names)
         resolved[name] = CustomCommand(name=name, path=draft.path, line=draft.line, body=draft.body,
                                        kind=draft.kind, layer=layer, reason=reason, via=via)
     return resolved
@@ -594,6 +649,7 @@ class CucumberJsEcosystem:
         next_line = len(declarations) - same_line
         regex_literals = sum(1 for declaration in declarations if declaration.regex)
         concatenated = sum(1 for declaration in declarations if declaration.concatenated)
+        unreadable = sum(1 for declaration in declarations if declaration.unreadable)
         evidence = [f"{len(declarations)} cucumber-js step-binding declarations in {step_files} files",
                     f"declaration syntax: {syntax}",
                     f"{this_style} declared as this.<Verb>(...)",
@@ -603,37 +659,71 @@ class CucumberJsEcosystem:
         if concatenated:
             evidence.append(f"{concatenated} declarations split across a string concatenation; "
                             "concatenated patterns are unsupported by this build")
+        if unreadable:
+            evidence.append(f"{unreadable} declarations cannot be read; nothing is placed for them "
+                            "and the rest of the suite is analysed")
         if commands:
             by_layer: dict[str, int] = {}
             for command in commands.values():
                 by_layer[command.layer] = by_layer.get(command.layer, 0) + 1
             split = ", ".join(f"{count} {layer}" for layer, count in sorted(by_layer.items()))
             evidence.append(f"{len(commands)} Cypress custom commands ({split})")
-        return Ecosystem(NAME, TITLE, False, evidence=tuple(evidence), reason=REASON)
+        return Ecosystem(NAME, TITLE, True, evidence=tuple(evidence))
 
-    def bindings(self, files: Mapping[str, str]) -> list[Binding]:
-        """The declarations with the layer their call graph resolves to, and no claim.
+    def bindings(self, files: Mapping[str, str], *, strict: bool = False) -> list[Binding]:
+        """The readable declarations with the layer their call graph resolves to.
 
         Every row carries either a layer from the JS vocabulary or ``unknown`` with
-        ``layer_reason`` saying why. Two shapes that cannot be read honestly - a regex literal and
-        a pattern split across a concatenation - raise here rather than returning a short list.
+        ``layer_reason`` saying why. A declaration this build cannot read - a regex literal, a
+        pattern split across a concatenation, an unterminated literal - is **recorded and
+        skipped**: nothing is placed for it and the rest of the suite is analysed (AC9). The cost
+        is visible in :meth:`unreadable` and on the run page, never fatal.
+
+        ``strict=True`` restores the old loud refusal for an audit: one unreadable declaration
+        raises instead of being skipped. It is not the default, because refusing a whole suite for
+        one file throws away readable evidence to punish an unreadable corner.
         """
         declarations = parse_declarations(files)
-        _refuse_unreadable(declarations)
+        if strict:
+            _refuse_unreadable(declarations)
         commands = _commands(files)
         helpers = {path: helper_bodies(_strip_comments(text))
                    for path, text in _files(files).items()}
         out: list[Binding] = []
         known = frozenset(commands)
         for declaration in declarations:
-            layer, reason, via = _reason_and_layer(declaration.body,
-                                                   helpers.get(declaration.path, {}), commands,
-                                                   known)
+            if declaration.unreadable:
+                continue
+            layer, reason, via, through = _reason_and_layer(declaration.body,
+                                                            helpers.get(declaration.path, {}),
+                                                            commands, known)
             out.append(Binding(pattern=declaration.pattern, verb=declaration.verb, cls="",
                                path=declaration.path, layer=layer,
                                suite=suite_of_path(declaration.path), line=declaration.line,
-                               layer_via=via, layer_reason=reason))
+                               layer_via=via, layer_reason=reason, layer_commands=through))
         return out
+
+    def unreadable(self, files: Mapping[str, str]) -> list[dict]:
+        """The declarations recorded as unreadable, with ``path:line`` and the reason (AC9)."""
+        return unreadable_declarations(files)
+
+    def explain_unmatched(self, text: str, bindings: list[Binding],
+                          suite: str = "", n: int = 2) -> dict:
+        """Why a step matched no declaration, and which patterns came closest (AC2).
+
+        The suite drifted from its own bindings: the step names a validation or mandatory error
+        message while the only declarations that exist say "Visitor will get ..." or "User will
+        get ...". A reader sees the step's own words and the nearest declared patterns, so the
+        gap is actionable rather than a sentence about the tool.
+        """
+        patterns: list[str] = []
+        for binding in bindings:
+            if binding.pattern and binding.pattern not in patterns:
+                patterns.append(binding.pattern)
+        ranked = sorted(patterns, key=lambda pattern: -difflib.SequenceMatcher(
+            None, pattern.lower(), text.lower()).ratio())
+        return {"reason": "no binding matches these words", "step": text,
+                "nearly": ranked[:n], "suite": suite}
 
     def drivers(self, files: Mapping[str, str]) -> Mapping[str, object]:
         """The registered custom commands: name -> :class:`CustomCommand` (file, line, body, layer).
@@ -645,22 +735,22 @@ class CucumberJsEcosystem:
 
 
 def _refuse_unreadable(declarations: list[Declaration]) -> None:
-    concatenated = [declaration for declaration in declarations if declaration.concatenated]
-    if concatenated:
-        first = concatenated[0]
-        raise UnsupportedEcosystem(
-            f"{TITLE} step patterns split across a string concatenation are not supported by this "
-            f"build: {first.path}:{first.line} declares {first.verb}("
-            f"'{first.pattern}' + ...). Only the first half is readable, which would be a pattern "
-            "that matches nothing, so this build refuses to return a partial binding list.")
-    regex_literals = [declaration for declaration in declarations if declaration.regex]
-    if regex_literals:
-        first = regex_literals[0]
-        raise UnsupportedEcosystem(
-            f"{TITLE} regular-expression patterns are not supported by this build: "
-            f"{first.path}:{first.line} declares a regex literal "
-            f"({first.verb}(/{first.pattern}/)). The declaration would otherwise be dropped "
-            "silently, so this build refuses to return a partial binding list.")
+    """The strict audit: one unreadable declaration raises instead of being skipped.
+
+    Not the default (AC9). It survives so a future corpus can be audited hard, and so the review's
+    canary is still testable, but wiring placement must never let it recurse into a whole-suite
+    refusal for a single unreadable file.
+    """
+    unreadable = [declaration for declaration in declarations if declaration.unreadable]
+    if not unreadable:
+        return
+    first = unreadable[0]
+    raise UnsupportedEcosystem(
+        f"{TITLE} cannot read every declaration in this suite: {first.path}:{first.line} "
+        f"declares {first.verb}("
+        f"{'/' + first.pattern + '/' if first.regex and first.pattern else repr(first.pattern)}). "
+        f"{first.unreadable_reason}. A strict audit refuses rather than returning a partial "
+        "binding list.")
 
 
 def _quote_name(quote: str, count: int) -> str:

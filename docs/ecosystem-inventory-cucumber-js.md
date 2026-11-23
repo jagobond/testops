@@ -303,3 +303,15 @@ it.
 - **The 0.25-day estimate is unaffected.** The directory rule is the cheaper of the two: no suffix
   table to extend and no per-corpus filename convention to defend. The cost line stands; only the
   rule it names has changed.
+
+### 23 November 2026 (TESTOPS-42C-3)
+
+- **§8's closing status is superseded, not deleted.** It said "Nothing of the above was built" and
+  that the run "makes no claim about the steps". That was true of TESTOPS-42A; TESTOPS-42C-1..3 have
+  since read the declarations, the commands, and their layers. The run for this corpus now places
+  **17 of its 43 asserting steps** and reports the other **26** as "no binding matches these
+  words", naming the two nearest patterns. The estimate in §7 was 6.25 days; it was not re-measured.
+- **§5's 17/26 is now also a run result, not only a matching exercise.** The count reproduces through
+  the level-fitness analyser over the stored snapshot (pinned by
+  `test_the_restfulbooker_corpus_places_17_of_43_and_says_why`). Nothing here changes the corpus
+  facts the corrections above established.

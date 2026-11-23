@@ -598,7 +598,16 @@ def _source_facts(conn, run_id: str, analyser: str | None) -> dict:
                             and isinstance(meta.get("ecosystems"), dict) else None),
              "service_states": (meta.get("service_states")
                                 if isinstance(meta, dict)
-                                and isinstance(meta.get("service_states"), list) else None)}
+                                and isinstance(meta.get("service_states"), list) else None),
+             # TESTOPS-42C-3: what the run placed and what it could not read. ``None`` means the
+             # snapshot was written before placement was recorded - not "everything was placed".
+             "placement": (meta.get("placement")
+                           if isinstance(meta, dict) and isinstance(meta.get("placement"), dict)
+                           else None),
+             "unreadable_declarations": (meta.get("unreadable_declarations")
+                                         if isinstance(meta, dict)
+                                         and isinstance(meta.get("unreadable_declarations"), list)
+                                         else None)}
     if not facts["registry_recorded"]:
         return facts
     assessment = sources.assessment_for(meta, analyser or "")

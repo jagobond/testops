@@ -115,17 +115,33 @@ def test_declaration_lines_are_one_based_and_point_at_the_keyword():
     assert lines["a double-quoted step"] == 7
 
 
-def test_a_regex_literal_is_reported_unsupported_not_skipped():
+def test_a_regex_literal_is_recorded_unreadable_and_never_placed():
+    """TESTOPS-42C-3 (AC9): the declaration is recorded, skipped, and the suite still analyses."""
     files = {"cypress/e2e/front/booking/booking.stepdef.js":
-             "Given(/^a (\\d+) user is logged in$/, () => {});\n"}
+             "Given(/^a (\\d+) user is logged in$/, () => {});\n"
+             "Then('a readable step', () => { cy.get('#x').should('be.visible'); });\n"}
 
     ecosystem = cucumber_js.ECOSYSTEM.detect(files)
     assert ecosystem is not None
-    assert any("1 regex-literal declarations" in line and "unsupported" in line
-               for line in ecosystem.evidence)
+    assert any("1 regex-literal declarations" in line for line in ecosystem.evidence)
+    assert any("1 declarations cannot be read" in line for line in ecosystem.evidence)
+
+    records = cucumber_js.ECOSYSTEM.unreadable(files)
+    assert len(records) == 1
+    assert records[0]["path"].endswith("booking.stepdef.js")
+    assert records[0]["line"] == 1
+    assert records[0]["kind"] == "regex-literal"
+    assert records[0]["reason"]
+
+    # Record-and-continue: nothing is placed for the regex literal, the rest is read.
+    bindings = cucumber_js.ECOSYSTEM.bindings(files)
+    assert [binding.pattern for binding in bindings] == ["a readable step"]
+    assert bindings[0].layer == "ui"
+
+    # The old loud refusal survives as an audit switch, with the path:line a reader needs.
     with pytest.raises(UnsupportedEcosystem) as caught:
-        cucumber_js.ECOSYSTEM.bindings(files)
-    assert "regex literal" in str(caught.value)
+        cucumber_js.ECOSYSTEM.bindings(files, strict=True)
+    assert "regular-expression literal" in str(caught.value)
     assert "booking.stepdef.js:1" in str(caught.value)
 
 
@@ -242,15 +258,15 @@ def test_ac6_six_features_and_five_stepdef_files_resolve_to_their_own_suites():
 
 
 @requires_store
-def test_ac7_the_ecosystem_is_still_unsupported_so_no_claim_can_be_placed():
+def test_ac7_the_ecosystem_is_supported_and_the_commands_are_read():
     ecosystem = cucumber_js.ECOSYSTEM.detect(_corpus())
 
     assert ecosystem is not None
-    assert ecosystem.supported is False
-    assert ecosystem.reason
-    # T42C-2 reads the custom commands (T42C-1 refused them outright); reading them is not
-    # placement, and the gate that stops a claim is the unsupported flag asserted above.
+    assert ecosystem.supported is True
+    # T42C-2 reads the custom commands; T42C-3 places the declarations, and an unreadable one
+    # would be recorded rather than refusing the suite.
     commands = cucumber_js.ECOSYSTEM.drivers(_corpus())
     assert len(commands) == 11
     assert all(isinstance(command, cucumber_js.CustomCommand) and command.body
                for command in commands.values())
+    assert cucumber_js.ECOSYSTEM.unreadable(_corpus()) == []
