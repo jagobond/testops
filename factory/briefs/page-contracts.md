@@ -48,7 +48,10 @@ page, in words they already know.
     when it recognised none, rather than implying the repository was empty or irrelevant.
 12. It says **what was skipped**, by kind and count, whenever files were not read for any reason.
 13. It says **what it placed and what it could not**, and for anything unplaced, why — in a sentence a reader can act on.
-14. It never awards a repository credit for analysis it did not perform.
+14. It never awards a repository credit for analysis it did not perform. **Observable form:** a repository that
+    contributed no evidence must not be presented as supporting the conclusion - if a verdict's supporting evidence comes
+    only from one repository, the other must not be described as though it confirmed anything. _(Amended after T7: the
+    first phrasing named an internal attribution no page exposes, so a blind author could not test it.)_
 
 ## A case page
 
