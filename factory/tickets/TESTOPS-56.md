@@ -2,7 +2,7 @@
 id: TESTOPS-56
 title: Tune the credential screen so it stops refusing ordinary words
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-51
 ---
