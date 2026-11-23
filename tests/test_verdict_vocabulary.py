@@ -115,7 +115,11 @@ def disagreement(documented: set[str], emitted: set[str]) -> tuple[list[str], li
 def test_the_analysers_emit_a_vocabulary_at_all():
     """A scan that finds nothing would make every comparison below vacuously true."""
     emitted = emitted_verdicts()
-    assert emitted, "no verdict literals found in testops/analysers - the scan is broken"
+    assert emitted, (
+        f"the verdict scan of {ANALYSERS} found no verdict literals - it walked no analyser "
+        "modules, or they no longer assign verdicts as string literals - so the comparisons "
+        "below would be vacuously true"
+    )
 
 
 @pytest.mark.parametrize("place, read", PLACES, ids=[place for place, _ in PLACES])

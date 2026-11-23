@@ -96,6 +96,41 @@ def _wheel_names(built_wheel: dict) -> set[str]:
         return set(archive.namelist())
 
 
+# TESTOPS-49: today the package ships exactly these two non-Python files. A minimum count and a
+# name list, not an equality, so a third file needs no edit here - but a deleted or renamed one
+# fails, which is the difference between "everything checked" and "nothing to check".
+MIN_DATA_FILES = 2
+KNOWN_DATA_FILES = (
+    "judgement/prompts/level_fitness.md",
+    "store/schema.sql",
+)
+
+
+def _assert_enumeration_is_real(files: list[str]) -> None:
+    """TESTOPS-49 AC1 and AC3: no coverage verdict is drawn from a walk that found nothing.
+
+    An empty enumeration (missing package directory, wrong ``PACKAGE``, a monkeypatched
+    ``_data_files_on_disk``) used to make the test below pass with zero files checked. That is a
+    pass about nothing, so this refuses it first and names the directory it walked.
+    """
+    assert files, (
+        f"the package-data walk of {PACKAGE} found no non-Python files at all. That is a broken "
+        "probe - a missing or wrong package directory - not a statement that packaging is "
+        "complete, so no wheel-coverage verdict is drawn from it."
+    )
+    assert len(files) >= MIN_DATA_FILES, (
+        f"the walk of {PACKAGE} found only {len(files)} non-Python file(s) ({files}); the "
+        f"package ships at least {MIN_DATA_FILES}, so files have gone missing from the tree, not "
+        "from the wheel."
+    )
+    absent = [name for name in KNOWN_DATA_FILES if name not in files]
+    assert not absent, (
+        f"the walk of {PACKAGE} no longer finds {absent}, which the package ships today. It "
+        f"found {files}. Renaming or deleting a shipped data file needs a deliberate edit to "
+        "KNOWN_DATA_FILES, not a silently smaller coverage check."
+    )
+
+
 def test_package_data_ships_every_non_python_file_in_the_package(built_wheel):
     """AC1: the built wheel, not a glob, decides whether package-data is complete.
 
@@ -103,12 +138,18 @@ def test_package_data_ships_every_non_python_file_in_the_package(built_wheel):
     right-anchors, so ``templates/probe.html`` matches ``web/templates/probe.html`` even though
     the build would ship nothing. The wheel's namelist cannot be fooled that way, so it is the
     authority; the matching patterns are shown only to point at the glob to fix.
+
+    TESTOPS-49: the enumeration is checked before it is trusted. Zero files found means the probe
+    is broken, and that is a failure here, never a pass.
     """
+    files = _data_files_on_disk()
+    _assert_enumeration_is_real(files)
+
     names = _wheel_names(built_wheel)
     patterns = _declared_data_patterns()
 
     missing = []
-    for rel in _data_files_on_disk():
+    for rel in files:
         expected = f"testops/{rel}"
         if expected not in names:
             missing.append((rel, expected, _patterns_matching(rel, patterns)))
