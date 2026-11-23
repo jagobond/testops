@@ -10,7 +10,7 @@ import json
 import re
 import sqlite3
 
-from . import blobs, cases, sources
+from . import blobs, cases, config, sources
 from .analysers import is_registered
 from .extract import csproj, gherkin, stepbindings
 from .links import GITHUB, blob_permalink, permalink, short_location
@@ -570,7 +570,80 @@ def _run_analysis(conn, run_id: str, analyser: str | None, snapshot: str | None,
                          (artefact_id,)).fetchone()[0] for artefact_id in active))
 
     record.update(_source_facts(conn, run_id, analyser))
+    record["read_counts"] = read_counts(conn, snapshot, record.get("reads"))
     return record
+
+
+def known_file_kinds() -> tuple[str, ...]:
+    """Every kind of file this build's collector reads, in the order it declares them.
+
+    A run page lists all of them for every repository, so a kind the repository holds none of is
+    a stated zero rather than a silence (TESTOPS-55).
+    """
+    return tuple(rule.suffix for rule in config.FILE_KINDS)
+
+
+def _file_suffix(path: str) -> str:
+    name = path.rsplit("/", 1)[-1]
+    return "." + name.rsplit(".", 1)[1] if "." in name.lstrip(".") else "(no suffix)"
+
+
+def read_counts(conn, snapshot: str | None, reads) -> list[dict] | None:
+    """Per repository, how many files of each kind this run read - zeroes included.
+
+    TESTOPS-55. The counts are derived from the store, never hardcoded and never stored twice:
+    every file a run fetched is an artefact of its snapshot, and the snapshot's ``reads`` record
+    says which commit belongs to which repository. A kind the collector reads that a repository
+    holds none of is reported as 0, because "0 .js files" and "the page never said" are different
+    facts. ``None`` when the snapshot cannot support the count at all - a run that recorded no
+    reads says nothing, rather than claiming zeroes it never counted.
+    """
+    if not snapshot or not isinstance(reads, dict) or not reads:
+        return None
+    owner: dict[str, str] = {}
+    for role, entry in reads.items():
+        commit = (entry or {}).get("commit") if isinstance(entry, dict) else None
+        if commit:
+            owner[str(commit)] = role
+    if not owner:
+        return None
+    counts: dict[str, dict[str, int]] = {role: {} for role in reads}
+    names: dict[str, str] = {}
+    for row in conn.execute("SELECT uri FROM artefact WHERE snapshot_id = ? ORDER BY id",
+                            (snapshot,)):
+        match = GITHUB.match(row["uri"] or "")
+        if match is None:
+            continue                        # jira:/ado: rows are not files read from a repository
+        role = owner.get(match["sha"])
+        if role is None:
+            continue                        # a commit this run did not record reading
+        suffix = _file_suffix(match["path"])
+        counts[role][suffix] = counts[role].get(suffix, 0) + 1
+        names.setdefault(role, f"{match['owner']}/{match['repo']}")
+    out: list[dict] = []
+    known = known_file_kinds()
+    for role in sorted(reads):
+        counted = counts.get(role) or {}
+        every_kind = list(known) + sorted(set(counted) - set(known))
+        out.append({"role": role, "repository": names.get(role, ""),
+                    "counts": {kind: int(counted.get(kind, 0)) for kind in every_kind}})
+    return out
+
+
+def store_totals(conn) -> dict[str, int]:
+    """How many projects, runs and cases the store holds - the front page's totals (TESTOPS-55).
+
+    A project is anything the store knows as one: a configured project, or a project a run names.
+    Counting only configured rows would contradict a front page that is listing a project heading
+    with no configuration row behind it.
+    """
+    return {
+        "projects": int(conn.execute(
+            "SELECT COUNT(*) FROM (SELECT slug FROM project UNION SELECT project FROM run)"
+        ).fetchone()[0]),
+        "runs": int(conn.execute("SELECT COUNT(*) FROM run").fetchone()[0]),
+        "cases": int(conn.execute("SELECT COUNT(*) FROM case_").fetchone()[0]),
+    }
 
 
 def _source_facts(conn, run_id: str, analyser: str | None) -> dict:
