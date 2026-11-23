@@ -18,8 +18,8 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-4 | One claim per assertion, said in words a developer can act on | F1 | done | 84 tests; PR #3 merged as 595894e after a PASS review |
 | TESTOPS-5 | Sources are declared, not assumed — the capability registry | F1 | done | 162 tests; crux held end to end; PR #13 merged after a PASS review |
 | TESTOPS-6 | The case page — an argument a developer can act on | F1 | done | 111 tests; PR #6 merged as fecfb6e after a PASS review |
-| TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | Unblocked by T5/T17; waits on F2 direction. The suite a real team would keep |
-| TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | blocked | Reviewer concern 3 on TESTOPS-2: `test_packaging` imports via sys.path, so a broken `package-data` stays green |
+| TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | Ticket now written; blocked on TESTOPS-42 (the suite pins pages T42 may change) |
+| TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | ready | Reviewer concern 3 on TESTOPS-2: `test_packaging` imports via sys.path, so a broken `package-data` stays green. Written as a ticket 23 Nov |
 | TESTOPS-9 | Stale claim vocabulary — the schema and the docstrings describe verdicts that were abandoned | F1 | done | 514 tests; three places corrected, test bites both ways; PR #36 |
 | TESTOPS-10 | Classification coverage — half the real corpus is unclassifiable | F1 | done | 48 → 0 unplaced, gaps unchanged; PR #4 merged after a PASS review |
 | TESTOPS-11 | Restraint — a claim is not checked because one of its words is familiar | F1 | done | 90 distinct / 1 unplaced / 1 gap / 2 review; PR #5 merged as 1c1fca3 after a PASS review |
