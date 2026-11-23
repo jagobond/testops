@@ -1,0 +1,34 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-56 - tuning the credential screen so it stops refusing
+ordinary words. This is the classic trade: every narrowing that removes a false positive risks a false negative, and a
+screen that misses real keys is worse than one that is annoying. Judge both directions.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t56 (branch `factory/testops-56-screen-tuning`). Only here.
+Ticket: factory/tickets/TESTOPS-56.md ; Build: factory/reports/2026-11-24/TESTOPS-56-build.md
+Prior evidence: factory/reports/2026-11-23/TESTOPS-51-review.md (the false-positive table and three concerns)
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Never write to the live store or contact port 8791. Copy `data/`, serve on a free port.
+- **FALSE NEGATIVES FIRST** - this is the risk the ticket creates, not the one it fixes. Read `_PREFIXED_TOKENS` and then
+  attack it with REAL format shapes: an `AKIA` key ID of 20 chars (4 + 16), one with a lowercase body, a `ghp_` with a
+  36-char body and one with a 40-char body (GitHub has used both), a `gho_` and `ghs_`, a `github_pat_` with a 22-char
+  body and a 59-char one, a `xoxb-` with a realistic `1234567890-1234567890123-abc...` body, a `glpat-` of 20 chars, a
+  short JWT, a PEM block for RSA and one for EC. For each, say refused or accepted, and where accepted, whether a real
+  leaked key of that shape could get through. Anything a real token of its own format would fail is a finding.
+- **Where the format is ambiguous:** if the real body length is uncertain, do not guess - say so and require the check to
+  accept a range wide enough to hold the real formats, rather than a single length.
+- **FALSE POSITIVES:** re-run the AC3 table (38 values) and then push on `_names_a_credential` yourself with at least
+  fifteen identifiers of your own: `token-bucket-limiter`, `password-manager/tool`, `secrets-service`, `api-token-refresh`,
+  `client-secret-rotation`, `bearer-middleware`, `auth-token-cache`, `session-token`, `license-key-check`, `vault-token`,
+  `oauth-secret-store`, `passwords-list`, `keyring-popup`, `cookie-token-sync`, `saml-assertion-token`. Which are refused,
+  and are those refusals defensible? A repository or service called `session-token` is plausible; `my-password` is not.
+- **AC4:** post an unknown settings key and confirm 400 with a reason and nothing stored. Then check the new behaviour
+  does not break legitimate editing: every real settings field for every service kind still round-trips (create, edit,
+  read back) - report the matrix you ran.
+- **AC5:** re-run the bypass table yourself (unseen key, project named like a credential, leading whitespace, trailing
+  newline, double-URL-encoding, mixed case, value split across fields) and report each attempt honestly.
+- **Contract + suite:** P23 passes; full suite green; no case-page golden changed.
+- Write exactly one file: factory/reports/2026-11-24/TESTOPS-56-review.md with: ## Verdict; ## False negatives (the real
+  risk); ## False positives, my fifteen; ## The scoped identifier rule; ## Unknown keys and editing; ## Bypass table
+  re-run; ## Contract suite; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 250 words.
