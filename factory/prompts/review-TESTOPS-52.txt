@@ -1,0 +1,40 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-52 - uncertainty must not wear certainty's clothes, and
+badges must carry valid markup. The build claims both fixes and one uncomfortable number: 522 malformed attributes across
+46 pages, not the 32+ the blind author saw.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t52 (branch `factory/testops-52-verdict-tone`). Work only here.
+Ticket: factory/tickets/TESTOPS-52.md ; Build: factory/reports/2026-11-23/TESTOPS-52-build.md
+Evidence: factory/reports/2026-11-23/TESTOPS-7-author-report.md (the review of T7 is on main, not in this worktree)
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- **Never touch the live store** (`C:/Users/Chester/Projects/testops/data/testops.db`) or the live server on port 8791.
+  Copy `data/` to a scratch dir, point `TESTOPS_DATA` at the copy, serve on a free port, and set `TESTOPS_BASE` for the
+  contract suite. If any command would write to the live store, stop and use the copy.
+- Verify the tone mapping yourself: read `testops/web/tone.py`, then check the **served** HTML of a real `Cannot assess`
+  case, a `distinct` case, and a problem case (`gap`/`duplicate`/`review`) on your own server. Confirm the classes differ
+  and that `distinct` does NOT wear the alarm colour. Then find the CSS rule for each class and confirm the colour it
+  actually produces - a class that maps to nothing is the same bug wearing a hat.
+- **The 522 number:** reproduce or refute it. Run the markup test against the pre-fix templates
+  (`git show origin/main:testops/web/app.py` into a scratch server) and report the count you get. Then run it against the
+  fix and confirm zero. If your number differs materially, say so and work out why.
+- **Exhaustiveness:** prove the mapping cannot silently miss a verdict. Add nothing to the repo - write a throwaway
+  script in scratch that takes the store's vocabulary (current + retired) and asks for each tone; then check what happens
+  for a name that is not declared (it must raise, not default). Report the exception type and message.
+- **Goldens:** the build says all 14 pages have identical visible text. Verify independently - strip tags and whitespace
+  from old and new goldens and diff. Then confirm the class diff is only tone and markup repair, no wording, numbers or
+  layout. Report any page where text moved.
+- **AC5:** run the contract suite yourself on the copy (`TESTOPS_BASE=http://127.0.0.1:<port>`). Expect 21 passed / 5
+  failed / 3 skipped with P4 passing. Confirm exactly which five fail and that they are the known ones (P05 x2, P07, P10,
+  P23). Any sixth failure or any newly failing contract test is a regression.
+- **Analysers untouched:** `git diff --stat origin/main...HEAD` must show no change under `testops/extract/`,
+  `testops/judgement/` or the analysis pipeline. CotW 94/90/1/1/2 and ReqOverflow 17/17 still pinned.
+- **The disclosure:** the build admits two early full-suite runs wrote `contract-audit-*` projects to the LIVE store, and
+  that it deleted those two rows itself. Verify the live store now holds exactly cotw, reqoverflow, restfulbooker,
+  testops with no stray rows (read-only query), and say whether the root cause - `tests/contracts` defaulting to the live
+  server - is fixed by this ticket or remains a live hazard for every future `pytest` run. If it remains, say plainly that
+  it needs its own ticket.
+- Write exactly one file: factory/reports/2026-11-23/TESTOPS-52-review.md with: ## Verdict; ## Tone, verified on served
+  pages; ## The 522; ## Exhaustiveness; ## Goldens; ## Contract suite; ## Analysers untouched; ## The live-store hazard;
+  ## Three sharpest concerns.
+- Reply with the verdict and a summary under 300 words.
