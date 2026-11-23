@@ -187,6 +187,8 @@ pre.snippet mark.hit { background:transparent; color:inherit; font-weight:600; }
 aside.xref { margin:.2rem 0 1rem; padding:.55rem .85rem .6rem; background:#f6f4f0;
              border-radius:5px; font-size:.94rem; }
 aside.xref p { margin:.15rem 0; }
+nav.site { margin-top:3rem; border-top:1px solid var(--line); padding-top:.8rem;
+           font-size:.92rem; color:var(--dim); }
 """
 
 
@@ -214,11 +216,21 @@ def age(iso: str | None) -> str:
     return f"{mins // (60 * 24)} days ago"
 
 
+# The one navigation every page carries (TESTOPS-54 AC2). It lives here, in the wrapper all pages
+# are rendered through, rather than in each page's body: a page whose address is only knowable by
+# someone who already knows it is not a page a reader can reach. The footer is identical everywhere
+# on purpose - one affordance, the same words, whatever page you are on.
+SITE_NAV = ('<nav class="site" aria-label="All pages">'
+            '<a href="/">\u2190 all cases</a> \u00b7 '
+            '<a href="/runs">all runs</a> \u00b7 '
+            '<a href="/config">projects and services</a></nav>')
+
+
 def page(title: str, body: str) -> bytes:
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(title)}</title><style>{CSS}</style></head>
-<body><main>{body}</main></body></html>""".encode("utf-8")
+<body><main>{body}{SITE_NAV}</main></body></html>""".encode("utf-8")
 
 
 def versions_text(versions: dict | None) -> str:
@@ -2087,6 +2099,15 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
                 f'{esc(state_label)}</span>'
                 f' \u00b7 Analysed {esc(age(row["created_at"]))}'
                 f'{" at " + esc(versions) if versions else ""}</p>')
+
+    if findings and row.get("run_id"):
+        # AC1 of TESTOPS-54: the case's own run, named by the link, not a bare "back". The run
+        # index says which runs exist; this says which one raised the case under a reader's eyes.
+        run_id = row["run_id"]
+        body.append(f'<p class="meta">Raised by the run '
+                    f'<a href="/run/{esc(run_id)}">{esc(run_id)}</a>'
+                    f' <span class="quiet">\u2014 what that run analysed, and what it could not '
+                    f'consult.</span></p>')
 
     if not findings:
         # A run that raised nothing is described as a run: what it examined, and what it could not
