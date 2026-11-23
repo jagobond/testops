@@ -2,7 +2,7 @@
 id: TESTOPS-54
 title: Every page leads somewhere - a case links to its run, and /config is reachable
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-53
 ---

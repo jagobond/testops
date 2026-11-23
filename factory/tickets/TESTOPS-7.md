@@ -2,7 +2,7 @@
 id: TESTOPS-7
 title: Page-contract suite written by a qa-author who never sees the implementation
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-42
 ---

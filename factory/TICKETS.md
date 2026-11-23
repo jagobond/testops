@@ -18,7 +18,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-4 | One claim per assertion, said in words a developer can act on | F1 | done | 84 tests; PR #3 merged as 595894e after a PASS review |
 | TESTOPS-5 | Sources are declared, not assumed — the capability registry | F1 | done | 162 tests; crux held end to end; PR #13 merged after a PASS review |
 | TESTOPS-6 | The case page — an argument a developer can act on | F1 | done | 111 tests; PR #6 merged as fecfb6e after a PASS review |
-| TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | ready | Brief written (24 promises, 5 page types); blind qa-author writes the suite; aims at the live store |
+| TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | done | Brief written (24 promises, 5 page types); blind qa-author writes the suite; aims at the live store |
 | TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | done | Built: wheel installed in a fresh venv, served 4 pages; red run shown; CI runs the marked tests; 557 tests; PR #42 |
 | TESTOPS-48 | The packaging coverage rule accepts a pattern that ships nothing | F1 | done | Wheel namelist is the authority; wrong-prefix declaration now fails; 3 red runs; PR #43 |
 | TESTOPS-49 | The packaging coverage test passes when there is nothing to check | F1 | done | From the TESTOPS-48 review: empty enumeration yields a green test asserting nothing; add non-empty and minimum-count guards |
@@ -66,10 +66,10 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-45 | The store will accept any verdict string, and 128 rows still carry retired names | F2 | done | Schema v5 vocabulary + triggers, `check-store`; 534 tests; PR #38 |
 | TESTOPS-46 | A store can no longer be restored from its own history | F2 | done | Insert allows ever-emitted, update stays current-only; `add_claim` guard now actually called; 548 tests; PR #40 |
 | TESTOPS-47 | Each analyser states the cover of its own decision, and states identity rather than promising an event | F2 | done | From the TESTOPS-40 review: one global sentence is wrong for duplication and over-promises on net-zero twin edits |
-| TESTOPS-51 | `password=hunter2` was stored and echoed by `/config`; a project cannot be deleted | F1 | ready | From T7: the screen exists per-field, so every field inherits the hole. One shared check, plus a project delete route |
-| TESTOPS-52 | "Cannot assess" wears the alarm colour, and 32+ badges have malformed class attributes | F1 | ready | From T7: the soft style exists in CSS and is applied to nothing; `class="badge class="hot""` makes `hot` inert |
-| TESTOPS-53 | Running `pytest` writes to the live store | F2 | ready | From T52's disclosure: `tests/contracts` defaults to the live server and POSTs a project. Give it its own temp server and store, and make it a CI gate |
-| TESTOPS-54 | A case does not link to its run; `/config` is reachable from nowhere | F1 | ready | From T7 P5: no dead ends, no page that only exists if you know the URL |
+| TESTOPS-51 | `password=hunter2` was stored and echoed by `/config`; a project cannot be deleted | F1 | done | From T7: the screen exists per-field, so every field inherits the hole. One shared check, plus a project delete route |
+| TESTOPS-52 | "Cannot assess" wears the alarm colour, and 32+ badges have malformed class attributes | F1 | done | From T7: the soft style exists in CSS and is applied to nothing; `class="badge class="hot""` makes `hot` inert |
+| TESTOPS-53 | Running `pytest` writes to the live store | F2 | done | From T52's disclosure: `tests/contracts` defaults to the live server and POSTs a project. Give it its own temp server and store, and make it a CI gate |
+| TESTOPS-54 | A case does not link to its run; `/config` is reachable from nowhere | F1 | done | From T7 P5: no dead ends, no page that only exists if you know the URL |
 | TESTOPS-55 | The front page states no totals; the run page gives no per-kind read counts | F1 | ready | From T7 P7/P10: a reader cannot state what exists or what was read, and never sees an explicit zero |
 | TESTOPS-56 | The screen refuses `token-bucket-limiter` and any value starting `AKIA`/`xoxb-` | F1 | ready | From the T51 review: qualify prefix rules by body shape, scope the short-identifier rule deliberately, pin a 25-value false-positive table |
 | TESTOPS-57 | The 351 claims the tool could not place have no page of their own | F1 | ready | From the T52 review: `unplaced` never becomes a case, so the soft tone is rendered nowhere. A per-run section with anchors and the soft treatment |

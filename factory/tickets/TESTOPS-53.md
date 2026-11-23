@@ -2,7 +2,7 @@
 id: TESTOPS-53
 title: Running the suite must not be able to write to the live store
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-52
 ---

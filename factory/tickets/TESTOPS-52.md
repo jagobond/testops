@@ -2,7 +2,7 @@
 id: TESTOPS-52
 title: Uncertainty does not wear certainty's clothes, and badges carry valid markup
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-7
 ---

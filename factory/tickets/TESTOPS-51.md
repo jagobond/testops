@@ -2,7 +2,7 @@
 id: TESTOPS-51
 title: The credential screen applies to every field, and a project can be deleted
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-7
 ---
