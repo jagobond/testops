@@ -2,7 +2,7 @@
 id: TESTOPS-49
 title: The packaging coverage test passes when there is nothing to check
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-48
 ---
