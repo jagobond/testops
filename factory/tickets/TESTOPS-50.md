@@ -2,7 +2,7 @@
 id: TESTOPS-50
 title: Two numbers in the inventory cannot be reproduced, and the document's selling point is its numbers
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-42A
 ---
