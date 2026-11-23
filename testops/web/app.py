@@ -2225,12 +2225,35 @@ def _form(payload: dict, key: str, default: str = "") -> str:
     return (payload.get(key) or [default])[0].strip()
 
 
+# TESTOPS-56 AC4. The fields this form understands, split into the ones that ride along with every
+# service (and are not settings) and the ones that become a service's settings. A key outside these
+# sets is *refused*, never dropped: the whitelist that used to build this dict made the screen safe
+# only by accident, and a refactor that forwarded unknown keys would have bypassed it with no test
+# failing. The refusal says so, and says nothing about the value.
+_FORM_FIELDS = frozenset({"project", "type", "role", "name", "slug"})
+_SETTINGS_FIELDS = frozenset({"repo", "board", "host", "org", "ado_project", "pipeline_id"})
+
+
 def _settings_from_form(kind: str, payload: dict) -> dict:
     """The settings a service row may hold, from the fields a person actually typed.
 
     Repositories, board keys, hosts and paths - never a credential. :func:`services.validate_settings`
-    is the guard, and it runs on the way in so a refused value never reaches the store.
+    is the guard, and it runs on every submitted settings value here, whether or not this kind stores
+    it, so a value cannot reach the store - or quietly evaporate - without having been screened.
+    A field this form does not know is refused rather than discarded (TESTOPS-56 AC4).
     """
+    unknown = sorted(key for key in payload if key not in _FORM_FIELDS | _SETTINGS_FIELDS)
+    if unknown:
+        raise services.ConfigError(
+            f"settings field {unknown[0]!r} is not a field this form knows, so the configuration was "
+            f"refused rather than saved without it: an unrecognised field would be stored unscreened "
+            f"or dropped unrecorded, and neither is a configuration. Remove it, or add the field and "
+            f"its screen together.")
+    for name in sorted(_SETTINGS_FIELDS):
+        if name in payload:
+            value = _form(payload, name)
+            if value:
+                services.validate_settings({name: value})
     if kind == "git_repo":
         return {"repo": _form(payload, "repo")}
     if kind == "jira_board":
