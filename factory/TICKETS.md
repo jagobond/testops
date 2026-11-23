@@ -18,7 +18,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-4 | One claim per assertion, said in words a developer can act on | F1 | done | 84 tests; PR #3 merged as 595894e after a PASS review |
 | TESTOPS-5 | Sources are declared, not assumed — the capability registry | F1 | done | 162 tests; crux held end to end; PR #13 merged after a PASS review |
 | TESTOPS-6 | The case page — an argument a developer can act on | F1 | done | 111 tests; PR #6 merged as fecfb6e after a PASS review |
-| TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | blocked | Ticket now written; blocked on TESTOPS-42 (the suite pins pages T42 may change) |
+| TESTOPS-7 | Page-contract suite from qa-author, never shown the implementation | F1 | ready | Brief written (24 promises, 5 page types); blind qa-author writes the suite; aims at the live store |
 | TESTOPS-8 | Packaging proof: install into a fresh venv and import through the distribution | F1 | done | Built: wheel installed in a fresh venv, served 4 pages; red run shown; CI runs the marked tests; 557 tests; PR #42 |
 | TESTOPS-48 | The packaging coverage rule accepts a pattern that ships nothing | F1 | done | Wheel namelist is the authority; wrong-prefix declaration now fails; 3 red runs; PR #43 |
 | TESTOPS-49 | The packaging coverage test passes when there is nothing to check | F1 | done | From the TESTOPS-48 review: empty enumeration yields a green test asserting nothing; add non-empty and minimum-count guards |
