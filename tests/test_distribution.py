@@ -16,87 +16,23 @@ business (``pytest -m "not distribution"``). CI runs it - see ``tests/README.md`
 from __future__ import annotations
 
 import json
-import os
-import shutil
-import subprocess
-import sys
 import zipfile
 
 import pytest
 
-pytestmark = pytest.mark.distribution
+from wheel_build import ROOT, install as _install, run as _run
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TIMEOUT = 240  # seconds: a wheel build plus an install on a cold Windows disk
+pytestmark = pytest.mark.distribution
 
 
 # --------------------------------------------------------------------------- plumbing
 
 
-def _python(venv):
-    return venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-
-
-def _env(**extra):
-    """The environment a child gets: no inherited repo path, no user site, no active venv."""
-    clean = {key: value for key, value in os.environ.items()
-             if key not in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "CONDA_PREFIX")}
-    clean["PYTHONNOUSERSITE"] = "1"
-    clean.update(extra)
-    return clean
-
-
-def _run(argv, cwd, **extra):
-    done = subprocess.run([str(arg) for arg in argv], cwd=str(cwd), env=_env(**extra),
-                          text=True, capture_output=True, timeout=TIMEOUT)
-    assert done.returncode == 0, (
-        f"command failed: {' '.join(str(a) for a in argv)}\n{done.stdout}\n{done.stderr}")
-    return done
-
-
-def _copy_source(work):
-    """A copy of the source tree, so the build cannot see the tests, the venv or git."""
-    source = work / "source"
-    source.mkdir()
-    shutil.copy(os.path.join(ROOT, "pyproject.toml"), source / "pyproject.toml")
-    shutil.copytree(os.path.join(ROOT, "testops"), source / "testops",
-                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    return source
-
-
-def _build_wheel(source, wheels):
-    wheels.mkdir()
-    _run([sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation",
-          "--wheel-dir", wheels, source], cwd=source.parent)
-    built = sorted(wheels.glob("testops-*.whl"))
-    assert len(built) == 1, f"expected one wheel, found {[p.name for p in built]}"
-    return built[0]
-
-
-def _install(work, wheel):
-    venv = work / "venv"
-    _run([sys.executable, "-m", "venv", venv], cwd=work)
-    python = _python(venv)
-    assert python.exists(), f"the fresh venv has no interpreter at {python}"
-    _run([python, "-m", "pip", "install", "--no-index", "--disable-pip-version-check", wheel],
-         cwd=work)
-    return venv, python
-
-
 @pytest.fixture(scope="module")
-def distribution(tmp_path_factory):
-    # --no-build-isolation means the wheel must be built by this interpreter's own backend, which
-    # is what the dev extras install. Say so in one line if it is missing, rather than letting pip
-    # fail with "No module named 'setuptools'" forty lines later.
-    probe = subprocess.run([sys.executable, "-c", "import setuptools, wheel"],
-                           capture_output=True, text=True)
-    assert probe.returncode == 0, (
-        "the distribution check needs the build backend: pip install -e '.[dev]'\n"
-        f"{probe.stderr}")
-
-    work = tmp_path_factory.mktemp("testops-distribution")
-    source = _copy_source(work)
-    wheel = _build_wheel(source, work / "wheels")
+def distribution(built_wheel):
+    """Install the session's wheel into a fresh venv; the wheel itself is built once."""
+    work = built_wheel["work"]
+    wheel = built_wheel["wheel"]
     venv, python = _install(work, wheel)
     return {"work": work, "wheel": wheel, "venv": venv, "python": python}
 

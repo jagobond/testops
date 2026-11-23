@@ -1,15 +1,16 @@
 """AC1 and AC2: pytest is a declared dev dependency; the package list names only real packages.
 
-TESTOPS-8 AC5 lives here too: ``[tool.setuptools.package-data]`` must list every non-Python file the
-app resolves at runtime, checked against the files that actually resolve rather than a hand-kept
-list. The behavioural half of TESTOPS-8 - install the wheel and serve pages from it - is
-``test_distribution.py``, which needs no network but does need a build backend.
+TESTOPS-8 AC5 lives here too: ``[tool.setuptools.package-data]`` must ship every non-Python file in
+the package, checked against the built wheel's namelist rather than against a glob. The behavioural
+half of TESTOPS-8 - install the wheel and serve pages from it - is ``test_distribution.py``, which
+needs no network but does need a build backend.
 """
 from __future__ import annotations
 
 import importlib
 import re
 import tomllib
+import zipfile
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,8 +77,9 @@ def _declared_data_patterns() -> list[str]:
     return patterns
 
 
-def _covered(rel: str, patterns: list[str]) -> bool:
-    return any(PurePosixPath(rel).match(pattern) for pattern in patterns)
+def _patterns_matching(rel: str, patterns: list[str]) -> list[str]:
+    """Only a suggestion for the error message; the wheel decides coverage, never this."""
+    return [pattern for pattern in patterns if PurePosixPath(rel).match(pattern)]
 
 
 def _data_files_on_disk() -> list[str]:
@@ -89,27 +91,34 @@ def _data_files_on_disk() -> list[str]:
     )
 
 
-def test_package_data_lists_every_file_the_app_resolves_at_startup():
-    """AC5: the declaration is checked against what resolves, not against a copy of itself.
+def _wheel_names(built_wheel: dict) -> set[str]:
+    with zipfile.ZipFile(built_wheel["wheel"]) as archive:
+        return set(archive.namelist())
 
-    ``store/schema.sql`` is the file startup actually opens (``db.SCHEMA``), so it is resolved
-    through the module rather than spelled out: rename or move it and this test follows it, while
-    ``package-data`` has to follow too or the check fails.
+
+def test_package_data_ships_every_non_python_file_in_the_package(built_wheel):
+    """AC1: the built wheel, not a glob, decides whether package-data is complete.
+
+    ``package-data`` patterns are relative to the package root. ``PurePosixPath.match``
+    right-anchors, so ``templates/probe.html`` matches ``web/templates/probe.html`` even though
+    the build would ship nothing. The wheel's namelist cannot be fooled that way, so it is the
+    authority; the matching patterns are shown only to point at the glob to fix.
     """
-    from testops.store import db
-
-    schema = db.SCHEMA
-    assert schema.is_file(), f"the store's schema is not on disk at {schema}"
-
-    # The startup path, expressed the way the build expresses it: relative to the package root.
-    resolved = schema.resolve().relative_to(PACKAGE.resolve()).as_posix()
+    names = _wheel_names(built_wheel)
     patterns = _declared_data_patterns()
-    assert _covered(resolved, patterns), (
-        f"{resolved} is read at startup but package-data does not ship it: {patterns}")
 
-    # The general rule the ticket asks for - a new template or static directory cannot be
-    # forgotten, because every non-Python file in the package must be covered by a pattern.
-    uncovered = [rel for rel in _data_files_on_disk() if not _covered(rel, patterns)]
-    assert uncovered == [], (
-        f"these files ship with the package only if package-data lists them: {uncovered}; "
-        f"declared: {patterns}")
+    missing = []
+    for rel in _data_files_on_disk():
+        expected = f"testops/{rel}"
+        if expected not in names:
+            missing.append((rel, expected, _patterns_matching(rel, patterns)))
+
+    assert missing == [], (
+        "the built wheel is missing non-Python files that are in the package tree; "
+        "package-data patterns are relative to the package root, and the wheel is the authority:\n"
+        + "\n".join(
+            f"  {rel}: expected in wheel as {expected}; "
+            f"declared patterns matching this file: {matches or 'none'}"
+            for rel, expected, matches in missing)
+        + f"\n  all declared patterns: {patterns}"
+    )

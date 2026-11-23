@@ -15,6 +15,7 @@ from __future__ import annotations
 import pytest
 
 from support import (install_store_guard, repository_snapshot, snapshot_difference)
+from wheel_build import build_wheel_for_session
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -32,3 +33,9 @@ def repo_guard():
     yield before
     difference = snapshot_difference(before, repository_snapshot())
     assert not any(difference.values()), f"a test wrote into the repository: {difference}"
+
+
+@pytest.fixture(scope="session")
+def built_wheel(tmp_path_factory):
+    """TESTOPS-48 AC4: one wheel per session, shared by packaging and distribution checks."""
+    return build_wheel_for_session(tmp_path_factory)
