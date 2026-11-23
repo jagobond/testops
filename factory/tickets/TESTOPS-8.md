@@ -2,7 +2,7 @@
 id: TESTOPS-8
 title: Packaging proof - install into a fresh venv and import through the distribution
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-2
 ---
