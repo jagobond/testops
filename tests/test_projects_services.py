@@ -163,7 +163,7 @@ def test_settings_refuse_a_credential_and_say_why(tmp_path):
     services.add_project(conn, "team", "Team")
     try:
         for secret in ("ghp_" + "a1B2c3D4e5F6g7H8i9J0" * 2,
-                       "Bearer abc123", "my-password", "shhh-secret", "an-api-token"):
+                       "Bearer abc123", "my-password", "the-secret", "an-api-token"):
             with pytest.raises(services.ConfigError) as refused:
                 services.add_service(conn, "team", "git_repo", "test", "tests",
                                      {"repo": "o/tests", "credential": secret})
