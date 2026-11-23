@@ -1,0 +1,30 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-49 - the guard against a test that passes when its subject
+has vanished.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t49 (branch `factory/testops-49-not-vacuous`). Work only here.
+Ticket:  factory/tickets/TESTOPS-49.md
+Build:   factory/reports/2026-11-23/TESTOPS-49-build.md
+Prior review: factory/reports/2026-11-23/TESTOPS-48-review.md, concern 1 - the evidence.
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Run the suite from this worktree with the interpreter above.
+- **Re-run the reviewer's original attack yourself:** monkeypatch `_data_files_on_disk` to return `[]` and confirm the
+  test now FAILS with a message saying the probe is broken. Then the second attack the build may have missed: point
+  `PACKAGE` at a directory that does not exist, and at a directory that exists but holds only Python files. All three
+  must fail; report each.
+- **AC3, the minimum count:** delete `judgement/prompts/level_fitness.md` from the tree (copy it aside first) and confirm
+  the test fails; restore it. Then add a third fake non-Python file, confirm the test still PASSES without an edit, and
+  remove it. If adding a file needs a code change, AC3 is not met.
+- **Did the guard weaken the verdict?** The build says `_data_files_on_disk` and the namelist verdict are unchanged.
+  Break the wheel (narrow package-data) and confirm the wheel-coverage failure still fires, so the new guard did not
+  short-circuit it.
+- **AC4:** the build edited `tests/test_partial_reads_visible.py` and `tests/test_verdict_vocabulary.py`. Find out why, and
+  say whether the same rule was applied correctly there or whether those edits are scope creep that weakens another
+  proof. This is the part of the change nobody asked for.
+- **Hygiene:** confirm no file under `testops/` changed (`git diff --stat origin/main...HEAD -- testops/` empty) and that
+  the suite count is unchanged.
+- Do not edit product code or the ticket. Write exactly one file:
+  factory/reports/2026-11-23/TESTOPS-49-review.md with: ## Verdict; ## The three attacks; ## AC3 both ways; ## Verdict
+  not weakened; ## The two extra files; ## Hygiene; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 250 words.
