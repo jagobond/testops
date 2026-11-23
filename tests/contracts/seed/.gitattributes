@@ -1,0 +1,3 @@
+# The seed's blobs are content-addressed: the file name is the sha256 of its bytes. A line-ending
+# conversion would change the bytes a page quotes while keeping the name, so they are stored as-is.
+blobs/** -text

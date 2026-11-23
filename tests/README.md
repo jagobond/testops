@@ -101,6 +101,32 @@ The suite is deliberately small. It pins the invariants later tickets depend on:
 Every test that needs a database creates it under pytest's `tmp_path`. No test reads the network,
 credentials, Jira, or an external repository - and no test may write to the live store.
 
+## The page-contract suite owns its server (TESTOPS-53)
+
+`tests/contracts/` is the blind page-contract suite from TESTOPS-7. It used to default to the live
+deployment (`http://100.121.128.21:8791`) and POST a timestamped audit project into the store the
+product runs from, so a bare `pytest` wrote to the Product Owner's evidence. It no longer can:
+
+- `conftest.py` starts a child process (`_server.py`) that serves the product on **port 0** - the
+  kernel chooses the port and the child prints it, so the suite cannot collide with, or be
+  silently hijacked by, another binder;
+- the child's store is built under pytest's temp directory from `tests/contracts/seed/` by
+  `harness.build_seed_store`; the seed is fixture input, not a copy of `data/`;
+- every inherited `TESTOPS_*` variable is stripped from the child and `TESTOPS_DATA` is set to that
+  temp directory, so the parent's environment cannot redirect it;
+- `harness.require_disposable_store` refuses any store outside the temp directory, and the child is
+  never launched before that check;
+- a server that cannot start raises `ServerUnavailable`, which the session fixture turns into
+  `pytest.skip` with the reason. There is no fallback URL and no default host.
+
+`test_contract_harness.py` pins all of it, including a source scan that fails if a live address or
+`TESTOPS_BASE` is written back into the suite. Regenerate the seed with
+`python tests/contracts/seed/make_seed.py <store>` (opens the store read-only; see
+`tests/contracts/seed/README.md`).
+
+`make_seed.py` is a fixture tool, not a test: it is in the seed directory and pytest does not
+collect it.
+
 ## Fixtures and the live store
 
 A review fixture belongs in a COPY of `data/`, never in the live store (TESTOPS-35). The reviewer
