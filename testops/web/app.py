@@ -641,8 +641,9 @@ def near_miss_sentence(product: dict) -> str:
                  or not product.get("assertion_verb"))
     if product.get("near_miss_kind") == "quoted_copy":
         shown = esc(product.get("display_text") or "")
+        copy = f'\u201c{shown}\u201d' if shown else "text a person is shown"
         return (f'it declares <span class="code">{route}</span>, which shares the word '
-                f'\u201c{word}\u201d, but the assertion quotes display copy \u201c{shown}\u201d '
+                f'\u201c{word}\u201d, but the assertion quotes display copy {copy} '
                 f'\u2014 text a person is shown rather than the subject of the check \u2014 so the '
                 f'shared word says nothing about whether the product publishes what the check is '
                 f'about.')
@@ -651,6 +652,13 @@ def near_miss_sentence(product: dict) -> str:
         return (f'it declares <span class="code">{route}</span>, but the assertion quotes two things '
                 f'\u2014 {named} \u2014 and nothing in the sentence says which one the check is '
                 f'about, so no shared word is counted as a repeat.')
+    if product.get("near_miss_kind") == "passive_voice":
+        phrase = esc(product.get("passive") or "")
+        said = f'\u201c{phrase}\u201d' if phrase else "in the passive voice"
+        return (f'it declares <span class="code">{route}</span>, which shares the word '
+                f'\u201c{word}\u201d, but the assertion is passive {said} and this rule does not '
+                f'assess what a passive claim asks the product to do, so a shared noun alone says '
+                f'nothing about whether the product already does this.')
     if no_intent:
         return (f'it declares <span class="code">{route}</span>, which shares the word '
                 f'\u201c{word}\u201d, but the assertion names no act this rule recognises (none '

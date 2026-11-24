@@ -1066,4 +1066,137 @@ def test_a_quoted_display_string_can_never_become_a_repeat_finding():
         assert product["near_miss"] is True, text
 
 
+# --------------------------------------------------- TESTOPS-85: refusing costs too
 
+# A corpus where both `room` and `booking` are words the product carries, so a compound noun can be
+# read either way and the test cannot pass by the quoted word simply not matching anything.
+COMPOUND_CORPUS = QUOTED_BOOKING_CORPUS + (GET_ROOM, POST_ROOM)
+
+
+def test_a_quoted_word_before_a_product_noun_is_an_entity_when_a_verb_governs_it():
+    """AC1: `a "room" booking exists` is a claim about a booking, not a caption.
+
+    The quoted word is itself a word the product carries, so `"room" booking` is a compound domain
+    noun and the head noun is the subject. A caption in front of a product noun (`a "Welcome"
+    message`) has a quoted word the product does not carry and stays copy. Pinned both ways, and
+    the intent verb is the same rescue as the existence verb.
+    """
+    entity = _verb_claim('a "room" booking exists', COMPOUND_CORPUS)
+    product = entity.detail["product"]
+    assert entity.verdict == "distinct"
+    assert product["near_miss"] is True
+    assert product["near_miss_kind"] == "no_intent"
+    assert product["word"] == "booking"
+    assert product["quoted_copy"] == []
+    # The head noun is the subject even though only the modifier is quoted.
+    assert product["word_quoted"] is False
+    assert "booking" in product["reason"]
+
+    created = _verb_claim('a "room" booking is created', COMPOUND_CORPUS)
+    assert created.verdict == "repeats_product"
+    assert created.detail["product"]["word"] == "booking"
+    assert created.detail["product"]["route"] == "POST /booking"
+
+    # The caption side is unchanged: `Welcome` is not a word the product carries.
+    caption = _verb_claim('a "Welcome" message is created', MESSAGE_CORPUS).detail["product"]
+    assert caption["near_miss_kind"] == "quoted_copy"
+    assert caption["word"] == "message"
+    assert caption["display_text"] == "Welcome"
+
+    # With no governing verb the pair is still a caption, so nothing is rescued.
+    plain = _verb_claim('the "room" booking', COMPOUND_CORPUS).detail["product"]
+    assert plain["near_miss"] is True
+    assert plain["state"] == "zero"
+
+
+def test_the_copy_refusal_is_word_aware_and_cannot_hide_an_unquoted_subject():
+    """AC2: `the "booking" booking` is assessed on the unquoted `booking`, not refused as copy.
+
+    The same word occurs unquoted and is the only candidate subject, so the quoted run is a
+    compound modifier, not a caption. The stored reason must also name the noun rather than print
+    an empty pair of quotes.
+    """
+    product = _verb_claim('the "booking" booking', QUOTED_BOOKING_CORPUS).detail["product"]
+    assert product["state"] == "zero"
+    assert product["near_miss_kind"] == "no_intent"
+    assert product["word"] == "booking"
+    assert product["quoted_copy"] == []
+    assert product["word_quoted"] is False
+    assert '""' not in product["reason"]
+    assert "\u201c\u201d" not in product["reason"]
+    assert "display copy" not in product["reason"]
+
+    # The word-level logic is what decides: a word with a free occurrence is not suppressed by a
+    # copy run elsewhere in the sentence, even though the claim itself is still refused (copy can
+    # never become a finding - TESTOPS-82).
+    domain = frozenset({"booking", "message", "room"})
+    assert level_fitness._quoted_copy_runs('the "booking" booking', domain) == []
+    assert level_fitness._quoted_copy_suppressed('the "booking" booking', domain) == {}
+    assert level_fitness._quoted_copy_suppressed(
+        'the user sees "booking" and a booking exists', domain) == {}
+    assert set(level_fitness._quoted_copy_suppressed('a "Welcome" message is created',
+                                                     domain)) == {"welcome", "message"}
+
+
+def test_every_near_miss_state_has_a_reason_a_reader_can_act_on():
+    """AC3: no near miss may carry an empty reason, and the page must say the same sentence.
+
+    The fault this pins is the one TESTOPS-78 fixed recurring: a `quoted_copy` record stored
+    `quotes display copy ""` because the reason interpolated a field that only carries unquoted
+    display copy. Every state the fixtures produce is walked here, and the set is asserted so a
+    new state cannot appear without a sentence a reader can act on.
+    """
+    fixtures = {
+        "display_copy": (BANNER, DISPLAY_CORPUS),
+        "no_intent": ('the "booking" exists', QUOTED_BOOKING_CORPUS),
+        "verb_differs": ('a "booking" is created', BOOKING_CORPUS),
+        "quoted_copy": ('a "Welcome" message is created', MESSAGE_CORPUS),
+        "ambiguous_quotes": ('the "booking" and the "message" are created',
+                             QUOTED_BOOKING_CORPUS + (GET_MESSAGE,)),
+        "passive_voice": ('a "room" gets booked', ROOM_CORPUS),
+    }
+    for kind, (text, surfaces) in fixtures.items():
+        product = _verb_claim(text, surfaces).detail["product"]
+        assert product["near_miss"] is True, (kind, product)
+        assert product["near_miss_kind"] == kind, (kind, product["near_miss_kind"])
+        reason = (product["reason"] or "").strip()
+        assert reason, (kind, "empty stored reason")
+        assert len(reason) > 60, (kind, reason)
+        assert "check this one by hand" in reason or "check whether" in reason, (kind, reason)
+        assert '""' not in reason and "\u201c\u201d" not in reason, (kind, reason)
+        page = app.near_miss_sentence(product)
+        assert page.strip(), (kind, "empty page sentence")
+        assert '""' not in page and "\u201c\u201d" not in page, (kind, page)
+        # Debugging shorthand must never reach a reader.
+        assert "I4" not in page and "KP" not in page, (kind, page)
+
+
+def test_a_passive_claim_is_declared_not_assessed():
+    """AC4: `a "room" gets booked` records that a passive claim was not assessed, and why.
+
+    `gets` is spelled like the read intent `get`, so it used to agree with `GET /room` and publish
+    a read where the sentence asserts a change of state. The auxiliary is no longer the act; when
+    the participle names no act the intent table knows, the record says so in words on the page.
+    The control `a "room" gets created` still reads create/POST.
+    """
+    claim = _verb_claim('a "room" gets booked', ROOM_CORPUS)
+    product = claim.detail["product"]
+    assert claim.verdict != "repeats_product"
+    assert product["state"] == "zero"
+    assert product["near_miss_kind"] == "passive_voice"
+    assert product["passive"] == "gets booked"
+    assert product["assertion_verb"] == ""
+    assert product["word"] == "room"
+    assert "passive" in product["reason"]
+    assert "does not assess" in product["reason"]
+    assert "not counted as a repeat" in product["reason"]
+
+    page = app.near_miss_sentence(product)
+    assert "passive" in page
+    assert "does not assess" in page
+
+    control = _verb_claim('a "room" gets created', ROOM_CORPUS)
+    assert control.verdict == "repeats_product"
+    assert control.detail["product"]["assertion_verb"] == "create"
+    assert control.detail["product"]["route"] == "POST /room"
+    assert control.detail["product"]["passive"] == ""
