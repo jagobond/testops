@@ -78,6 +78,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-60 | The unplaced section is a 93KB wall at 220 entries, and its anchors are positional | F1 | ready | From the T57 review: group by reason, disclose or cap with an honest count, state the reason once, and anchor on the claim id |
 | TESTOPS-61 | The grammatical rule reads the first word and the last part only | F1 | ready | From the T59 review: `this-is-not-a-password` refused, `acme-their-password` accepted; `github_pat_` truncation goes green silently; drop the vendor appeal |
 | TESTOPS-62 | The clause exemption fires on a word, not a clause | F1 | ready | From the T61 review: `my-password-is-here`, `has-my-token`, `acme-no-password` all accepted. Require a predication whose complement is the credential word |
+| TESTOPS-63 | `key` missing from the credential vocabulary | F1 | ready | From the T62 review: `the-api-key-is-xyz`, `my-private-key` bypass every branch because only `apikeys?` and `_keys?` are matched. Qualify the word, protect the honest `key` names |
 
 |----|-------|---------|--------|------|
 

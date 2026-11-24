@@ -2,7 +2,7 @@
 id: TESTOPS-62
 title: The clause exemption fires on a word, not on a clause
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-61
 ---
