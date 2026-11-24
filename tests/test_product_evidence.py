@@ -792,3 +792,129 @@ def test_quoted_copy_is_not_the_assertions_intent():
     assert refused["state"] == "zero"
     assert refused["verb_agrees"] is False
 
+
+# -------------------------------------------- TESTOPS-82: quoting is not a signal of copy
+
+# The reviewer's five probes, verbatim. Four are assertions a person would trust - they quote their
+# subject to be unambiguous - and the fifth is the one that used to accuse on the incidental word
+# `list` after `room` had been withheld.
+QUOTED_SHOWN = 'the "booking" record is shown'
+QUOTED_CREATED = 'a "booking" is created'
+QUOTED_EXISTS = 'the "booking" exists'
+QUOTED_SEARCH = 'search for "room" returns results'
+QUOTED_LIST = 'verify the "room" type appears in the list'
+
+POST_BOOKING = _surface("POST /booking", "create booking")
+# Six surfaces: "booking" in three of them is exactly half, so the common-share guard cannot be what
+# refuses the creation probe - only the act can.
+QUOTED_BOOKING_CORPUS = (GET_BOOKING, DELETE_BOOKING, POST_BOOKING, BRANDING, AUTH, REPORTS)
+HEALTH = _surface("GET /health", "get health")
+PING = _surface("GET /ping", "ping")
+DOCS = _surface("GET /docs", "read docs")
+ROOM_CORPUS = (GET_ROOM, POST_ROOM, BRANDING, AUTH, REPORTS, HEALTH)
+# `list` is a route word here, and `room` is carried by three of eight surfaces. Without the
+# quoted-subject preference `list` wins on rarity; with it, `room` is the word the record uses.
+ROOM_LIST = _surface("GET /list", "list the room")
+LIST_CORPUS = (ROOM_LIST, GET_ROOM, BRANDING, AUTH, REPORTS, HEALTH, PING, DOCS)
+
+
+def test_a_single_quoted_word_is_the_subject_and_not_display_copy():
+    """AC1: all five probes, each verdict stated, on corpora where the act can be judged.
+
+    A single quoted word with no second mark stays a candidate shared word. ``the "booking" record
+    is shown`` is a repeat on its merits - the verb ``shown`` and a GET route agree - and
+    ``a "booking" is created`` is a repeat because ``created`` agrees with POST. The two sentences
+    that name no act the rule knows are refused on the act, not on the quoting.
+    """
+    assert level_fitness._display_copy(QUOTED_SHOWN) == {}
+    assert level_fitness._display_copy(QUOTED_CREATED) == {}
+    assert level_fitness._display_copy(QUOTED_EXISTS) == {}
+    assert level_fitness._display_copy(QUOTED_SEARCH) == {}
+    assert level_fitness._display_copy(QUOTED_LIST) == {}
+
+    # 1. the "booking" record is shown -> show agrees with GET /booking/{id}. The word `record`
+    #    places the claim as stored data (I1), so the claim is `review`; what the ticket turns on
+    #    is that the rule no longer refuses `booking` as copy - the match is a real one.
+    shown = _verb_claim(QUOTED_SHOWN, QUOTED_BOOKING_CORPUS)
+    assert shown.verdict == "review"
+    assert shown.detail["product"]["word"] is None
+    match = level_fitness.product_match(QUOTED_SHOWN, QUOTED_BOOKING_CORPUS)
+    assert match is not None
+    assert match["word"] == "booking"
+    assert match["route"] == "GET /booking/{id}"
+    assert match["display_copy"] is False
+    assert match["verb_agrees"] is True
+
+    # 2. a "booking" is created -> creation agrees with POST /booking
+    created = _verb_claim(QUOTED_CREATED, QUOTED_BOOKING_CORPUS)
+    assert created.verdict == "repeats_product"
+    assert created.detail["product"]["word"] == "booking"
+    assert created.detail["product"]["route"] == "POST /booking"
+
+    # 3. the "booking" exists -> no recognised act, so distinct; the noun is still the subject
+    exists = _verb_claim(QUOTED_EXISTS, QUOTED_BOOKING_CORPUS)
+    assert exists.verdict == "distinct"
+    assert exists.detail["product"]["near_miss_kind"] == "no_intent"
+    assert exists.detail["product"]["word"] == "booking"
+    assert exists.detail["product"]["word_quoted"] is True
+
+    # 4. search for "room" returns results -> no recognised act; `room` is the shared word
+    search = _verb_claim(QUOTED_SEARCH, ROOM_CORPUS)
+    assert search.verdict == "distinct"
+    assert search.detail["product"]["near_miss_kind"] == "no_intent"
+    assert search.detail["product"]["word"] == "room"
+
+    # 5. verify the "room" type appears in the list -> on `room`, never on `list`
+    listed = _verb_claim(QUOTED_LIST, LIST_CORPUS)
+    assert listed.detail["product"]["word"] == "room"
+    assert listed.detail["product"]["route"] == "GET /room/{id}"
+
+
+def test_a_quoted_noun_outranks_an_incidental_word_outside_the_quotes():
+    """AC2: the strongest shared noun in the quotes is the one the record uses.
+
+    ``list`` sits in a route and is rarer than ``room``, so it wins the old ranking. It is not what
+    the assertion is about: the quoted ``room`` is. The record must name ``room`` - a weaker word
+    outside the run may never justify the match.
+    """
+    product = _verb_claim(QUOTED_LIST, LIST_CORPUS).detail["product"]
+    assert product["word"] == "room"
+    assert product["word_quoted"] is True
+    assert product["route"] == "GET /room/{id}"
+    # The refusal is never justified with the incidental word.
+    assert '"list"' not in product["reason"]
+    assert level_fitness._quoted_subject_words(QUOTED_LIST) == frozenset({"room"})
+
+
+def test_a_quoted_run_is_copy_only_when_a_second_mark_says_so():
+    """AC1: the three second marks, and the single quoted word that carries none of them."""
+    # (a) a multi-word quoted run is copy.
+    assert level_fitness._display_copy('Visitor sees "Booking created"') == {
+        "booking": "Booking created", "created": "Booking created"}
+    # (b) a display verb immediately in front of the quotes makes even one word copy.
+    for verb in ("shows", "sees", "displays", "reads", "gets", "receives", "says"):
+        _, copy = next(iter(level_fitness._display_copy(f'Visitor {verb} "Booking"').items()))
+        assert copy == "Booking", verb
+    # (c) banner punctuation inside the run is copy, whatever stands in front of it.
+    assert level_fitness._display_copy('Visitor checks the "Success!" banner') == {
+        "success": "Success!"}
+    # No second mark: the quotes alone are not copy.
+    assert level_fitness._display_copy(QUOTED_SHOWN) == {}
+    assert level_fitness._display_copy('the "booking" exists') == {}
+
+
+def test_the_refusal_distinguishes_copy_from_a_quoted_subject_refused_for_another_reason():
+    """AC4: the two near misses say different things, and neither calls the subject incidental."""
+    copy = _verb_claim(BANNER, DISPLAY_CORPUS).detail["product"]
+    assert copy["near_miss_kind"] == "display_copy"
+    assert "text a person is shown" in copy["reason"]
+    assert "rather than the subject of the check" in copy["reason"]
+
+    subject = _verb_claim(QUOTED_EXISTS, QUOTED_BOOKING_CORPUS).detail["product"]
+    assert subject["near_miss_kind"] == "no_intent"
+    assert "quoting is not why it is refused" in subject["reason"]
+    assert "rather than the subject of the check" not in subject["reason"]
+    assert "text a person is shown" not in subject["reason"]
+    assert "rather than the subject of the check" not in app.near_miss_sentence(subject)
+
+

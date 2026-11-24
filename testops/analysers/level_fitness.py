@@ -1,4 +1,24 @@
-"""Level fitness v0.13 - one claim per assertion, in words a reader can act on.
+"""Level fitness v0.14 - one claim per assertion, in words a reader can act on.
+
+v0.14 is TESTOPS-82: quoting is not by itself a signal of copy.
+
+  * **a quoted run is display copy only when a second mark says so.** v0.13 refused any shared
+    word that occurred only inside a quoted literal, which refused exactly the best-written
+    assertions: ``the "booking" record is shown``, ``a "booking" is created``, ``the "booking"
+    exists``, ``search for "room" returns results``. Well-written Gherkin quotes its subject to be
+    unambiguous, so a single quoted word that is the sentence's only naming of its subject stays a
+    candidate shared word. Copy now needs one of three marks beside the quotes: the run holds more
+    than one word, a display verb stands immediately in front of it (``shows``, ``sees``,
+    ``displays``, ``reads``, ``gets``, ``receives``, ``says``), or banner punctuation sits inside it
+    (``!``). ``the "booking" record is shown`` is judged on its merits - the verb ``shown`` and a
+    GET route - and is no longer refused for quoting alone;
+  * **the quoted noun outranks an incidental word.** ``verify the "room" type appears in the list``
+    used to withhold ``room`` and then accuse on ``list``, a word that happens to sit in a route.
+    When a quoted run names a noun the product also carries, that is the noun the record uses;
+    a weaker word outside the run is never allowed to justify the match;
+  * **the refusal says which case it is.** A display-copy refusal says the word is "text a person
+    is shown"; a quoted entity refused because the act does not agree says so instead, and never
+    calls the assertion's own subject something other than the subject of the check.
 
 v0.13 is TESTOPS-79: display copy is not the subject of the claim.
 
@@ -252,7 +272,7 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.13"
+version = "0.14"
 uses_model = False
 
 # What this analyser's verdict rests on, and what it would like to check itself against but does
@@ -514,7 +534,7 @@ def _product_meaningful(text: str, *, skip: frozenset[str] = frozenset()) -> set
             if len(word) >= 3 and word not in PRODUCT_STOP and word not in skip}
 
 
-# ------------------------------------------------------- the assertion's display copy (v0.13)
+# ------------------------------------------------------- the assertion's display copy (v0.13/82)
 #
 # A word a person is *shown* is not the subject of the check. "Visitor will get Booking Successful!
 # message" is about a banner; "message" is part of the copy on it, and the product's ``get message``
@@ -523,7 +543,10 @@ def _product_meaningful(text: str, *, skip: frozenset[str] = frozenset()) -> set
 #
 # Display copy is recognised from the assertion's own typography, never from a list of nouns:
 #
-#   * a quoted run (``"..."``, ``'...'``, the curly forms) is text the assertion reproduces. A
+#   * a quoted run (``"..."``, ``'...'``, the curly forms) is *only* copy when a second mark says so
+#     (TESTOPS-82). Quoting a noun is how well-written Gherkin names its subject, so a single
+#     quoted word is a candidate shared word unless the run holds more than one word, a display
+#     verb stands immediately in front of it, or banner punctuation (``!``) sits inside it. A
 #     quoted *placeholder* (``'<room_name>'``, ``'{room}'``) is a parameter, not copy, and stays a
 #     candidate word - ``room`` in the room-creation assertion is a slot, not a literal;
 #   * a capitalised phrase introduced by a display verb (``get``, ``see``, ``show``, ``display``,
@@ -539,7 +562,9 @@ def _product_meaningful(text: str, *, skip: frozenset[str] = frozenset()) -> set
 _DISPLAY_VERBS = frozenset({"get", "gets", "getting", "got", "see", "sees", "saw", "seen",
                             "seeing", "show", "shows", "showed", "shown", "showing", "display",
                             "displays", "displayed", "displaying", "render", "renders",
-                            "rendered", "rendering"})
+                            "rendered", "rendering", "read", "reads", "reading", "receive",
+                            "receives", "received", "receiving", "say", "says", "said", "saying"})
+
 
 # Where a banner phrase stops. These are connectives, determiners and auxiliaries - words that
 # cannot be part of a banner's own text - and not prepositions: "Thanks for getting in touch" has
@@ -574,12 +599,60 @@ def _quoted_runs(text: str) -> list[tuple[int, int]]:
             if not _is_slot(match.group(0)[1:-1])]
 
 
-def _display_runs(text: str) -> list[tuple[int, int]]:
-    """The character spans of the assertion's quoted copy and banner phrases (TESTOPS-79)."""
-    runs = list(_quoted_runs(text))
+def _quoted_copy_runs(text: str) -> list[tuple[int, int]]:
+    """The quoted runs that carry a second mark of display copy (TESTOPS-82, AC1).
+
+    Quoting a noun is how well-written Gherkin names its subject, so the quotes alone say nothing.
+    Copy is a quoted run that holds more than one word, stands behind a display verb, or carries
+    banner punctuation (``!``) inside it. A single quoted word with none of those marks is the
+    assertion naming its subject, and stays a candidate shared word.
+    """
     tokens = [(match.group(0), match.start(), match.end())
               for match in _WORD_TOKEN.finditer(text)]
-    quoted = [any(start <= s and e <= stop for start, stop in runs) for _w, s, e in tokens]
+    runs: list[tuple[int, int]] = []
+    for match in _QUOTED_RUN.finditer(text):
+        content = match.group(0)[1:-1]
+        if _is_slot(content):
+            continue
+        start, end = match.start() + 1, match.end() - 1
+        inside = [token for token in tokens if start <= token[1] and token[2] <= end]
+        if len(inside) > 1 or "!" in content:
+            runs.append((start, end))
+            continue
+        # A display verb immediately in front of the opening quote introduces the run as copy.
+        before = [token for token in tokens if token[2] <= match.start()]
+        if before and before[-1][0].lower() in _DISPLAY_VERBS:
+            runs.append((start, end))
+    return runs
+
+
+def _quoted_subject_words(text: str) -> frozenset[str]:
+    """The words a quoted run names as the assertion's subject, not as copy (TESTOPS-82, AC2).
+
+    ``verify the "room" type appears in the list`` names ``room``; ``list`` is incidental. When one
+    of these words is also carried by the product, it is the noun the record must use - a weaker
+    word outside the run may never justify the match.
+    """
+    copy_runs = _display_runs(text)
+    words: set[str] = set()
+    for start, stop in _quoted_runs(text):
+        if any(run_start <= start and stop <= run_end for run_start, run_end in copy_runs):
+            continue
+        for match in _WORD_TOKEN.finditer(text, start, stop):
+            words.add(match.group(0).lower())
+    return frozenset(words)
+
+
+def _display_runs(text: str) -> list[tuple[int, int]]:
+    """The character spans of the assertion's display copy and banner phrases (TESTOPS-79/82)."""
+    runs = list(_quoted_copy_runs(text))
+    # Every quoted literal bounds a banner phrase, copy or not: a title cannot swallow a quote.
+    quoted_spans = _quoted_runs(text)
+    tokens = [(match.group(0), match.start(), match.end())
+              for match in _WORD_TOKEN.finditer(text)]
+    quoted = [any(start <= s and e <= stop for start, stop in quoted_spans)
+              for _w, s, e in tokens]
+
     for index, (word, start, _end) in enumerate(tokens):
         if index == 0 or quoted[index]:
             continue
@@ -730,17 +803,20 @@ def product_match(assertion: str, surfaces) -> dict | None:
     Deterministic and total: every candidate is scored and the lowest key wins, so the same assertion
     over the same surfaces always names the same route. The ranking, in order, prefers
 
-      0. a surface whose HTTP method is one the assertion's verb is settled by (TESTOPS-72
+      0. a word a single quoted run names - the assertion quoting its own subject - over any word
+         outside the quotes (TESTOPS-82, AC2), so an incidental word in a route cannot justify the
+         match;
+      1. a surface whose HTTP method is one the assertion's verb is settled by (TESTOPS-72
          amendment: "create/add/new" -> POST, "read/get/show/display/list" -> GET, "update/edit/
          change" -> PUT/PATCH, "delete/remove" -> DELETE). This is a rule, not a tie-break: a
          creation assertion is not evidence about a read route however well the nouns agree;
-      1. a word the surface's *route* carries over a word only its claim carries - the route names
+      2. a word the surface's *route* carries over a word only its claim carries - the route names
          the thing, so a shared route word says the product publishes that thing at an address;
-      2. the rarer word, because a word in 3 of 25 surfaces is more specific than one in 12;
-      3. the surface sharing more of the assertion's meaningful words;
-      4. the surface whose claim uses the assertion's own verb ("get message" for "will get ...
+      3. the rarer word, because a word in 3 of 25 surfaces is more specific than one in 12;
+      4. the surface sharing more of the assertion's meaningful words;
+      5. the surface whose claim uses the assertion's own verb ("get message" for "will get ...
          message"), which separates a read from a delete that happens to name the same noun;
-      5. the surface id, so the choice is stable when everything else ties.
+      6. the surface id, so the choice is stable when everything else ties.
 
     Two guards refuse a candidate outright: a stop word is never evidence, and a word carried by more
     than :data:`PRODUCT_COMMON_SHARE` of the surfaces is the product's subject rather than this
@@ -757,10 +833,16 @@ def product_match(assertion: str, surfaces) -> dict | None:
     surface shares nothing but such a word, the nearest one is still returned - with
     ``display_copy`` set and the copy it sits in - so the refusal names the route, the word and the
     banner rather than falling silent.
+
+    TESTOPS-82: a word inside a single quoted run is the assertion naming its subject, and such a
+    word ranks above any word outside it. ``verify the "room" type appears in the list`` must record
+    ``room``; ``list`` may never be the word a match is justified with.
     """
     display = _display_copy(assertion)
     display_words = frozenset(display)
+    subject_words = _quoted_subject_words(assertion)
     assertion_words = _product_meaningful(assertion, skip=display_words)
+
     readings = [_surface_reading(surface) for surface in surfaces or ()]
     if not readings or not (assertion_words or display_words):
         return None
@@ -777,7 +859,10 @@ def product_match(assertion: str, surfaces) -> dict | None:
         agrees = bool(assertion_verbs & claim_words)
         method = _surface_method(route)
         method_agrees = not (intent_methods and method and method not in intent_methods)
-        return (0 if method_agrees else 1,
+        # A quoted noun is the assertion's own naming of its subject, so it outranks any word
+        # outside the quotes - including one that happens to sit in a route (TESTOPS-82, AC2).
+        return (0 if word in subject_words else 1,
+                0 if method_agrees else 1,
                 0 if word in route_words else 1, frequency[word], -len(shared),
                 0 if agrees else 1, identifier, word)
 
@@ -819,6 +904,10 @@ def product_match(assertion: str, surfaces) -> dict | None:
             # The word is display copy the assertion reproduces, not the subject of the check
             # (TESTOPS-79). ``display_text`` is the phrase it sits in, so the refusal can quote it.
             "display_copy": is_copy, "display_text": display.get(word, "") if is_copy else "",
+            # A word inside a single quoted run is the assertion naming its subject, not copy
+            # (TESTOPS-82). The refusal can then say which case it is instead of blaming the
+            # quoting.
+            "word_quoted": word in subject_words,
             "verb_agrees": (intent is not None
                             and not (intent_methods and method and method not in intent_methods))}
 
@@ -863,8 +952,9 @@ def _product_record(interaction: str, assertion: str, surfaces, state: str, reas
               # an assertion with no recognised act at all, or a word that is only display copy
               # (TESTOPS-79). ``None`` on every other record.
               "near_miss_kind": None, "intent_known": None,
-              # The display copy a refused word sat in, so the page can quote it (TESTOPS-79).
-              "display_text": ""}
+              # The display copy a refused word sat in, so the page can quote it (TESTOPS-79), and
+              # whether the word is the assertion's quoted subject rather than copy (TESTOPS-82).
+              "display_text": "", "word_quoted": False}
     if not placed or interaction == "U":
         record["reason"] = ("nothing placed this claim, so nothing is known about what would settle "
                             "it and the product is not evidence about it")
@@ -936,6 +1026,11 @@ def _product_record(interaction: str, assertion: str, surfaces, state: str, reas
                                 f'noun alone is not evidence that the product already does this - '
                                 f'it is not counted as a repeat. Name the act the assertion checks, '
                                 f'or check this one by hand')
+            if match["word_quoted"]:
+                # AC4: the word is the assertion's subject, quoted for clarity. The refusal is
+                # about the act, and the record must not read as if the quoting were the fault.
+                record["reason"] += (f' The word is quoted because the assertion quotes its own '
+                                     f'subject; quoting is not why it is refused')
             return record
         record["near_miss_kind"] = "verb_differs"
         record["reason"] = (f'the product declares {match["route"]}, and it shares the word '
@@ -944,6 +1039,9 @@ def _product_record(interaction: str, assertion: str, surfaces, state: str, reas
                             f'{match["surface_verb"]} route does not settle "{match["assertion_verb"]}" '
                             f'- so it is not counted as a repeat. Check whether the product declares '
                             f'a route for "{match["assertion_verb"]}", or check this one by hand')
+        if match["word_quoted"]:
+            record["reason"] += (f' The word is quoted because the assertion quotes its own subject; '
+                                 f'quoting is not why it is refused')
         return record
     record["state"] = PRODUCT_FOUND
     record["reason"] = (f'the product declares {match["route"]}, whose own claim is '
