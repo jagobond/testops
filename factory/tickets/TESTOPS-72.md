@@ -2,7 +2,7 @@
 id: TESTOPS-72
 title: The product is evidence - is this test repeating work the developer already did?
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-70
 ---

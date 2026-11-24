@@ -93,6 +93,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-75 | Two sentences and one regex: polish from the residuals review | F1 | ready | A guard message cites a ticket id; `example-<word>` counts as a placeholder; the loud direction's ~72s cost is undocumented |
 | TESTOPS-76 | The source band says "consulted" where it means "read" | F1 | ready | From the T73 review: product tag cannot distinguish read-from-used; test-only sentence asserts blind spots the case never had; absence line untruthful until links are populated |
 | TESTOPS-77 | The Java reader refuses for the right reason - two false reasons left | F1 | ready | From the T74 round-2 review: type names harvested from string literals; interface refusals name a superclass that does not exist |
+| TESTOPS-78 | A verb-less assertion still accuses, and the near miss is never shown | F1 | ready | From the T72 round-2 review: `booking details present` matched a DELETE on the bare noun; near-miss records are stored but no page renders them |
 
 |----|-------|---------|--------|------|
 
