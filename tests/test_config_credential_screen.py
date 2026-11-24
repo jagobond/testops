@@ -513,6 +513,30 @@ BOUNDARY = [
     ("the key is " + "ghp_" + CLASSIC_BODY, "refused",
      "a real token pasted in prose is still a token (TESTOPS-59 AC1)"),
     ("aws id AKIA" + "Q7FZ2K9M4T8X1B6N", "refused", "a real AWS key ID inside a sentence"),
+    # --- TESTOPS-63: `key` - the commonest credential word - is screened in the instance position.
+    #     Qualification is what makes it a credential word; the branch it enters then decides the
+    #     verdict, exactly as it does for `secret` (`my-secret` refused, `client-secret` accepted).
+    ("the-api-key-is-xyz", "refused",
+     "`key` is the subject of the verb, not its complement: the name labels an instance"),
+    ("the-api-key", "refused", "a determiner and a qualified `key` head: a particular credential"),
+    ("my-key", "refused", "a possessive and the credential word `key` as the head: an instance"),
+    ("my-signing-key", "refused",
+     "a qualifier makes `key` the credential word and the possessive makes it an instance"),
+    ("key", "accepted",
+     "a bare `key` with no determiner names a configuration slot, not a particular credential"),
+    ("signing-key", "accepted",
+     "qualified but determiner-less: a kind name, the same branch that accepts client-secret"),
+    ("key-metrics", "accepted", "`key` qualifies the head `metrics`: a measurement, not a credential"),
+    ("primary-key", "accepted", "a database index, with no determiner: a kind name"),
+    ("foreign-key", "accepted", "the same grammatical shape as primary-key"),
+    ("key-value-store", "accepted", "a store of pairs; `key` is a qualifier and the head is `store`"),
+    ("sorting-keys", "accepted", "a collection name: `key` is a qualifier, not the head"),
+    ("keyboard", "accepted", "one word, and not the word `key`: nothing here is a credential"),
+    ("keynote", "accepted", "one word, and not the word `key`"),
+    ("keycloak", "accepted", "one word, and not the word `key`"),
+    ("keystore", "accepted", "one word, and not the word `key`"),
+    ("hotkey", "accepted", "one word, and not the word `key`"),
+    ("monkey", "accepted", "one word that merely ends in the letters k-e-y"),
 ]
 
 
@@ -708,6 +732,120 @@ def test_a_word_in_two_classes_cannot_satisfy_both_tests():
     assert services._looks_like_secret("acme-not-password") is None
     assert services._looks_like_secret("never-the-api-token") is not None, \
         "a true negator with no subject is still a fragment"
+
+
+# TESTOPS-63 AC1: `key` is the commonest credential word in real repositories and it was in no
+# vocabulary at all, so `the-api-key-is-xyz` was screened by nothing and accepted. It is a credential
+# word when qualified (`api-key`, `signing-key`, ...) or bare after a determiner/possessive
+# (`the-key`, `my-key`), and it enters the same branches as every other credential word - the same
+# refusals, the same reason.
+@pytest.mark.parametrize("value", [
+    "my-key", "their-key", "our-key", "the-key", "my_keys", "the_keys", "their_key",
+    "the-api-key", "the-private-key", "my-secret-key", "the-signing-key", "the-access-key",
+    "the-auth-key", "the-ssh-key", "the-encryption-key", "my-deploy-key",
+])
+def test_key_with_a_determiner_or_qualifier_names_an_instance(value):
+    reason = services._looks_like_secret(value)
+    assert reason is not None, f"{value!r} names a particular credential and was accepted"
+    assert reason == services._looks_like_secret("my-password"), \
+        "a key must be refused by the same branch, with the same reason, as every credential word"
+    with pytest.raises(services.ConfigError):
+        services.validate_settings({"name": value})
+
+
+def test_key_as_the_subject_of_a_verb_is_a_label_not_a_clause():
+    """TESTOPS-63 AC1: the T62 grammar applies unchanged - `key` is not a free pass to a verb."""
+    assert services._looks_like_secret("the-api-key-is-xyz") is not None, \
+        "`key` is the subject of `is`, not its complement, so the name labels an instance"
+    assert services._looks_like_secret("my-key-is-here") is not None
+    # The other direction: a predication about a key is still a statement, not a label.
+    assert services._looks_like_secret("this-is-not-a-key") is None
+
+
+# TESTOPS-63 AC2: `key` is not a credential word where it means something else. Each is pinned
+# here on its own, so the boundary cannot drift into refusing an honest name.
+KEY_MEANS_SOMETHING_ELSE = [
+    "key-value-store", "keyboard", "keynote", "keycloak", "monkey", "primary-key",
+    "foreign-key", "hotkey", "keystore", "key-metrics", "sorting-keys",
+    "key", "keys",
+]
+
+
+@pytest.mark.parametrize("value", KEY_MEANS_SOMETHING_ELSE)
+def test_key_that_means_something_else_is_accepted(value):
+    assert services._looks_like_secret(value) is None, \
+        f"{value!r} means something other than a credential and was refused"
+    assert services.validate_settings({"name": value}) == {"name": value}
+
+
+def test_key_is_not_a_credential_word_in_a_pair_or_a_settings_field_name():
+    """TESTOPS-63: qualification is applied in the instance rule only, and this is why.
+
+    A `name=value` pair and a settings field name are named by a word, not by a position: `sort_keys=`
+    is an honest setting, and `board_keys` is exactly the field the refusal message says settings may
+    hold. Refusing those to catch `my-key=` would be the false positive the ticket forbids.
+    """
+    for honest in ("sort_keys=True", "sorting_keys=asc", "board_keys", "primary_key=id"):
+        assert services._looks_like_secret(honest) is None, f"{honest!r} was refused"
+        assert services.validate_settings({"sorting_keys": honest}) == {"sorting_keys": honest}
+    assert services.validate_settings({"board_keys": "COTW"}) == {"board_keys": "COTW"}
+    # A `key` stated with its determiner *and* a value is a pasted credential, and the pair branch is
+    # where that shape is caught - the instance rule cannot see a value after '='.
+    for pasted in ("my-key=hunter2", "the-key: abc123", "their_keys=v"):
+        reason = services._looks_like_secret(pasted)
+        assert reason is not None, f"{pasted!r} is a pasted key and was accepted"
+        assert pasted not in reason, "refusing a pasted key must not print it"
+    # And prose that mentions a key with a colon stays prose: only a hyphen or underscore joins the
+    # two, so the determiner rule cannot reach into a sentence.
+    for prose in ("the key: it is in the vault", "ask the platform team for the key, then paste it"):
+        assert services._looks_like_secret(prose) is None, f"prose was refused: {prose!r}"
+
+
+# TESTOPS-63 AC3: the false-positive risk is asymmetric, so the measurement is written down. The
+# twelve T62 refusals keep their verdicts, the twenty T59 ordinary values and every AC2 value stay
+# accepted - and one new refusal of an honest name is a failure, not a cost.
+T62_REFUSED = [
+    "my-password-is-here", "the-token-is-abcd1234", "this-token-was-leaked", "my-secret-has-value",
+    "has-my-token", "is-my-password", "never-the-api-token", "no-password-yet",
+    "x-not-a-token-but-abcdef", "acme-no-password", "acme-their-no-password", "not-a-password",
+]
+T59_ORDINARY = [
+    "the token is validated in middleware", "our password policy is documented",
+    "Bearer tokens are refreshed hourly", "secrets are rotated weekly",
+    "jwt.decode lives in lib/auth.py", "no token needed for this endpoint",
+    "docs/how-to-reset-your-password.md", "pat-notes.md", "gh_workflows/", "akia-notes",
+    "xox-not-a-slack-token", "the private key is in vault", "my-password-manager",
+    "session-token", "vault-token", "password-list", "passwords-list", "token-refresh-service",
+    "the-token-service", "my-secret-store",
+]
+
+
+def test_the_key_vocabulary_refuses_no_honest_name_from_the_earlier_probe_sets():
+    assert len(T62_REFUSED) == 12 and len(T59_ORDINARY) == 20, "the probe sets are transcribed whole"
+    refused = {value: services._looks_like_secret(value) for value in T62_REFUSED}
+    assert all(reason is not None for reason in refused.values()), \
+        f"a T62 refusal was lost: {[v for v, r in refused.items() if r is None]}"
+    accepted = {value: services._looks_like_secret(value) for value in T59_ORDINARY}
+    new = [value for value, reason in accepted.items() if reason is not None]
+    assert not new, f"an honest T59 name is now refused: {new}"
+    newly_refused = [value for value in KEY_MEANS_SOMETHING_ELSE
+                     if services._looks_like_secret(value) is not None]
+    assert not newly_refused, f"a name where `key` means something else is refused: {newly_refused}"
+
+
+def test_the_key_probes_are_refused_over_http_at_the_name_field(live):
+    """TESTOPS-63: the hole was at the route a person uses, so the fix is pinned there too."""
+    base, path = live
+    _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
+    for value in ("the-api-key-is-xyz", "the-api-key", "my-key"):
+        status, body = _post(f"{base}/config/services", _service_fields(name=value))
+        assert status == 400, f"{value!r} was stored"
+        assert value not in body, "the refusal page printed the value"
+    conn = db.connect(path)
+    try:
+        assert services.list_services(conn, "team") == []
+    finally:
+        conn.close()
 
 
 # TESTOPS-61 AC3: a cut-off prefix is refused with a reason that says it is too short, and the
