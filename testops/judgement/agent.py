@@ -28,6 +28,11 @@ the model, so a changed record is a new key rather than a stale hit.
 
 **Failure is a sentence, never a blank.** No token, an unreachable model, a non-200, a rate limit, an
 empty reply, a malformed one: the agent-off page plus one sentence, and the cause in the ledger.
+
+TESTOPS-90 adds two things to that. A citation identifier written in the prose (``claim:2405``) is
+not a statistic and the number scan no longer reads it as one - the guard must never punish a model
+for citing. And a rejected reply gets one repair round: the model is shown the exact violations and
+asked to change only those sentences; a second rejection is the end, and the page falls back.
 """
 from __future__ import annotations
 
@@ -74,7 +79,7 @@ def canonical_state(served: str) -> str:
 
 # Part of the prompt hash. Bump it when the prompt changes: an explanation written under an older
 # instruction is not the same artefact, and a reader comparing two of them is owed the difference.
-PROMPT_VERSION = "explain-a-case/2"
+PROMPT_VERSION = "explain-a-case/3"
 
 # How long a resolved (or failed) token lookup is trusted. Long enough that a page view does not
 # wait three seconds on IMDS every time, short enough that a rotated token is picked up.
@@ -104,7 +109,9 @@ them exactly as they are printed.
 
 Rules, all of them absolute:
 - Every sentence must cite at least one identifier from the record. A sentence you cannot cite is a
-  sentence you must not write.
+  sentence you must not write. The identifiers belong in the "citations" array and nowhere else:
+  never write one in the explanation's prose. If a sentence is about the claim whose id is 12, the
+  prose says "the claim" and the citations array says "claim:12" - the prose never says "claim:12".
 - Use only the facts in the record. Do not add a fact from your own knowledge, however obvious.
 - A route must be quoted exactly as the record records it, with the same method. Do not change GET
   to PATCH or any other verb.
@@ -156,6 +163,7 @@ class Outcome:
     tokens_out: int = 0
     call_id: int | None = None
     violations: list[str] = field(default_factory=list)
+    repairs: int = 0                # how many repair rounds this view paid for
 
     @property
     def served(self) -> bool:
@@ -607,6 +615,12 @@ _DIGITS = re.compile(r"(?<!\w)\d+(?!\w)")
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
 _HAS_WORD = re.compile(r"[A-Za-z]{3,}")
 
+# An identifier a model may write in the prose: ``claim:12``, ``reason:12``. The digits in it name a
+# row; they are not a statistic about the case, so the number scan must not read them as one. A reply
+# that writes its own citation id in a sentence is citing, and the guard must not punish it for that
+# (TESTOPS-90: the number scan rejected the honest sentence that named ``claim:2405``).
+_CITATION_ID = re.compile(r"\b(?:claim|reason):\d+\b")
+
 # A count can be written as a word as easily as as a digit, and the reviewer's model wrote "four
 # findings" where the record held six. Words are read as numbers, digits are read as numbers, and
 # both are held against the same rows.
@@ -679,6 +693,42 @@ def parse_reply(raw: str) -> tuple[Reply | None, str]:
         cited.setdefault(number, []).extend(fact.strip() for fact in facts)
     return Reply(text=text, citations={number: tuple(dict.fromkeys(facts))
                                        for number, facts in cited.items()}), ""
+
+
+# One repair round. A reply that failed the check is shown its own violations once, and asked to
+# change only the sentences they name. A second failure is the end of it: the page falls back to the
+# honest sentence and the view is recorded as rejected. One round, because the alternative - asking
+# again and again until something passes - is a way of buying a pass rather than writing an
+# explanation, and it multiplies the cost of a model that cannot follow the instructions.
+REPAIR_ROUNDS = 1
+
+
+def repair_prompt(record: dict, model: str, reply: Reply,
+                  invented: list[str]) -> tuple[str, str, str]:
+    """The prompt that asks once for the named sentences to be fixed, and the hash that keys it.
+
+    The model is shown its own reply and the *exact* violations the check found, and told that only
+    the sentences those violations name may change. Every other sentence and every citation must
+    come back as it was, so a repair cannot quietly rewrite a reply the check has already accepted
+    sentence by sentence.
+    """
+    system, user, _ = prompt(record, model)
+    reasons = "\n".join(f"  - {violation}" for violation in invented)
+    previous = {"explanation": reply.text,
+                "citations": [{"sentence": number, "facts": list(facts)}
+                              for number, facts in sorted(reply.citations.items())]}
+    user = (f"{user}\n\nYour previous reply was rejected. These are the exact violations:\n{reasons}\n\n"
+            f"Your previous reply was:\n{json.dumps(previous)}\n\n"
+            "Write the explanation again. Change only the sentences those violations name, and "
+            "leave every other sentence and every citation exactly as it was. The identifiers from "
+            "the record's CITATIONS list belong in the citations array only - never write one in the "
+            "prose. Reply with one JSON object in the same shape, and nothing else.")
+    body = f"{PROMPT_VERSION}\n{system}\n{user}\n--\n{model}"
+    try:
+        digest = hashlib.sha256(body.encode()).hexdigest()[:16]
+    except UnicodeEncodeError:  # a record with undecodable text still gets a stable key
+        digest = hashlib.sha256(body.encode("utf-8", "replace")).hexdigest()[:16]
+    return system, user, digest
 
 
 def _route_paths(sentence: str) -> list[str]:
@@ -775,12 +825,15 @@ def violations(reply, record: dict) -> list[str]:
                 found.append(f"the line {value}, where the record says "
                              f"{sorted(cited_lines)[0]}")
 
-        # (d) Every number, digit or word, must be one the cited rows hold.
+        # (d) Every number, digit or word, must be one the cited rows hold. Identifiers written in
+        # the prose are masked first: the digits in ``claim:2405`` name a row, they do not measure
+        # anything, and scanning them punished the model for citing (TESTOPS-90).
+        scanned = _CITATION_ID.sub(" ", sentence)
         allowed_numbers: set[int] = set()
         for row in rows:
             allowed_numbers |= _numbers_in(row["text"])
         count_rows = [row for row in rows if row["kind"] == "count"]
-        for written, value in _numbers_written(sentence):
+        for written, value in _numbers_written(scanned):
             if value in allowed_numbers or value in reported_numbers:
                 continue
             named = [row for row in count_rows if row["name"].lower() in sentence.lower()]
@@ -995,15 +1048,60 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
                            cached=False, wall_ms=wall,
                            outcome="rejected" if invented else "ok",
                            cause=("rejected: " + invented[0]) if invented else "")
+    repairs = 0
+    # One repair round (AC3): the model is shown the exact violations and asked to change only those
+    # sentences. The reply is checked again from scratch, so a repair buys nothing but a second
+    # chance to satisfy the same check - it cannot relax it.
+    while invented and repairs < REPAIR_ROUNDS:
+        repairs += 1
+        repair_system, repair_user, repair_hash = repair_prompt(record, model, reply, invented)
+        started = time.monotonic()
+        try:
+            completion = ask(repair_system, repair_user, model,
+                             endpoint_url=cfg.endpoint, access_token=cfg.token)
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError, TimeoutError):
+            # The repair could not be asked for. The original reply is still rejected, so the fallback
+            # is the honest sentence - and the attempt is still a row in the ledger.
+            wall = int((time.monotonic() - started) * 1000)
+            call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
+                                   prompt_hash=repair_hash, tokens_in=0, tokens_out=0,
+                                   cached=False, wall_ms=wall, outcome="error", cause="unreachable")
+            break
+        except Exception:  # noqa: BLE001 - a transport surprise is not a page crash
+            wall = int((time.monotonic() - started) * 1000)
+            call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
+                                   prompt_hash=repair_hash, tokens_in=0, tokens_out=0,
+                                   cached=False, wall_ms=wall, outcome="error", cause="unreachable")
+            break
+        wall = int((time.monotonic() - started) * 1000)
+        repair_in, repair_out = int(completion.tokens_in or 0), int(completion.tokens_out or 0)
+        tokens_in, tokens_out = tokens_in + repair_in, tokens_out + repair_out
+        candidate, cause = parse_reply(completion.text or "")
+        if cause:
+            call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
+                                   prompt_hash=repair_hash, tokens_in=repair_in,
+                                   tokens_out=repair_out, cached=False, wall_ms=wall,
+                                   outcome="error", cause=cause)
+            break
+        assert candidate is not None
+        reply = candidate
+        invented = violations(reply, record)
+        call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
+                               prompt_hash=repair_hash, tokens_in=repair_in,
+                               tokens_out=repair_out, cached=False, wall_ms=wall,
+                               outcome="rejected" if invented else "ok",
+                               cause=("rejected: " + invented[0]) if invented else "")
+
     if invented:
         return Outcome(state=STATE_REJECTED, model=model, cause="rejected", detail=invented[0],
                        prompt_hash=prompt_hash, tokens_in=tokens_in, tokens_out=tokens_out,
-                       call_id=call_id, violations=invented)
+                       call_id=call_id, violations=invented, repairs=repairs)
 
+    text = reply.text
     _store_explanation(conn, case_id, prompt_hash, model, text, tokens_in, tokens_out, now)
     return Outcome(state=STATE_FRESH, text=text, model=model, detail=model,
                    prompt_hash=prompt_hash, tokens_in=tokens_in, tokens_out=tokens_out,
-                   call_id=call_id)
+                   call_id=call_id, repairs=repairs)
 
 
 # ---------------------------------------------------------------- the report

@@ -1,0 +1,186 @@
+{
+ "summary": {
+  "cases": 10,
+  "accepted": 7,
+  "accept_rate": 0.7,
+  "repaired_to_acceptance": 0,
+  "mean_tokens_in": 1471.4,
+  "mean_tokens_out": 253.3,
+  "total_tokens_in": 14714,
+  "total_tokens_out": 2533,
+  "total_wall_ms": 31839,
+  "model": "deepseek-flash"
+ },
+ "rows": [
+  {
+   "case": "case-restfulbooker-levels-20261124T123451-01",
+   "state": "failed_unavailable",
+   "accepted": false,
+   "repairs": 0,
+   "tokens_in": 1537,
+   "tokens_out": 176,
+   "wall_ms": 4077,
+   "call_wall_ms": 4077,
+   "violations": [],
+   "text": "",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is redirected to Rooms Management Page, and the record says this is settled by the page the server sends. The rule found that the words name the page as served, so the assertion is about the page as served rather than about anything the browser decides. Because the run drives a browser, it pays for a browser that decides nothing extra, and the cheapest surface is recorded as api while the levels the test reaches are ui. The product declares GET /, and it shares the word \\\"rooms\\\", but the assertion names no act this rule recognises, so a shared noun alone is not counted as a repeat. The proposed action is to rewrite the step to call the HTTP client instead of the browser. The record does not contain the act the assertion checks, so the reader would name that act or check this one by hand.\"}"
+   ],
+   "detail": "malformed",
+   "cause": "malformed"
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T123451-02",
+   "state": "fresh",
+   "accepted": true,
+   "repairs": 0,
+   "tokens_in": 1551,
+   "tokens_out": 327,
+   "wall_ms": 4250,
+   "call_wall_ms": 4250,
+   "violations": [],
+   "text": "The claim asserts that the user is still on the Booking Management login page, and the record says the words name the page as served. The rule found that the page the server sends settles this, yet the run drives a browser, so it pays for a browser that decides nothing extra. The rule's verdict is review, and it proposes rewriting the step to call the HTTP client instead of the browser. The cheapest surface is api, while the levels the test reaches are ui. The product declares the route, and it shares the word \"login\", but the assertion names no act the rule recognises, so a shared noun alone is not counted as a repeat. The record does not contain the act the assertion checks, and it does not contain anything beyond the counts of findings, claims and sources.",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is still on the Booking Management login page, and the record says the words name the page as served. The rule found that the page the server sends settles this, yet the run drives a browser, so it pays for a browser that decides nothing extra. The rule's verdict is review, and it proposes rewriting the step to call the HTTP client instead of the browser. The cheapest surface is api, while the levels the test reaches are ui. The product declares the route, and it shares the word \\\"login\\\", but the assertion names no act the rule recognises, so a shared noun alone is not counted as a repeat. The record does not contain the act the assertion checks, and it does not contain anything beyond the counts of findings, claims and sources.\", \"citations\": [{\"sentence\": 1, \"facts\": [\"claim:2399\", \"file:cypress/e2e/features/admin-panel/login/login.feature:18\"]}, {\"sentence\": 2, \"facts\": [\"claim:2399\"]}, {\"sentence\": 3, \"facts\": [\"claim:2399\"]}, {\"sentence\": 4, \"facts\": [\"claim:2399\"]}, {\"sentence\": 5, \"facts\": [\"claim:2399\", \"route:POST /login\", \"reason:2399\"]}, {\"sentence\": 6, \"facts\": [\"claim:2399\", \"count:findings:1\", \"count:claims:1\", \"count:sources:3\"]}]}"
+   ],
+   "detail": "deepseek-flash",
+   "cause": ""
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T123451-03",
+   "state": "failed_unavailable",
+   "accepted": false,
+   "repairs": 0,
+   "tokens_in": 1551,
+   "tokens_out": 190,
+   "wall_ms": 2608,
+   "call_wall_ms": 2593,
+   "violations": [],
+   "text": "",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is still on Booking Management login page, and the record says this is settled by the page the server sends. The rule found that the words name the page as served, so the assertion is about the page as served rather than about anything a browser would decide. Because the run drives a browser, it pays for a browser that decides nothing extra, and the levels the test reaches are recorded as ui while the cheapest surface is api. The proposed action is to rewrite the step \\\"user is still on Booking Management login page\\\" to call the HTTP client instead of the browser. The product declares POST /login, and it shares the word \\\"login\\\", but the assertion names no act this rule recognises, so a shared noun alone is not counted as a repeat. The record does not contain the act the assertion checks, so the reader would either name that act or check this one by hand.\"}"
+   ],
+   "detail": "malformed",
+   "cause": "malformed"
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T123451-04",
+   "state": "failed_unavailable",
+   "accepted": false,
+   "repairs": 0,
+   "tokens_in": 1551,
+   "tokens_out": 185,
+   "wall_ms": 2390,
+   "call_wall_ms": 2390,
+   "violations": [],
+   "text": "",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is still on Booking Management login page, and the record says this is settled by the page the server sends. The rule found that the words name the page as served, so the page the server sends settles the assertion, yet the run drives a browser and pays for a browser that decides nothing extra. The claim's verdict is review, and the proposed action is to rewrite the step to call the HTTP client instead of the browser. The cheapest surface is api, while the levels the test reaches are ui. The product declares POST /login and shares the word \\\"login\\\", but the assertion names no act the rule recognises, so a shared noun alone is not evidence that the product already does this and it is not counted as a repeat. The record does not contain the act the assertion checks, so the reader would name that act or check this one by hand.\"}"
+   ],
+   "detail": "malformed",
+   "cause": "malformed"
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T123451-05",
+   "state": "fresh",
+   "accepted": true,
+   "repairs": 0,
+   "tokens_in": 1753,
+   "tokens_out": 258,
+   "wall_ms": 3359,
+   "call_wall_ms": 3344,
+   "violations": [],
+   "text": "The assertion states that a new room of a given type, accessibility, name, price and features will be created. The rule found that this repeats the product, because the product already publishes the same behaviour at the route and its own claim for that route is to create a room. The reason given is that the product declares that route with that claim, and it shares the word \"room\" with the assertion, a word that appears in 6 of the product's 25 surfaces. The proposed action is to assert this at the API by calling the route and checking the response, rather than reading it through a UI run, while a browser is still needed for what only a person sees. The record does not contain any further detail about the assertion beyond what is stated here.",
+   "raw_replies": [
+    "{\"explanation\": \"The assertion states that a new room of a given type, accessibility, name, price and features will be created. The rule found that this repeats the product, because the product already publishes the same behaviour at the route and its own claim for that route is to create a room. The reason given is that the product declares that route with that claim, and it shares the word \\\"room\\\" with the assertion, a word that appears in 6 of the product's 25 surfaces. The proposed action is to assert this at the API by calling the route and checking the response, rather than reading it through a UI run, while a browser is still needed for what only a person sees. The record does not contain any further detail about the assertion beyond what is stated here.\", \"citations\": [{\"sentence\": 1, \"facts\": [\"claim:2405\"]}, {\"sentence\": 2, \"facts\": [\"claim:2405\", \"route:POST /\"]}, {\"sentence\": 3, \"facts\": [\"reason:2405\"]}, {\"sentence\": 4, \"facts\": [\"claim:2405\"]}, {\"sentence\": 5, \"facts\": [\"claim:2405\"]}]}"
+   ],
+   "detail": "deepseek-flash",
+   "cause": ""
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T114627-01",
+   "state": "fresh",
+   "accepted": true,
+   "repairs": 0,
+   "tokens_in": 1250,
+   "tokens_out": 274,
+   "wall_ms": 3219,
+   "call_wall_ms": 3202,
+   "violations": [],
+   "text": "The claim asserts that the user is redirected to Rooms Management Page, and the record says the words name the page as served. The rule found that the page the server sends settles it, so the assertion is settled by the page the server sends. Because the run drives a browser, the claim does not need a browser, so the product is not evidence about it. The proposed action is to rewrite the step \"user is redirected to Rooms Management Page\" to call the HTTP client instead of the browser. The record does not contain the HTTP client's name or the route involved, so a reader cannot tell from this record which endpoint would be called.",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is redirected to Rooms Management Page, and the record says the words name the page as served. The rule found that the page the server sends settles it, so the assertion is settled by the page the server sends. Because the run drives a browser, the claim does not need a browser, so the product is not evidence about it. The proposed action is to rewrite the step \\\"user is redirected to Rooms Management Page\\\" to call the HTTP client instead of the browser. The record does not contain the HTTP client's name or the route involved, so a reader cannot tell from this record which endpoint would be called.\", \"citations\": [{\"sentence\": 1, \"facts\": [\"claim:2355\", \"file:cypress/e2e/features/admin-panel/login/login.feature:14\"]}, {\"sentence\": 2, \"facts\": [\"claim:2355\"]}, {\"sentence\": 3, \"facts\": [\"claim:2355\", \"reason:2355\"]}, {\"sentence\": 4, \"facts\": [\"claim:2355\"]}, {\"sentence\": 5, \"facts\": [\"claim:2355\", \"count:findings:1\", \"count:claims:1\", \"count:sources:3\"]}]}"
+   ],
+   "detail": "deepseek-flash",
+   "cause": ""
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T114627-02",
+   "state": "fresh",
+   "accepted": true,
+   "repairs": 0,
+   "tokens_in": 1256,
+   "tokens_out": 253,
+   "wall_ms": 2000,
+   "call_wall_ms": 1984,
+   "violations": [],
+   "text": "The claim asserts that the user is still on Booking Management login page. The rule found that this assertion is settled by the page the server sends, because the words name the page as served. The claim's verdict is review, and the reason given is that this claim does not need a browser, so the product is not evidence about it. The proposed action is to rewrite the step \"user is still on Booking Management login page\" to call the HTTP client instead of the browser. The claim reaches the ui level, while the cheapest surface is api. The record does not contain any further detail about the product routes that were consulted.",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is still on Booking Management login page. The rule found that this assertion is settled by the page the server sends, because the words name the page as served. The claim's verdict is review, and the reason given is that this claim does not need a browser, so the product is not evidence about it. The proposed action is to rewrite the step \\\"user is still on Booking Management login page\\\" to call the HTTP client instead of the browser. The claim reaches the ui level, while the cheapest surface is api. The record does not contain any further detail about the product routes that were consulted.\", \"citations\": [{\"sentence\": 1, \"facts\": [\"claim:2356\"]}, {\"sentence\": 2, \"facts\": [\"claim:2356\"]}, {\"sentence\": 3, \"facts\": [\"claim:2356\", \"reason:2356\"]}, {\"sentence\": 4, \"facts\": [\"claim:2356\"]}, {\"sentence\": 5, \"facts\": [\"claim:2356\"]}, {\"sentence\": 6, \"facts\": [\"claim:2356\", \"count:sources:3\"]}]}"
+   ],
+   "detail": "deepseek-flash",
+   "cause": ""
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T114627-03",
+   "state": "fresh",
+   "accepted": true,
+   "repairs": 0,
+   "tokens_in": 1256,
+   "tokens_out": 294,
+   "wall_ms": 2405,
+   "call_wall_ms": 2391,
+   "violations": [],
+   "text": "The claim asserts that the user is still on Booking Management login page. The rule found that this assertion is settled by the page the server sends, because the words name the page as served. The claim reaches the ui level, but the cheapest surface for it is api, since this claim does not need a browser, so the product is not evidence about it. The proposed action is to rewrite the step \"user is still on Booking Management login page\" to call the HTTP client instead of the browser. The record does not contain the HTTP client or the exact step definition, so a reader would need to consult the file to see how the step is currently written. The finding is one of one claim across three sources examined.",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is still on Booking Management login page. The rule found that this assertion is settled by the page the server sends, because the words name the page as served. The claim reaches the ui level, but the cheapest surface for it is api, since this claim does not need a browser, so the product is not evidence about it. The proposed action is to rewrite the step \\\"user is still on Booking Management login page\\\" to call the HTTP client instead of the browser. The record does not contain the HTTP client or the exact step definition, so a reader would need to consult the file to see how the step is currently written. The finding is one of one claim across three sources examined.\", \"citations\": [{\"sentence\": 1, \"facts\": [\"claim:2358\"]}, {\"sentence\": 2, \"facts\": [\"claim:2358\"]}, {\"sentence\": 3, \"facts\": [\"claim:2358\", \"reason:2358\"]}, {\"sentence\": 4, \"facts\": [\"claim:2358\"]}, {\"sentence\": 5, \"facts\": [\"file:cypress/e2e/features/admin-panel/login/login.feature:23\"]}, {\"sentence\": 6, \"facts\": [\"count:findings:1\", \"count:claims:1\", \"count:sources:3\"]}]}"
+   ],
+   "detail": "deepseek-flash",
+   "cause": ""
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T114627-04",
+   "state": "fresh",
+   "accepted": true,
+   "repairs": 0,
+   "tokens_in": 1256,
+   "tokens_out": 244,
+   "wall_ms": 1844,
+   "call_wall_ms": 1827,
+   "violations": [],
+   "text": "The claim asserts that the user is still on Booking Management login page. The rule found that this assertion is settled by the page the server sends, because the words name the page as served. The claim reaches the ui level, but the cheapest surface for it is api, since the run drives a browser that decides nothing extra. The proposed action is to rewrite the step to call the HTTP client instead of the browser. The record does not contain the product route or the HTTP client name that the rewrite would use. The finding is one of one claim across three sources examined.",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is still on Booking Management login page. The rule found that this assertion is settled by the page the server sends, because the words name the page as served. The claim reaches the ui level, but the cheapest surface for it is api, since the run drives a browser that decides nothing extra. The proposed action is to rewrite the step to call the HTTP client instead of the browser. The record does not contain the product route or the HTTP client name that the rewrite would use. The finding is one of one claim across three sources examined.\", \"citations\": [{\"sentence\": 1, \"facts\": [\"claim:2360\"]}, {\"sentence\": 2, \"facts\": [\"claim:2360\"]}, {\"sentence\": 3, \"facts\": [\"claim:2360\"]}, {\"sentence\": 4, \"facts\": [\"claim:2360\"]}, {\"sentence\": 5, \"facts\": [\"claim:2360\"]}, {\"sentence\": 6, \"facts\": [\"count:findings:1\", \"count:claims:1\", \"count:sources:3\"]}]}"
+   ],
+   "detail": "deepseek-flash",
+   "cause": ""
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T114627-05",
+   "state": "fresh",
+   "accepted": true,
+   "repairs": 0,
+   "tokens_in": 1753,
+   "tokens_out": 332,
+   "wall_ms": 5687,
+   "call_wall_ms": 5672,
+   "violations": [],
+   "text": "The assertion states that a new room of a given type, accessibility, name, price and features will be created. The rule found that this repeats the product, because the product already publishes the same behaviour at the route and its own claim for that route is \"create room\". The reason given is that the product declares that route, whose own claim is \"create room\", and it shares the word \"room\" with the assertion, a word that appears in 6 of the product's 25 surfaces. The assertion sits in the feature file at the recorded line, and what settles it is that it needs a browser. The proposed action is to assert this at the API by calling the route and checking the response, rather than reading it through a UI run, while a browser is still needed for what only a person sees. The record does not contain any further detail about the assertion beyond what is stated here.",
+   "raw_replies": [
+    "{\"explanation\": \"The assertion states that a new room of a given type, accessibility, name, price and features will be created. The rule found that this repeats the product, because the product already publishes the same behaviour at the route and its own claim for that route is \\\"create room\\\". The reason given is that the product declares that route, whose own claim is \\\"create room\\\", and it shares the word \\\"room\\\" with the assertion, a word that appears in 6 of the product's 25 surfaces. The assertion sits in the feature file at the recorded line, and what settles it is that it needs a browser. The proposed action is to assert this at the API by calling the route and checking the response, rather than reading it through a UI run, while a browser is still needed for what only a person sees. The record does not contain any further detail about the assertion beyond what is stated here.\", \"citations\": [{\"sentence\": 1, \"facts\": [\"claim:2362\"]}, {\"sentence\": 2, \"facts\": [\"claim:2362\", \"route:POST /\"]}, {\"sentence\": 3, \"facts\": [\"reason:2362\"]}, {\"sentence\": 4, \"facts\": [\"file:cypress/e2e/features/admin-panel/management/room-management.feature:15\", \"claim:2362\"]}, {\"sentence\": 5, \"facts\": [\"claim:2362\", \"route:POST /\"]}, {\"sentence\": 6, \"facts\": [\"claim:2362\"]}]}"
+   ],
+   "detail": "deepseek-flash",
+   "cause": ""
+  }
+ ]
+}

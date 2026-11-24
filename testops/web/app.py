@@ -3278,8 +3278,9 @@ def agent_report(conn) -> bytes:
         if row["unlinked_calls"]:
             body.append(f'<p class="quiet">{esc(row["label"])}: {row["unlinked_calls"]} call(s), '
                         f'{row["unlinked_tokens"]} tokens, belong to no closed view - a render that '
-                        f'spent a call and never recorded what it carried. They are counted in the '
-                        f'variant total and attributed to no state.</p>')
+                        f'spent a call and never recorded what it carried, or a first attempt that a '
+                        f'repair round replaced. They are counted in the variant total and attributed '
+                        f'to no state.</p>')
     for row in rows:
         body.append(f'<p><strong>{esc(row["label"])}</strong>: {esc(_counts_line(row))}'
                     f'{" No explanation has been served under this variant yet." if row["views"] == 0 else ""}</p>')

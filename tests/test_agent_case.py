@@ -327,6 +327,26 @@ def _record(findings: int = 6) -> dict:
             "findings": [{"claims": [dict(claim)]} for _ in range(findings)]}
 
 
+# The sentence the real model wrote and was rejected for, quoted from the reply to
+# case-restfulbooker-levels-20261124T123451-05 (TESTOPS-90's evidence). The 2405 is the claim id.
+REAL_SENTENCE = ("The record does not contain the defect's origin, and claim:2405 is the claim whose "
+                 "record that gap concerns.")
+
+
+def _citation_record(claim_id: int = 2405) -> dict:
+    """A record whose claim is 2405, with a near-miss reason, so both id forms can be cited."""
+    return {"case": {"id": CASE},
+            "counts": {"findings": 1, "claims": 1, "sources": 3},
+            "findings": [{"claims": [{
+                "id": claim_id,
+                "verdict": "repeats_product",
+                "statement": "The assertion re-verifies what the product already publishes.",
+                "assertion_text": "a room will be created",
+                "path": PATH, "line": LINE,
+                "product": {"route": "POST /", "word": "room",
+                            "reason": "the product declares POST /, whose own claim is create room"}}]}]}
+
+
 @pytest.mark.parametrize("sentence,facts,expected", [
     # 1. A real route with the wrong verb. The record says GET; the reply says PATCH.
     ("The product declares PATCH /rooms, which is where the panel is served.",
@@ -454,6 +474,103 @@ def test_a_reply_that_is_not_the_agreed_json_is_unusable(tmp_path):
     finally:
         conn.close()
     assert row["outcome"] == "error" and row["cause"] == "malformed"
+    assert b"agent-text" not in on
+
+
+def test_a_citation_id_written_in_the_prose_is_not_a_statistic():
+    """TESTOPS-90 AC1: the exact sentence the real model wrote, with the id it was rejected for.
+
+    The number scan used to read the 2405 of ``claim:2405`` as a fabricated count. The sentence is
+    the model's own, quoted from the rejected reply on
+    ``case-restfulbooker-levels-20261124T123451-05``; it is honest, it cites the row it names, and it
+    is accepted now.
+    """
+    record = _citation_record()
+    assert "claim:2405" in agent.citation_index(record)
+    reply, cause = agent.parse_reply(_reply([(REAL_SENTENCE, ["claim:2405"])]))
+    assert cause == "" and reply is not None
+    assert agent.violations(reply, record) == []
+
+
+def test_a_reason_id_written_in_the_prose_is_not_a_statistic_either():
+    record = _citation_record()
+    assert "reason:2405" in agent.citation_index(record)
+    reply, cause = agent.parse_reply(_reply([
+        ("The near-miss reason:2405 records that the route shares a word with the assertion.",
+         ["reason:2405"])]))
+    assert cause == "" and reply is not None
+    assert agent.violations(reply, record) == []
+
+
+def test_a_plain_number_beside_a_real_citation_is_still_refused():
+    """The mask is the identifier, not the sentence: a bare ``the number 7`` still rejects."""
+    record = _citation_record()
+    reply, cause = agent.parse_reply(_reply([
+        ("The record does not contain the defect's origin, and the number 7 is not in it.",
+         ["claim:2405"])]))
+    assert cause == "" and reply is not None
+    assert agent.violations(reply, record) == ["the number 7, which no cited fact holds"]
+
+
+def test_the_prompt_keeps_citation_ids_out_of_the_prose_and_its_version_changed(monkeypatch):
+    """AC2: belt and braces, so the model is not relying on the mask."""
+    assert agent.PROMPT_VERSION == "explain-a-case/3"
+    assert agent.PROMPT_VERSION != "explain-a-case/2"
+    assert 'The identifiers belong in the "citations" array and nowhere else' in agent.SYSTEM_PROMPT
+    assert "never write one in the explanation's prose" in agent.SYSTEM_PROMPT
+    # And the version is part of the cache key, so an explanation written under the old instruction
+    # can never be served as one written under this one.
+    record = _record()
+    _, _, current = agent.prompt(record, "deepseek-flash")
+    monkeypatch.setattr(agent, "PROMPT_VERSION", "explain-a-case/2")
+    _, _, older = agent.prompt(record, "deepseek-flash")
+    assert current != older
+
+
+def test_one_rejection_is_repaired_once_and_the_good_repair_is_served(tmp_path):
+    """AC3, first pin: fail once, succeed on the repair, and the reader gets the explanation."""
+    conn = _seed(tmp_path)
+    written = _reply([("The product declares PATCH /rooms, which is where the panel is served.",
+                       ["route:GET /rooms"])])
+    fake = FakeModel(written, _good_reply(conn))
+    try:
+        view_id = agent.start_view(conn, CASE, "on")
+        on = _on(conn, fake, view_id=view_id)
+        calls = conn.execute("SELECT outcome, cause, tokens_in, tokens_out FROM agent_call"
+                             " ORDER BY id").fetchall()
+        stored = conn.execute("SELECT text FROM agent_explanation").fetchone()
+        view = conn.execute("SELECT served FROM agent_view WHERE id=?", (view_id,)).fetchone()
+    finally:
+        conn.close()
+    assert len(fake.calls) == 2, "one ask, then one repair"
+    assert "the verb PATCH" in fake.calls[1]["user"], "the repair quotes the exact violation"
+    assert "Change only the sentences those violations name" in fake.calls[1]["user"]
+    assert [call["outcome"] for call in calls] == ["rejected", "ok"]
+    assert b"agent-text" in on and "was rejected" not in _text(on)
+    assert stored is not None and stored["text"].startswith("This test asserts")
+    assert view["served"] == "fresh"
+
+
+def test_a_second_rejection_falls_back_to_the_honest_sentence_with_state_rejected(tmp_path):
+    """AC3, second pin: the repair fails too, so nothing is served and the view says rejected."""
+    conn = _seed(tmp_path)
+    written = _reply([("The product declares PATCH /rooms, which is where the panel is served.",
+                       ["route:GET /rooms"])])
+    fake = FakeModel(written)          # the same bad reply every time
+    try:
+        view_id = agent.start_view(conn, CASE, "on")
+        on = _on(conn, fake, view_id=view_id)
+        calls = conn.execute("SELECT outcome, cause FROM agent_call ORDER BY id").fetchall()
+        stored = conn.execute("SELECT COUNT(*) FROM agent_explanation").fetchone()[0]
+        view = conn.execute("SELECT served FROM agent_view WHERE id=?", (view_id,)).fetchone()
+    finally:
+        conn.close()
+    assert len(fake.calls) == 2, "exactly one repair round, not a loop"
+    assert [call["outcome"] for call in calls] == ["rejected", "rejected"]
+    assert "PATCH" in calls[-1]["cause"]
+    assert view["served"] == "rejected"
+    assert stored == 0
+    assert "The model-written explanation was rejected" in _text(on)
     assert b"agent-text" not in on
 
 
@@ -679,12 +796,16 @@ def test_the_report_separates_every_state_so_value_and_loss_are_not_confused(tmp
     # The vote is the cached page's, not the fresh one's.
     assert states["cached"]["helped"] == 1 and states["fresh"]["helped"] == 0
     assert on["helped"] == 1
-    # And the variant total is the sum of the states, call for call and token for token.
+    # And the variant total is the sum of the states, call for call and token for token. A rejected
+    # reply now buys one repair attempt (TESTOPS-90), so its view made two calls: the row the view
+    # closed on is the repair (180 tokens), and the first attempt is an unlinked call of the same
+    # cost. Both are paid for, so both are in the variant total.
     assert on["explanation_views"] == 2      # fresh + cached, not the five views
     assert on["views"] == 5
     assert on["rejected"] == 1 and on["errors"] == 2
-    assert on["total_tokens"] == sum(int(c["tokens"]) for c in calls) == 360
-    assert on["unlinked_calls"] == 0
+    assert sum(int(c["tokens"]) for c in calls) == 360
+    assert on["unlinked_calls"] == 1 and on["unlinked_tokens"] == 180
+    assert on["total_tokens"] == sum(int(c["tokens"]) for c in calls) + 180 == 540
     assert rows["off"]["states"]["off"]["views"] == 1
 
 
