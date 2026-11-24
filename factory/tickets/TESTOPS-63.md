@@ -2,7 +2,7 @@
 id: TESTOPS-63
 title: `key` is not in the credential vocabulary, so `the-api-key-is-xyz` is never screened
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-62
 ---
