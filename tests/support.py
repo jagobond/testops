@@ -25,7 +25,25 @@ What the guard can attribute:
   observed digest and says the working tree and the commit disagree.
 * When git cannot be read, the difference is reported as unreadable: "the repository could not be
   read, so nothing could be attributed". It still fails - the invariant is unproven - but git is the
-  suspect, not the suite.
+  suspect, not the suite. A repository whose *tree* cannot be read (``ls-tree`` fails, as with a
+  corrupt object store) is unreadable too, never "staged": git is named and nothing is attributed to
+  a commit.
+
+Policy-ignored paths (TESTOPS-67 AC1):
+
+* ``.git`` and ``.venv`` are not repository content and are never walked; a change there is outside
+  the guard's subject.
+* ``__pycache__/``, ``.pytest_cache/``, ``build/``, ``dist/`` and ``*.pyc`` are walked, digested and
+  compared, but are **report-only**. The interpreter, pytest and builds write them into the checkout
+  during a legitimate run, so they do not fail the suite. The summary always states how many such
+  paths changed and that they are not attributed, and a non-zero count is listed by path. "0 files"
+  in the ordinary classes therefore never means "0 files where the guard does not look": the ignored
+  count is printed beside it.
+
+Digest alphabets (TESTOPS-67 AC3): a snapshot uses exactly one alphabet - git's blob sha, or a raw
+sha256 when git cannot be run. The two are never compared. If the baseline used blob digests and the
+comparison cannot, the report is unreadable, says the two snapshots are not comparable, and
+attributes nothing, rather than treating every tracked file as changed by the suite.
 
 What it cannot attribute:
 
@@ -50,9 +68,24 @@ from typing import Callable, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Written by Python's import machinery and by pytest itself, not by a test.
-_IGNORED_DIRS = {".git", ".venv", "__pycache__", ".pytest_cache", "build", "dist"}
-_IGNORED_SUFFIXES = (".pyc",)
+# Not repository content: never walked at all.
+_EXCLUDED_DIRS = {".git", ".venv"}
+# Written by Python's import machinery, pytest and build tooling, not by a test. Walked and counted
+# under the report-only policy (TESTOPS-67 AC1), never failed and never attributed.
+_POLICY_IGNORED_DIRS = {"__pycache__", ".pytest_cache", "build", "dist"}
+_POLICY_IGNORED_SUFFIXES = (".pyc",)
+
+# The two digest alphabets. A snapshot uses one of these throughout, and they are never compared.
+BLOB_ALPHABET = "git-blob"
+RAW_ALPHABET = "sha256"
+
+
+class Snapshot(dict):
+    """A path-to-(size, digest) map that also records which alphabet its digests use."""
+
+    def __init__(self, files=(), *, alphabet: str = BLOB_ALPHABET):
+        super().__init__(files)
+        self.alphabet = alphabet
 
 
 def _raw_digest(path: Path) -> tuple[int, str]:
@@ -89,35 +122,65 @@ def _blob_digests(root: Path, paths: list[str]) -> dict[str, str] | None:
     return dict(zip(paths, lines))
 
 
-def repository_snapshot(root: Path = ROOT) -> dict[str, tuple[int, str]]:
-    """Digest every tracked-by-content file in the repo, ignoring interpreter caches.
+def _walk(root: Path) -> tuple[list[str], list[str]]:
+    """Normal paths and policy-ignored paths, relative to ``root``, both sorted and deterministic.
 
-    The digest is git's blob sha, so it can be compared directly with the blob an excusing commit
-    holds for the path. A raw sha256 fallback is used only when git cannot be run. Comparing two
-    snapshots detects an added, removed or modified file anywhere in the working tree, which is what
-    AC10 needs: a test may only write under pytest's ``tmp_path``.
+    ``.git`` and ``.venv`` are pruned entirely. A policy-ignored directory is walked (so its
+    contents are visible and counted) and every path under it is classified as ignored; a ``.pyc``
+    file is ignored wherever it sits.
     """
-    paths: list[str] = []
+    normal: list[str] = []
+    ignored: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in _IGNORED_DIRS)
+        dirnames[:] = sorted(d for d in dirnames if d not in _EXCLUDED_DIRS)
+        directory = Path(dirpath).relative_to(root)
+        under_ignored_dir = any(part in _POLICY_IGNORED_DIRS for part in directory.parts)
         for name in sorted(filenames):
-            if name.endswith(_IGNORED_SUFFIXES):
-                continue
-            paths.append((Path(dirpath) / name).relative_to(root).as_posix())
+            relative = (directory / name).as_posix() if directory.parts else name
+            if under_ignored_dir or name.endswith(_POLICY_IGNORED_SUFFIXES):
+                ignored.append(relative)
+            else:
+                normal.append(relative)
+    return normal, ignored
+
+
+def _digest_paths(root: Path, paths: list[str]) -> Snapshot:
+    """Digest ``paths`` with one alphabet throughout; never mix blob shas and sha256 in one snapshot."""
+    if not paths:
+        return Snapshot({}, alphabet=BLOB_ALPHABET)
     blobs = _blob_digests(root, paths)
+    use_blobs = blobs is not None and all(path in blobs for path in paths)
     out: dict[str, tuple[int, str]] = {}
     for relative in paths:
         path = root / relative
         size = path.stat().st_size
-        digest = blobs.get(relative) if blobs is not None else None
-        if digest is None:
-            size, digest = _raw_digest(path)
-        out[relative] = (size, digest)
-    return out
+        if use_blobs:
+            assert blobs is not None
+            out[relative] = (size, blobs[relative])
+        else:
+            out[relative] = _raw_digest(path)
+    return Snapshot(out, alphabet=BLOB_ALPHABET if use_blobs else RAW_ALPHABET)
 
 
-def snapshot_difference(before: dict[str, tuple[int, str]],
-                        after: dict[str, tuple[int, str]]) -> dict[str, list[str]]:
+def repository_snapshot(root: Path = ROOT) -> Snapshot:
+    """Digest every file in the repo that the guard attributes: everything outside the ignored set.
+
+    The digest is git's blob sha, so it can be compared directly with the blob an excusing commit
+    holds for the path. A raw sha256 fallback is used only when git cannot be run, and the snapshot
+    records which alphabet it used so a comparison can refuse an incomparable pair (TESTOPS-67 AC3).
+    Comparing two snapshots detects an added, removed or modified file anywhere in the working tree,
+    which is what AC10 needs: a test may only write under pytest's ``tmp_path``.
+    """
+    return _digest_paths(root, _walk(root)[0])
+
+
+def repository_ignored_snapshot(root: Path = ROOT) -> Snapshot:
+    """Digest the policy-ignored paths the summary reports but does not attribute (TESTOPS-67 AC1)."""
+    return _digest_paths(root, _walk(root)[1])
+
+
+def snapshot_difference(before: Mapping[str, tuple[int, str]],
+                        after: Mapping[str, tuple[int, str]]) -> dict[str, list[str]]:
     return {
         "added": sorted(set(after) - set(before)),
         "removed": sorted(set(before) - set(after)),
@@ -161,7 +224,9 @@ class AttributionReport:
     addition no commit contains) are failures. ``unreadable`` is every difference when git could not
     be read; it is a failure too, but the suspect is git. ``content_mismatches`` carries
     ``(path, expected_blob, observed_digest)`` for paths where a commit touched the path but the
-    working tree disagrees with the blob it holds.
+    working tree disagrees with the blob it holds. ``ignored_changed`` is policy-ignored paths that
+    changed; they are reported and counted but never attributed or failed. ``not_comparable`` means
+    the two snapshots used different digest alphabets, so no digest was compared.
     """
 
     changed_by_commit: tuple[str, ...] = ()
@@ -171,7 +236,10 @@ class AttributionReport:
     unexplained: tuple[str, ...] = ()
     untracked: tuple[str, ...] = ()
     unreadable: tuple[str, ...] = ()
+    ignored_changed: tuple[str, ...] = ()
     content_mismatches: tuple[tuple[str, str, str], ...] = ()
+    unreadable_reason: str | None = None
+    not_comparable: bool = False
     head_before: str | None = None
     head_after: str | None = None
 
@@ -184,25 +252,42 @@ class AttributionReport:
         return len(self.changed_by_commit) + len(self.added_by_commit)
 
     def summary(self) -> list[str]:
-        """Every class with its count, so a reader never has to infer the outcome from a pass."""
-        return [
+        """Every class with its count, so a reader never has to infer the outcome from a pass.
+
+        The policy-ignored count is always printed, including its "report-only: not attributed"
+        wording, so a zero in the attributed classes cannot be read as "nothing changed anywhere we
+        did not look" (TESTOPS-67 AC1).
+        """
+        lines = [
             "write guard: "
             f"{_count(self.explained_count, 'file')} changed by a commit during the run, "
             f"{_count(len(self.deleted_by_commit), 'file')} deleted by a commit during the run, "
             f"{_count(len(self.staged), 'staged but uncommitted change')}, "
             f"{_count(len(self.unexplained), 'file')} unexplained, "
             f"{_count(len(self.untracked), 'untracked addition')} no commit accounts for, "
-            f"{_count(len(self.unreadable), 'unreadable file')}"
+            f"{_count(len(self.unreadable), 'unreadable file')}, "
+            f"{_count(len(self.ignored_changed), 'path')} under policy-ignored directories changed "
+            "(report-only: not attributed)"
         ]
+        if self.ignored_changed:
+            lines.append("write guard: policy-ignored paths changed and are not attributed: "
+                         + ", ".join(self.ignored_changed))
+        return lines
 
     def failure_message(self) -> str:
         assert self.failures
         lines: list[str] = []
         if self.unreadable:
-            lines.append(
-                "the repository could not be read, so nothing could be attributed: "
-                f"{', '.join(self.unreadable)}")
-            lines.append("(git is the suspect; the suite did not write this)")
+            if self.not_comparable:
+                lines.append(self.unreadable_reason or (
+                    "the two snapshots are not comparable: the baseline and the comparison used "
+                    "different digest alphabets, so no digest was compared"))
+                lines.append("(no difference was attributed; the suite is not the suspect)")
+            else:
+                lines.append(self.unreadable_reason or (
+                    "the repository could not be read, so nothing could be attributed: "
+                    f"{', '.join(self.unreadable)}"))
+                lines.append("(git is the suspect; the suite did not write this)")
         else:
             if self.staged:
                 lines.append(
@@ -236,28 +321,71 @@ def attribute_differences(before: Mapping[str, tuple[int, str]],
                           *,
                           before_state: RepoState,
                           after_state: RepoState,
-                          commit_blobs: Callable[[str | None], Mapping[str, str]]) -> AttributionReport:
+                          commit_blobs: Callable[[str | None], Mapping[str, str] | None],
+                          before_alphabet: str | None = None,
+                          after_alphabet: str | None = None,
+                          before_ignored_alphabet: str | None = None,
+                          after_ignored_alphabet: str | None = None,
+                          before_ignored: Mapping[str, tuple[int, str]] | None = None,
+                          after_ignored: Mapping[str, tuple[int, str]] | None = None) -> AttributionReport:
     """Split the difference between two snapshots into exactly one class per path.
 
-    ``commit_blobs(commit)`` returns the path-to-blob-sha map of that commit's tree. A commit excuses
-    a path only when it touched the path **and** the working-tree digest equals the blob the new
-    commit holds for it; a path the commit added or removed must be present or absent in the new tree
-    as appropriate. A staged-but-uncommitted change is detected from the index when its entry changed
-    during the run and the working tree matches the new index blob. When git is unreadable, every
-    difference is reported as unreadable and nothing is blamed on the suite. When ``HEAD`` did not
-    move - or either side has no commit - nothing is explained, which is the loud direction.
+    ``commit_blobs(commit)`` returns the path-to-blob-sha map of that commit's tree, or ``None`` when
+    git cannot read that tree (a corrupt object store, a failed ``ls-tree``). A commit excuses a path
+    only when it touched the path **and** the working-tree digest equals the blob the new commit holds
+    for it; a path the commit added or removed must be present or absent in the new tree as
+    appropriate. A staged-but-uncommitted change is detected from the index when its entry changed
+    during the run and the working tree matches the new index blob. When git is unreadable - or a
+    tree it should be able to read is not - every difference is reported as unreadable and nothing is
+    blamed on the suite. When ``HEAD`` did not move - or either side has no commit - nothing is
+    explained, which is the loud direction. If the two snapshots used different digest alphabets,
+    nothing is compared: the report is unreadable and says they are not comparable. ``before_ignored``
+    and ``after_ignored`` are the policy-ignored snapshots; their differences are reported in
+    ``ignored_changed`` and are never attributed or failed.
     """
     difference = snapshot_difference(dict(before), dict(after))
     all_paths = sorted(set(difference["added"]) | set(difference["removed"])
                        | set(difference["changed"]))
+    for baseline_alpha, comparison_alpha in (
+            (before_alphabet, after_alphabet),
+            (before_ignored_alphabet, after_ignored_alphabet)):
+        if (baseline_alpha is not None and comparison_alpha is not None
+                and baseline_alpha != comparison_alpha):
+            return AttributionReport(
+                # Every path in the comparison is unreadable, not just the ones whose digests
+                # happened to differ: no digest from a different alphabet was compared.
+                unreadable=tuple(all_paths or sorted(set(before) | set(after))),
+                not_comparable=True,
+                unreadable_reason=(
+                    "the two snapshots are not comparable: the baseline used "
+                    f"{baseline_alpha} digests and the comparison used {comparison_alpha} digests, "
+                    "so no digest was compared and nothing was attributed to a commit"),
+                head_before=before_state.head,
+                head_after=after_state.head)
+    ignored_difference = snapshot_difference(dict(before_ignored or {}), dict(after_ignored or {}))
+    ignored_changed = tuple(sorted(set(ignored_difference["added"])
+                                   | set(ignored_difference["removed"])
+                                   | set(ignored_difference["changed"])))
     if not before_state.readable or not after_state.readable:
         return AttributionReport(unreadable=tuple(all_paths),
+                                 ignored_changed=ignored_changed,
                                  head_before=before_state.head,
                                  head_after=after_state.head)
 
     moved = bool(before_state.head and after_state.head and before_state.head != after_state.head)
-    before_tree: Mapping[str, str] = commit_blobs(before_state.head) if moved else {}
-    after_tree: Mapping[str, str] = commit_blobs(after_state.head) if moved else {}
+    before_tree: Mapping[str, str] | None = commit_blobs(before_state.head) if moved else {}
+    after_tree: Mapping[str, str] | None = commit_blobs(after_state.head) if moved else {}
+    if before_tree is None or after_tree is None:
+        failed = before_state.head if before_tree is None else after_state.head
+        return AttributionReport(
+            unreadable=tuple(all_paths),
+            ignored_changed=ignored_changed,
+            unreadable_reason=(
+                "the repository could not be read: git could not read the tree of commit "
+                f"{_short(failed)} (ls-tree failed), so the difference is unreadable, not staged, "
+                "and no difference is attributed to a commit"),
+            head_before=before_state.head,
+            head_after=after_state.head)
 
     def digest_of(path: str) -> str:
         return after[path][1]
@@ -324,6 +452,7 @@ def attribute_differences(before: Mapping[str, tuple[int, str]],
         staged=tuple(sorted(staged_paths)),
         unexplained=tuple(sorted(unexplained)),
         untracked=tuple(sorted(untracked)),
+        ignored_changed=ignored_changed,
         content_mismatches=tuple(sorted(mismatches)),
         head_before=before_state.head,
         head_after=after_state.head,
@@ -384,8 +513,13 @@ class GitRepository:
             index[path[len(stem):]] = parts[1]
         return RepoState(head=self.head(), index=index)
 
-    def commit_blobs(self, commit: str | None) -> Mapping[str, str]:
-        """The path-to-blob-sha map of ``commit``'s tree, relative to ``root``."""
+    def commit_blobs(self, commit: str | None) -> Mapping[str, str] | None:
+        """The path-to-blob-sha map of ``commit``'s tree, or ``None`` if git cannot read the tree.
+
+        ``None`` is distinct from ``{}``: an empty tree is a real answer, a failed ``ls-tree``
+        (corrupt object store, unreadable object) is not. Conflating them is how TESTOPS-66 reported
+        a corrupt repository's committed addition as "staged but uncommitted" with git never named.
+        """
         if not commit:
             return {}
         if commit in self._trees:
@@ -394,7 +528,9 @@ class GitRepository:
         stem = f"{prefix}/" if prefix else ""
         tree: dict[str, str] = {}
         listing = self._git("ls-tree", "-r", "-z", "--full-tree", commit)
-        for record in (listing or "").split("\0"):
+        if listing is None:
+            return None
+        for record in listing.split("\0"):
             if not record:
                 continue
             meta, _, path = record.partition("\t")
@@ -408,24 +544,38 @@ class GitRepository:
 
 @dataclass(frozen=True)
 class GuardBaseline:
-    """What the write guard records before the first test: the digest, ``HEAD`` and the index."""
+    """What the write guard records before the first test: the digest, ``HEAD`` and the index.
+
+    ``ignored_snapshot`` is the policy-ignored half (build outputs, caches, ``*.pyc``); it is
+    compared and reported but never attributed or failed (TESTOPS-67 AC1).
+    """
 
     snapshot: Mapping[str, tuple[int, str]]
     state: RepoState
+    ignored_snapshot: Mapping[str, tuple[int, str]] | None = None
     root: Path = ROOT
 
 
 def guard_baseline(root: Path = ROOT) -> GuardBaseline:
     return GuardBaseline(snapshot=repository_snapshot(root), state=GitRepository(root).state(),
-                         root=Path(root))
+                         ignored_snapshot=repository_ignored_snapshot(root), root=Path(root))
 
 
 def guard_report(baseline: GuardBaseline) -> AttributionReport:
     """Compare ``baseline`` with the tree as it is now, attributing what a commit can account for."""
     repository = GitRepository(baseline.root)
-    return attribute_differences(baseline.snapshot, repository_snapshot(baseline.root),
-                                 before_state=baseline.state, after_state=repository.state(),
-                                 commit_blobs=repository.commit_blobs)
+    after_snapshot = repository_snapshot(baseline.root)
+    after_ignored = repository_ignored_snapshot(baseline.root)
+    return attribute_differences(
+        baseline.snapshot, after_snapshot,
+        before_state=baseline.state, after_state=repository.state(),
+        commit_blobs=repository.commit_blobs,
+        before_alphabet=getattr(baseline.snapshot, "alphabet", None),
+        after_alphabet=getattr(after_snapshot, "alphabet", None),
+        before_ignored_alphabet=getattr(baseline.ignored_snapshot, "alphabet", None),
+        after_ignored_alphabet=getattr(after_ignored, "alphabet", None),
+        before_ignored=baseline.ignored_snapshot,
+        after_ignored=after_ignored)
 
 
 # ---------------------------------------------------------------- the store guard

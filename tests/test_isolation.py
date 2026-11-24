@@ -10,7 +10,10 @@ committed from another shell used to fail this test with "the suite wrote outsid
 path is reported and does not fail. TESTOPS-66: the commit excuses the path only when the working
 tree's digest equals the blob the commit holds; a mismatch fails and names the disagreement. A
 staged-but-uncommitted change fails as staged, and git unavailability fails as unreadable rather than
-accusing the suite. A path no commit accounts for still fails, and the message names it.
+accusing the suite. TESTOPS-67: a tree git cannot read is unreadable (not staged), two digest
+alphabets are never compared, and policy-ignored paths (build outputs, caches, ``*.pyc``) are counted
+and named in the summary under a stated report-only policy, so "0 files" never hides them. A path no
+commit accounts for still fails, and the message names it.
 """
 from __future__ import annotations
 

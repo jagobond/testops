@@ -4,23 +4,33 @@ The guard failed on ``main`` because a ticket file was committed from another sh
 observation (the working tree changed) with a false attribution ("the suite wrote outside tmp_path").
 TESTOPS-66 sharpened the rule: a commit excuses a path only when the working tree's digest equals the
 blob the commit holds for it. A content mismatch, a staged-but-uncommitted change and git
-unavailability are each their own failure. These tests pin the verdicts by driving
-``attribute_differences`` with synthetic snapshots and synthetic commits - no test here commits,
-writes outside ``tmp_path``, or touches the real checkout, so the guard cannot fire on its own author
-again.
+unavailability are each their own failure. TESTOPS-67 adds the three boundaries: policy-ignored paths
+are counted and named but never attributed, an unreadable tree (corrupt object store) is unreadable
+rather than staged, and blob and sha256 digests are never compared. These tests pin the verdicts by
+driving ``attribute_differences`` with synthetic snapshots and synthetic commits - no test here
+commits, writes outside ``tmp_path``, or touches the real checkout, so the guard cannot fire on its
+own author again. The corruption test uses a disposable git repository in ``tmp_path``.
 """
 from __future__ import annotations
 
-from support import AttributionReport, RepoState, attribute_differences
+import os
+import subprocess
+import stat
+from pathlib import Path
+
+from support import (AttributionReport, GitRepository, RepoState, Snapshot, attribute_differences,
+                     repository_ignored_snapshot, repository_snapshot)
 
 BEFORE_HEAD = "1111111111111111111111111111111111111111"
 AFTER_HEAD = "2222222222222222222222222222222222222222"
 
 
-def _diff(before, after, *, before_state, after_state, trees):
+def _diff(before, after, *, before_state, after_state, trees, before_ignored=None,
+          after_ignored=None):
     """Drive the comparison with synthetic trees: ``trees`` maps a commit sha to path -> blob sha."""
     return attribute_differences(before, after, before_state=before_state, after_state=after_state,
-                                 commit_blobs=trees.get)
+                                 commit_blobs=trees.get,
+                                 before_ignored=before_ignored, after_ignored=after_ignored)
 
 
 def _classes(report):
@@ -33,6 +43,7 @@ def _classes(report):
         "unexplained": report.unexplained,
         "untracked": report.untracked,
         "unreadable": report.unreadable,
+        "ignored_changed": report.ignored_changed,
     }
 
 
@@ -182,7 +193,8 @@ def test_an_empty_report_has_nothing_to_say():
     assert report.summary() == [
         "write guard: 0 files changed by a commit during the run, 0 files deleted by a commit "
         "during the run, 0 staged but uncommitted changes, 0 files unexplained, 0 untracked "
-        "additions no commit accounts for, 0 unreadable files"
+        "additions no commit accounts for, 0 unreadable files, 0 paths under policy-ignored "
+        "directories changed (report-only: not attributed)"
     ]
 
 
@@ -246,13 +258,15 @@ def test_the_partition_counts_every_difference_exactly_once(repo_guard):
     report = _diff(before, after,
                    before_state=RepoState(BEFORE_HEAD, before_index),
                    after_state=RepoState(AFTER_HEAD, after_index),
-                   trees=trees)
+                   trees=trees,
+                   before_ignored={},
+                   after_ignored={"build/out.txt": (5, "i1")})
 
     expected = set(before) ^ set(after)
     expected |= {path for path in set(before) & set(after) if before[path] != after[path]}
     flat = _flatten(report)
     assert len(flat) == len(set(flat)), "a difference was counted in more than one class"
-    assert set(flat) == expected, "a difference was dropped or invented"
+    assert set(flat) == expected | {"build/out.txt"}, "a difference was dropped or invented"
 
     assert report.changed_by_commit == ("changed.txt",)
     assert report.added_by_commit == ("added.txt",)
@@ -262,6 +276,8 @@ def test_the_partition_counts_every_difference_exactly_once(repo_guard):
     assert report.untracked == ("leak.txt",)
     assert report.unreadable == ()
     assert report.content_mismatches == (("mismatch.txt", "m2", "m3"),)
+    assert report.ignored_changed == ("build/out.txt",)
+    assert "build/out.txt" not in report.failures, "ignored paths are report-only, not failures"
 
     line = report.summary()[0]
     assert "2 files changed by a commit during the run" in line
@@ -270,18 +286,142 @@ def test_the_partition_counts_every_difference_exactly_once(repo_guard):
     assert "3 files unexplained" in line
     assert "1 untracked addition" in line
     assert "0 unreadable files" in line
-    assert sum(len(paths) for paths in _classes(report).values()) == len(expected)
+    assert "1 path under policy-ignored directories changed (report-only: not attributed)" in line
+    assert "build/out.txt" in report.summary()[1]
+    assert sum(len(paths) for paths in _classes(report).values()) == len(expected) + 1
 
     # The same partition when git cannot be read: every difference is unreadable, and the message
-    # points at git rather than at the suite.
+    # points at git rather than at the suite. The policy-ignored path is still reported, still not
+    # attributed.
     unreadable = _diff(before, after,
                        before_state=RepoState(None, {}, readable=False),
                        after_state=RepoState(None, {}, readable=False),
-                       trees={})
+                       trees={},
+                       before_ignored={},
+                       after_ignored={"build/out.txt": (5, "i1")})
     assert unreadable.unreadable == tuple(sorted(expected))
+    assert unreadable.ignored_changed == ("build/out.txt",)
     assert unreadable.failures == unreadable.unreadable
-    assert len(_flatten(unreadable)) == len(set(_flatten(unreadable))) == len(expected)
+    assert len(_flatten(unreadable)) == len(set(_flatten(unreadable))) == len(expected) + 1
     message = unreadable.failure_message()
     assert "the repository could not be read" in message
     assert "git is the suspect" in message
     assert "the suite wrote" not in message
+
+
+def test_a_write_under_a_policy_ignored_directory_is_visible_not_attributed(tmp_path):
+    """AC1: a write to build/ is counted and named in the summary, and is not a failure."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.txt").write_bytes(b"kept\n")
+    (tmp_path / "build").mkdir()
+    (tmp_path / "build" / "x.txt").write_bytes(b"build output\n")
+    (tmp_path / "pkg" / "__pycache__").mkdir(parents=True)
+    (tmp_path / "pkg" / "__pycache__" / "z.pyc").write_bytes(b"cache\n")
+
+    normal = repository_snapshot(tmp_path)
+    ignored = repository_ignored_snapshot(tmp_path)
+    assert set(normal) == {"src/a.txt"}
+    assert set(ignored) == {"build/x.txt", "pkg/__pycache__/z.pyc"}
+
+    report = attribute_differences(normal, normal,
+                                   before_state=RepoState(None, {}),
+                                   after_state=RepoState(None, {}),
+                                   commit_blobs=lambda _: {},
+                                   before_ignored={}, after_ignored=ignored)
+
+    assert report.failures == ()
+    assert report.ignored_changed == ("build/x.txt", "pkg/__pycache__/z.pyc")
+    line = report.summary()[0]
+    assert "0 files unexplained" in line
+    assert "2 paths under policy-ignored directories changed (report-only: not attributed)" in line
+    assert "build/x.txt" in report.summary()[1]
+    assert "pkg/__pycache__/z.pyc" in report.summary()[1]
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True)
+
+
+def test_a_corrupt_repository_is_unreadable_not_staged(tmp_path):
+    """AC2: a corrupt object store makes the tree unreadable, names git, and attributes nothing."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test")
+
+    (repo / "f.txt").write_bytes(b"one\n")
+    _git(repo, "add", "f.txt")
+    _git(repo, "commit", "-q", "-m", "one")
+    before = repository_snapshot(repo)
+    before_state = GitRepository(repo).state()
+
+    (repo / "f.txt").write_bytes(b"two\n")
+    _git(repo, "add", "f.txt")
+    _git(repo, "commit", "-q", "-m", "two")
+    after = repository_snapshot(repo)
+    after_state = GitRepository(repo).state()
+    assert before_state.head != after_state.head
+    # The working tree agrees with the new index: before the fix this is exactly the shape the
+    # staged rule claimed, while the commit's tree was silently unavailable.
+    assert after["f.txt"][1] == after_state.index["f.txt"]
+
+    assert after_state.head is not None
+    obj = repo / ".git" / "objects" / after_state.head[:2] / after_state.head[2:]
+    assert obj.is_file()
+    os.chmod(obj, stat.S_IWRITE)  # git stores loose objects read-only
+    obj.write_bytes(b"corrupt")
+
+    repository = GitRepository(repo)
+    assert repository.commit_blobs(after_state.head) is None
+    report = attribute_differences(before, after,
+                                   before_state=before_state, after_state=after_state,
+                                   commit_blobs=repository.commit_blobs,
+                                   before_alphabet=before.alphabet,
+                                   after_alphabet=after.alphabet)
+
+    assert report.unreadable == ("f.txt",)
+    assert report.staged == ()
+    assert report.changed_by_commit == report.added_by_commit == ()
+    assert report.failures == ("f.txt",)
+    message = report.failure_message()
+    assert "could not read the tree" in message
+    assert "git" in message
+    assert "a staged but uncommitted change appeared" not in message
+    assert "the suite wrote" not in message
+
+
+def test_blob_and_sha256_digests_are_never_compared(repo_guard):
+    """AC3: a baseline in blob shas and a comparison in sha256 fail as unreadable, not as a mass write."""
+    before = Snapshot({"f.txt": (10, "blob-1")}, alphabet="git-blob")
+    after = Snapshot({"f.txt": (10, "0" * 64)}, alphabet="sha256")
+
+    report = attribute_differences(before, after,
+                                   before_state=RepoState(BEFORE_HEAD, {"f.txt": "blob-1"}),
+                                   after_state=RepoState(BEFORE_HEAD, {"f.txt": "blob-1"}),
+                                   commit_blobs=lambda _: {},
+                                   before_alphabet=before.alphabet,
+                                   after_alphabet=after.alphabet)
+
+    assert report.not_comparable is True
+    assert report.unreadable == ("f.txt",)
+    assert report.failures == ("f.txt",)
+    assert report.changed_by_commit == ()
+    assert report.staged == ()
+    assert report.unexplained == ()
+    message = report.failure_message()
+    assert "not comparable" in message
+    assert "git-blob" in message and "sha256" in message
+    assert "the suite wrote" not in message
+
+    # The ignored half is subject to the same rule: an alphabet mismatch there is not compared
+    # either, even when the ordinary half is unchanged.
+    mixed_ignored = attribute_differences(before, before,
+                                          before_state=RepoState(BEFORE_HEAD, {}),
+                                          after_state=RepoState(BEFORE_HEAD, {}),
+                                          commit_blobs=lambda _: {},
+                                          before_ignored_alphabet="git-blob",
+                                          after_ignored_alphabet="sha256")
+    assert mixed_ignored.not_comparable is True
+    assert mixed_ignored.failures, "an incomparable ignored snapshot must still fail the guard"
+    assert "not comparable" in mixed_ignored.failure_message()
