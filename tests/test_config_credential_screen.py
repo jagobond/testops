@@ -439,8 +439,36 @@ BOUNDARY = [
      "a clause: 'is' is a finite verb, so the determiner belongs to the sentence, not to a credential"),
     ("this-is-my-password", "accepted", "a clause for the same reason: it states something"),
     ("xox-not-a-slack-token", "accepted",
-     "a denial: 'not' makes the phrase a statement, not a label"),
-    ("not-a-password", "accepted", "a denial: it names no credential, only what the thing is not"),
+     "a denial with a subject before 'not' and the credential word as its complement"),
+    ("not-a-password", "refused",
+     "a denial fragment: no subject before 'not', so it states nothing"),
+    # --- TESTOPS-62 AC1/AC2/AC3/AC4: a word in the name is not a clause. The exemption holds only
+    #     for a predication about the credential word, and the one word in two classes is settled by
+    #     precedence (`no` is a determiner, never a negator that excuses).
+    ("my-password-is-here", "refused",
+     "the credential word is the subject before the verb, not its complement: it labels an instance"),
+    ("the-token-is-abcd1234", "refused",
+     "the credential word is the subject before the verb, not its complement"),
+    ("this-token-was-leaked", "refused",
+     "the credential word is the subject before the verb, not its complement"),
+    ("my-secret-has-value", "refused",
+     "the credential word is the subject before the verb, not its complement"),
+    ("has-my-token", "refused", "a verb fragment: nothing sits before 'has', so there is no subject"),
+    ("is-my-password", "refused", "a verb fragment: nothing sits before 'is', so there is no subject"),
+    ("never-the-api-token", "refused",
+     "a denial fragment: nothing sits before 'never', so there is no subject"),
+    ("x-not-a-token-but-abcdef", "refused",
+     "the credential word is not the final complement of the predicate: no clause"),
+    ("not-my-password", "refused",
+     "a denial fragment with no subject before 'not': the determiner labels an instance"),
+    ("no-password-yet", "refused",
+     "'no' is read as a determiner, so it marks an instance and cannot excuse it as a negator"),
+    ("acme-no-password", "refused",
+     "'no' is a determiner by precedence: it never supplies the predicate that would excuse it"),
+    ("acme-their-no-password", "refused",
+     "'no' is a determiner and no predicate is made about the credential word"),
+    ("acme-not-password", "accepted",
+     "a denial with a subject ('acme') and the credential word as the final complement"),
     ("acme-their-password", "refused",
      "a possessive in a middle position names a particular credential as plainly as my-password"),
     ("their-password", "refused", "a possessive and a credential head: an instance"),
@@ -643,16 +671,43 @@ def test_a_determiner_or_possessive_in_any_position_names_an_instance():
         assert services._looks_like_secret(value) is None, f"{value!r} names a kind and was refused"
 
 
-# TESTOPS-61 AC2: a statement about a credential is not a label for one. The deciding rule is stated
-# in services._names_a_credential: a determiner marks an instance unless the parts are a clause (a
-# finite verb) or a denial (a negator). The boundary is the same five parts without the verb.
+# TESTOPS-61 AC2 / TESTOPS-62 AC1/AC2: a predication about a credential is not a label for one. The
+# deciding rule is stated in services._is_predication: a subject before a predicate head, and the
+# credential word as the complement after it. A verb or a negator anywhere is not enough.
 def test_a_statement_about_a_credential_is_not_an_instance_label():
     assert services._looks_like_secret("this-is-not-a-password") is None, \
         "a sentence-name was refused for opening with a determiner"
     assert services._looks_like_secret("this-is-my-password") is None, "a clause is not a label"
-    assert services._looks_like_secret("xox-not-a-slack-token") is None, "a denial is not a label"
+    assert services._looks_like_secret("xox-not-a-slack-token") is None, \
+        "a denial with a subject and the credential word as its complement is not a label"
+    # TESTOPS-62 AC1: the credential word as the *subject* of the verb is a label, not a statement.
+    for value in ("my-password-is-here", "the-token-is-abcd1234", "this-token-was-leaked",
+                  "my-secret-has-value"):
+        assert services._looks_like_secret(value) is not None, \
+            f"{value!r} was excused although the credential word is the verb's subject"
+    # AC2: a fragment is not a clause, and the credential word must be the final complement.
+    for value in ("has-my-token", "is-my-password", "never-the-api-token", "no-password-yet",
+                  "x-not-a-token-but-abcdef"):
+        assert services._looks_like_secret(value) is not None, \
+            f"{value!r} was excused although it is a fragment, not a clause"
     assert services._looks_like_secret("acme-their-prod-db-password") is not None, \
-        "the boundary: the same possessive with no verb or negator is a label"
+        "the boundary: the same possessive with no predicate is a label"
+
+
+# TESTOPS-62 AC3: precedence, stated once and pinned. `no` is a determiner before it is a negator, so
+# it takes a name into the instance test and never supplies the excuse. A true negator still needs a
+# subject before it and the credential word as its complement.
+def test_a_word_in_two_classes_cannot_satisfy_both_tests():
+    assert "no" in services._DETERMINERS and "no" in services._NEGATORS
+    assert "no" not in services._PREDICATE_HEADS, \
+        "`no` must not be a predicate head: it can never excuse what it just marked as an instance"
+    for value in ("no-password-yet", "acme-no-password", "acme-their-no-password"):
+        assert services._looks_like_secret(value) is not None, \
+            f"{value!r} was excused by `no`, which is read as a determiner"
+    # The same shape with a true negator and a subject is a denial and is accepted.
+    assert services._looks_like_secret("acme-not-password") is None
+    assert services._looks_like_secret("never-the-api-token") is not None, \
+        "a true negator with no subject is still a fragment"
 
 
 # TESTOPS-61 AC3: a cut-off prefix is refused with a reason that says it is too short, and the
