@@ -345,3 +345,36 @@ CREATE TABLE IF NOT EXISTS agent_feedback (
 CREATE INDEX IF NOT EXISTS idx_agent_view_case ON agent_view(case_id);
 CREATE INDEX IF NOT EXISTS idx_agent_call_case ON agent_call(case_id);
 CREATE INDEX IF NOT EXISTS idx_agent_feedback_case ON agent_feedback(case_id);
+
+-- TESTOPS-89. Why a token did not arrive, recorded where the ledger records everything else. One
+-- row per lookup, and no column can hold a token: ``access_token`` is not in this table's
+-- vocabulary by construction, and ``attempts`` is the probe's own token-free JSON. A page that says
+-- "no token" without this row beside it is the state this ticket exists to end.
+CREATE TABLE IF NOT EXISTS agent_token_probe (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL,
+  endpoint TEXT NOT NULL DEFAULT '',
+  endpoint_variable TEXT NOT NULL DEFAULT '',    -- the env var that set it, '' when derived
+  model TEXT NOT NULL DEFAULT '',
+  model_variable TEXT NOT NULL DEFAULT '',
+  environment_token INTEGER NOT NULL DEFAULT 0,  -- 1: TESTOPS_AGENT_TOKEN was set. Never its value.
+  token_obtained INTEGER NOT NULL DEFAULT 0,
+  token_source TEXT NOT NULL DEFAULT '',         -- environment | imds | az | ''
+  imds_attempted INTEGER NOT NULL DEFAULT 0,
+  imds_answered INTEGER NOT NULL DEFAULT 0,
+  imds_status INTEGER,
+  imds_cause TEXT NOT NULL DEFAULT '',
+  imds_error_code TEXT NOT NULL DEFAULT '',
+  imds_detail TEXT NOT NULL DEFAULT '',
+  imds_api_version TEXT NOT NULL DEFAULT '',     -- the version that answered, when one did
+  imds_attempt INTEGER NOT NULL DEFAULT 0,
+  imds_elapsed_ms INTEGER NOT NULL DEFAULT 0,
+  imds_attempts TEXT NOT NULL DEFAULT '[]',      -- every attempt, as the probe recorded it
+  az_present INTEGER NOT NULL DEFAULT 0,
+  az_answered INTEGER NOT NULL DEFAULT 0,
+  az_cause TEXT NOT NULL DEFAULT '',
+  az_detail TEXT NOT NULL DEFAULT '',
+  az_elapsed_ms INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_token_probe_at ON agent_token_probe(at);
