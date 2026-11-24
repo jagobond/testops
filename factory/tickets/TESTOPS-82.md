@@ -2,7 +2,7 @@
 id: TESTOPS-82
 title: A quoted entity is not display copy - copy needs a second mark
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-79
 ---
