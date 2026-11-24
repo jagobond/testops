@@ -58,6 +58,7 @@ import datetime as dt
 import html
 import re
 import urllib.parse
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .. import cases, queries, services, sources
@@ -2722,13 +2723,68 @@ def stale_case_page(case_id: str, unregistered_analyser: str | None = None) -> b
     return page(f"TestOps \u00b7 {case_id}", "".join(body))
 
 
+# TESTOPS-92. The words a reader may type after ``?agent=``. The flag used to accept only the literal
+# ``on``, so ``?agent=true`` - the spelling the demo instructions implied - silently rendered the
+# agent-off page, and a reader was entitled to conclude the agent did nothing. Both lists are what
+# the page names when it refuses a value, so the reader is told what would have worked.
+FLAG_SHOW = ("on", "true", "1", "yes")
+FLAG_HIDE = ("off", "false", "0", "no")
+FLAG_ACCEPTED = FLAG_SHOW + FLAG_HIDE
+
+
+@dataclass(frozen=True)
+class AgentFlag:
+    """What the request's ``?agent=`` said: the variant, whether it was understood, and the value.
+
+    ``value`` is the value as typed, trimmed, and ``""`` when the page carried none. ``understood``
+    is false only for a value that is neither an accepted spelling nor absent: an absent flag is the
+    documented default and is not a mistake, so it must never raise a warning at a reader.
+    """
+
+    value: str
+    variant: str
+    understood: bool
+
+
+def parse_agent_flag(value: str | None) -> AgentFlag:
+    """The flag as typed, parsed to one of the two pages and to whether the reader's words were taken.
+
+    Case and surrounding whitespace are not the reader's fault - `` True `` means what ``true``
+    means. Anything else that is not one of the accepted spellings still renders the agent-off page,
+    because off is the default; it is marked not understood so the page can say what it accepted and
+    the ledger can show the typo (TESTOPS-92 AC1, AC2).
+    """
+    raw = "" if value is None else str(value).strip()
+    word = raw.lower()
+    if word in FLAG_SHOW:
+        return AgentFlag(raw, agent.VARIANT_ON, True)
+    if word in FLAG_HIDE or word == "":
+        return AgentFlag(raw, agent.VARIANT_OFF, True)
+    return AgentFlag(raw, agent.VARIANT_OFF, False)
+
+
 def _agent_variant(value: str | None) -> str:
-    """The variant a request asked for. Anything but an explicit ``on`` is off (TESTOPS-88 AC1).
+    """The variant a request asked for. Absent or unrecognised means off (TESTOPS-88 AC1).
 
     Off is the default on purpose: a page a reader did not ask to be explained is the page as it
     was, and the golden for every real case has to stay byte-identical when this flag is absent.
     """
-    return agent.VARIANT_ON if (value or "").strip().lower() == "on" else agent.VARIANT_OFF
+    return parse_agent_flag(value).variant
+
+
+def flag_note_block(flag: AgentFlag | None) -> list[str]:
+    """One line, when the value was not understood: what was typed, and what is accepted (AC2).
+
+    A reader who typed ``?agent=maybe`` must not be able to conclude the feature is dead: the page
+    says the value was not understood, names the eight spellings that work, and says the page is
+    still the one without the explanation. Nothing is added for an accepted value or an absent flag.
+    """
+    if flag is None or flag.understood:
+        return []
+    return [f'<p class="agent-flag-note">The explanation was not shown: the value '
+            f'<span class="code">{esc(flag.value)}</span> in <span class="code">?agent=</span> was '
+            f'not understood. It accepts on, true, 1 or yes to show the explanation, and off, '
+            f'false, 0 or no to hide it; anything else leaves it hidden, as this page does.</p>']
 
 
 def _explanation_block(outcome, case_id: str, view_id: int | None) -> list[str]:
@@ -2770,7 +2826,7 @@ def _agent_note(outcome) -> list[str]:
 
 def case_response(conn, case_id: str, *, variant: str = agent.VARIANT_OFF,
                   view_id: int | None = None, agent_config=None,
-                  completer=None) -> tuple[bytes, int]:
+                  completer=None, flag: AgentFlag | None = None) -> tuple[bytes, int]:
     """The page for a case id, with the status it must be served under.
 
     A pruned case answers 404 with an explanatory page rather than ``None``: the web layer had
@@ -2780,6 +2836,10 @@ def case_response(conn, case_id: str, *, variant: str = agent.VARIANT_OFF,
     before this ticket - the page is built exactly as it always was. With it on the page gains one
     block after the claim and before the decision, and every failure to produce that block adds one
     sentence and nothing else. ``view_id``, when given, is the ledger row this view opened.
+
+    TESTOPS-92: ``flag`` is what ``?agent=`` said, when the request carried the parameter. A value
+    that was not understood adds one line at the top saying so (AC2); ``None`` - every caller that
+    renders a page without a request - adds nothing, so the agent-off page is byte-identical (AC3).
     """
     row = queries.case_row(conn, case_id)
     if not row:
@@ -2804,6 +2864,10 @@ def case_response(conn, case_id: str, *, variant: str = agent.VARIANT_OFF,
                 f'{esc(state_label)}</span>'
                 f' \u00b7 Analysed {esc(age(row["created_at"]))}'
                 f'{" at " + esc(versions) if versions else ""}</p>')
+
+    # TESTOPS-92 AC2: a value the flag did not understand is said once, at the top, above everything
+    # the page is about - a note below the evidence is a note a reader may never reach.
+    body.extend(flag_note_block(flag))
 
     # TESTOPS-73: what the case examined, before the statement. The band is built from the case's
     # own snapshot, so a reader sees the repositories, commits and linked items - and the blind
@@ -3130,7 +3194,11 @@ class Handler(BaseHTTPRequestHandler):
             m = re.fullmatch(r"/case/([^/]+)", path)
             if m:
                 case_id = urllib.parse.unquote(m.group(1))
-                variant = _agent_variant(_form(query, "agent"))
+                # TESTOPS-92: what the reader typed is recorded as itself, so a typo is a visible row
+                # in the meter rather than a variant column that silently reads "off".
+                flag = parse_agent_flag(query["agent"][0] if "agent" in query else None)
+                variant = flag.variant
+                agent.record_flag(conn, case_id, flag.value, flag.variant, flag.understood)
                 # The view is opened before the page is rendered, so the explanation's feedback
                 # links can name it. A view of a case the store does not hold is not a view of a
                 # case: nothing is written for it.
@@ -3139,7 +3207,8 @@ class Handler(BaseHTTPRequestHandler):
                     view_id = (agent.start_view(conn, case_id, variant)
                                if variant == agent.VARIANT_ON
                                else agent.record_view(conn, case_id, variant))
-                body, code = case_response(conn, case_id, variant=variant, view_id=view_id)
+                body, code = case_response(conn, case_id, variant=variant, view_id=view_id,
+                                           flag=flag)
                 self._send(body, code)
                 return
             m = re.fullmatch(r"/run/([^/]+)", path)
@@ -3221,6 +3290,38 @@ def _counts_line(row: dict) -> str:
             f'{row["did_not_help"]} said it did not.')
 
 
+def flag_values_section(conn) -> list[str]:
+    """Which ``?agent=`` values the case pages actually saw, and what each produced (TESTOPS-92 AC4).
+
+    A demo-day typo is otherwise invisible: the reader gets the agent-off page, the variant column
+    reads "off", and nobody can tell a mistyped flag from a page that asked for nothing. Every value
+    is a row here, with the page it produced and whether it was one of the accepted spellings, so a
+    typo reads as a typo. An empty table says no page has recorded its flag yet - never "no flags".
+    """
+    rows = agent.flag_values(conn)
+    out = ['<h2 class="section">The flag values readers typed</h2>',
+           '<p class="meta">Every case page records the value after <span class="code">?agent=</span>, '
+           'exactly as it was typed, and what that value did. An unrecognised value hides the '
+           'explanation and says so on the page it serves; the row here is how it becomes visible '
+           'afterwards.</p>']
+    if not rows:
+        out.append('<p class="quiet">No case page has recorded its flag yet, so this table is empty '
+                   'because nothing was measured - not because every value was understood.</p>')
+        return out
+    out.append('<table><tr><th>Flag value</th><th>Page shown</th><th>Understood</th>'
+               '<th>Views</th><th>Last seen</th></tr>')
+    for row in rows:
+        value = row["value"]
+        shown_value = (f'<span class="code">{esc(value)}</span>' if value
+                       else '<span class="quiet">(absent or empty)</span>')
+        label = agent.VARIANT_LABEL.get(row["variant"], row["variant"])
+        understood = "yes" if row["understood"] else "no"
+        out.append(f'<tr><td>{shown_value}</td><td>{esc(label)}</td><td>{understood}</td>'
+                   f'<td>{row["views"]}</td><td>{esc(age(row["last_at"]))}</td></tr>')
+    out.append('</table>')
+    return out
+
+
 def agent_report(conn) -> bytes:
     """Per variant: what was shown, what it cost, and what readers said about it (AC4, AC6).
 
@@ -3262,6 +3363,7 @@ def agent_report(conn) -> bytes:
                 'field short of an answer, the one repair round quoted the exact fault, and the '
                 'second reply passed. Both calls are in the ledger, so the repair round can be '
                 'priced separately rather than folded into a first-time explanation.</p>')
+    body.extend(flag_values_section(conn))
     body.append('<h2 class="section">What each view actually was</h2>')
     body.append('<p class="meta">A variant is not one experiment. A page can be a first view that paid '
                 'for an explanation, a later view of the stored one, a reply that was paid for and '

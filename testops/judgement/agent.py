@@ -994,6 +994,38 @@ def record_view(conn, case_id: str, variant: str, served: str = VARIANT_OFF,
     return int(cur.lastrowid)
 
 
+def record_flag(conn, case_id: str, value: str | None, variant: str, understood: bool,
+                now: str | None = None) -> int:
+    """Record what one case page's ``?agent=`` flag said, as typed (TESTOPS-92 AC4).
+
+    The ledger already records the page a reader was shown; this records the *words* that asked for
+    it. Without it a mistyped value is indistinguishable from a page that asked for nothing, which
+    is exactly the demo-day trap: the variant column reads "off" and nobody can see why.
+    """
+    cur = conn.execute(
+        "INSERT INTO agent_flag (at, case_id, flag_value, variant, understood) VALUES (?,?,?,?,?)",
+        (_now(now), case_id, (value or "")[:50], variant, 1 if understood else 0))
+    conn.commit()
+    return int(cur.lastrowid)
+
+
+def flag_values(conn) -> list[dict]:
+    """Every flag value the ledger has seen, with the page it produced and how many times.
+
+    Grouped by (value, variant, understood), because the same spelling always means the same page:
+    a row per value makes a typo a row a reader can see, rather than a silence between two rows.
+    """
+    out = []
+    for row in conn.execute(
+            "SELECT flag_value, variant, understood, COUNT(*) AS views, MAX(at) AS last_at"
+            " FROM agent_flag GROUP BY flag_value, variant, understood"
+            " ORDER BY views DESC, flag_value, variant"):
+        out.append({"value": row["flag_value"], "variant": row["variant"],
+                    "understood": bool(row["understood"]), "views": int(row["views"]),
+                    "last_at": row["last_at"]})
+    return out
+
+
 def _record_call(conn, *, case_id, variant, model, prompt_hash, tokens_in, tokens_out,
                  cached, wall_ms, outcome, cause) -> int:
     cur = conn.execute(

@@ -346,6 +346,23 @@ CREATE INDEX IF NOT EXISTS idx_agent_view_case ON agent_view(case_id);
 CREATE INDEX IF NOT EXISTS idx_agent_call_case ON agent_call(case_id);
 CREATE INDEX IF NOT EXISTS idx_agent_feedback_case ON agent_feedback(case_id);
 
+-- TESTOPS-92. What each case page's ``?agent=`` flag actually said. A reader who types
+-- ``?agent=true`` and gets the agent-off page must be able to see, in the meter, that the value was
+-- recorded and what it meant - and a demo-day typo must be visible as a typo rather than inferred
+-- from a variant column that stays empty. ``flag_value`` is the value as typed, trimmed; '' is a
+-- page that carried no value (no parameter, or an empty one). ``understood`` is 1 when the value is
+-- one of the eight accepted spellings, so an unrecognised one is counted as itself, not as "off".
+CREATE TABLE IF NOT EXISTS agent_flag (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL,
+  case_id TEXT NOT NULL,
+  flag_value TEXT NOT NULL DEFAULT '',
+  variant TEXT NOT NULL CHECK (variant IN ('on', 'off')),
+  understood INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_flag_value ON agent_flag(flag_value);
+
 -- TESTOPS-89. Why a token did not arrive, recorded where the ledger records everything else. One
 -- row per lookup, and no column can hold a token: ``access_token`` is not in this table's
 -- vocabulary by construction, and ``attempts`` is the probe's own token-free JSON. A page that says
