@@ -282,6 +282,75 @@ def test_the_match_is_deterministic_and_prefers_the_route_that_names_the_thing()
     assert first.detail["product"]["word"] == second.detail["product"]["word"]
 
 
+# ------------------------------------------------- TESTOPS-72 amendment: the verb is a rule
+
+CREATION = "New room will be created"
+# Four surfaces so that "room" is in half of them and the common-share guard does not decide this.
+GET_ROOM = _surface("GET /room/{id}", "get room")
+POST_ROOM = _surface("POST /room", "create room")
+BRANDING = _surface("GET /branding", "get branding")
+REPORTS = _surface("GET /report", "get room report")
+AUTH = _surface("GET /auth", "get token")
+CORPUS = (GET_ROOM, POST_ROOM, BRANDING, AUTH)
+
+
+def _verb_claim(assertion: str, surfaces):
+    """One browser claim for ``assertion``, through the analyser, with the product present."""
+    path = "features/rooms.feature"
+    feature = gherkin.parse(
+        path, f"Feature: rooms\n  Scenario: a new room\n"
+              f"    Given a visitor opens the room admin page\n    Then {assertion}\n")
+    assert feature is not None
+    suite = stepbindings.suite_of(path)
+    bindings = [stepbindings.Binding(pattern=text, verb=verb, cls="RoomSteps",
+                                     path="steps/RoomSteps.cs", layer="ui", suite=suite)
+                for text, verb in [("a visitor opens the room admin page", "Given"),
+                                   (assertion, "Then")]]
+    claims = level_fitness.analyse(
+        features=[feature], bindings=bindings, surfaces=list(surfaces),
+        uri_for_path=lambda value: f"github:fixture/fixture@deadbeef:{value}",
+        budget={"calls": 0, "tokens_in": 0, "tokens_out": 0}, product_state="found")
+    return claims[-1]
+
+
+def test_a_creation_assertion_prefers_the_post_surface_over_a_get_that_shares_the_noun():
+    """The review's case: "New room will be created" must not match ``GET /room/{id}``.
+
+    Both surfaces carry the noun "room"; one answers a POST and one a GET. The verb decides before
+    the route, the word or the id ever do, and the claim records the assertion's verb and the
+    surface's method so a reader can check the rule that fired.
+    """
+    claim = _verb_claim(CREATION, CORPUS)
+    product = claim.detail["product"]
+    assert claim.verdict == "repeats_product"
+    assert product["route"] == "POST /room"
+    assert product["word"] == "room"
+    assert product["assertion_verb"] == "create"
+    assert product["surface_verb"] == "POST"
+    assert product["verb_agrees"] is True
+    assert product["near_miss"] is False
+
+
+def test_where_only_the_get_exists_the_verb_differs_and_no_repeat_is_emitted():
+    """The honest refusal: a shared noun is not evidence when the method settles a different act.
+
+    ``GET /room/{id}`` is the only surface about rooms, and the assertion is about creation. No
+    ``repeats_product`` is emitted; the claim is ``distinct`` and records the near miss - route,
+    assertion verb and surface method - so the evidence is arguable rather than silent.
+    """
+    claim = _verb_claim(CREATION, (GET_ROOM, BRANDING, REPORTS, AUTH))
+    product = claim.detail["product"]
+    assert claim.verdict == "distinct"
+    assert product["state"] == "zero"
+    assert product["near_miss"] is True
+    assert product["route"] == "GET /room/{id}"
+    assert product["assertion_verb"] == "create"
+    assert product["surface_verb"] == "GET"
+    assert product["verb_agrees"] is False
+    assert "create" in product["reason"] and "GET" in product["reason"]
+
+
+
 # --------------------------------------------------------------- AC4: a product nobody could read
 
 def test_an_unreadable_product_is_not_a_zero_and_never_a_repeat():

@@ -633,6 +633,15 @@ def product_evidence_block(claim: dict) -> list[str]:
                 f'{esc(reason) if reason else "the product could not be consulted"}, so nothing '
                 f'here says whether this claim repeats it. That is not a zero.</p>']
     if state == "zero":
+        if product.get("near_miss"):
+            route = esc(product.get("route") or "a route")
+            word = esc(product.get("word") or "")
+            verb = esc(product.get("assertion_verb") or "")
+            method = esc(product.get("surface_verb") or "")
+            return [f'<p class="meta"><span class="fn">What the product says:</span> it declares '
+                    f'<span class="code">{route}</span>, which shares the word \u201c{word}\u201d, '
+                    f'but its method is {method} and the assertion is about \u201c{verb}\u201d, so '
+                    f'nothing here says the product already does this.</p>']
         total = product.get("surfaces")
         held = (f'it was read and declares {total} surfaces, and none of them shares a meaningful '
                 f'word with this assertion' if isinstance(total, int) and total

@@ -348,11 +348,72 @@ PRODUCT_COMMON_SHARE = 0.5
 # they break a tie between two surfaces that share the assertion's noun, by preferring the surface
 # whose own claim uses the assertion's verb ("get message" over "delete message" for a claim that
 # says "will get ... message"). Without the tie-break the winner would be whichever id sorted first.
+#
+# TESTOPS-72 amendment: this is a tie-break *within* a chosen method, never the rule itself. The
+# rule is below, and it is what stops a creation assertion being matched to a read route.
 PRODUCT_CLAIM_VERBS = frozenset({"get", "list", "read", "create", "add", "update", "delete",
                                  "remove", "clear", "validate", "mark", "check"})
 
 # What a target has to start with to be a route rather than a file path.
 _ROUTE_VERBS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "ANY"})
+
+# The assertion's intent, as the HTTP methods that could settle it (TESTOPS-72 amendment). The
+# verb is a rule, not a tie-break: "New room will be created" is creation, and a route that happens
+# to name the noun "room" but answers a GET is a near miss, not evidence that the product publishes
+# creation. The review found exactly this case: "created" is not in ``PRODUCT_CLAIM_VERBS``, so both
+# surfaces scored the same and the id sort picked the GET. The mapping is explicit and small, because
+# a guessed intent is worse than no intent: an assertion with no verb in this table keeps the old
+# noun-only matching and says so on the claim.
+_INTENT_METHODS = {
+    "create": frozenset({"POST"}), "add": frozenset({"POST"}), "new": frozenset({"POST"}),
+    "read": frozenset({"GET"}), "get": frozenset({"GET"}), "show": frozenset({"GET"}),
+    "display": frozenset({"GET"}), "list": frozenset({"GET"}), "view": frozenset({"GET"}),
+    "see": frozenset({"GET"}), "fetch": frozenset({"GET"}), "retrieve": frozenset({"GET"}),
+    "update": frozenset({"PUT", "PATCH"}), "edit": frozenset({"PUT", "PATCH"}),
+    "change": frozenset({"PUT", "PATCH"}), "modify": frozenset({"PUT", "PATCH"}),
+    "delete": frozenset({"DELETE"}), "remove": frozenset({"DELETE"}),
+    "destroy": frozenset({"DELETE"}),
+}
+
+
+def _intent_forms(base: str) -> set[str]:
+    """The inflected forms of an intent verb that an assertion might use.
+
+    "created", "creates" and "creating" are the same act as "create", and the review's case turns on
+    an inflected form. Only forms that are real English are generated - no "seed" for "see" - so a
+    form that is never written can never be read as an intent.
+    """
+    forms = {base, base + "s"}
+    if base.endswith("e"):
+        forms.add(base + "d")
+        forms.add(base[:-1] + "ing")
+    elif len(base) > 2 and base[-1] not in "aeiouwy":
+        forms.add(base + "ed")
+        forms.add(base + "ing")
+        forms.add(base + base[-1] + "ed")      # added
+        forms.add(base + base[-1] + "ing")     # adding
+    else:
+        forms.add(base + "ed")
+        forms.add(base + "ing")
+    if base == "new":
+        # An adjective, not a verb: "news" is not an intent to create.
+        forms = {base}
+    return forms
+
+
+# form -> (base verb, the methods that settle it). Built once, deterministically; the first base to
+# claim a form keeps it, and every base here has a distinct set of forms.
+def _intent_forms_by_word() -> dict[str, tuple[str, frozenset[str]]]:
+    table: dict[str, tuple[str, frozenset[str]]] = {}
+    for base, methods in _INTENT_METHODS.items():
+        for form in _intent_forms(base):
+            table.setdefault(form, (base, methods))
+    return table
+
+
+_INTENT_FORMS = _intent_forms_by_word()
+del _intent_forms_by_word
+
 
 _PRODUCT_WORD = re.compile(r"[a-z0-9]+")
 
@@ -425,12 +486,51 @@ def _surface_reading(surface) -> tuple[str, str, tuple, set[str], set[str], set[
     return identifier, route, claims, route_words, claim_words, route_words | claim_words
 
 
+def _surface_method(route: str) -> str | None:
+    """The HTTP method a surface's route declares, or ``None`` when it declares no method.
+
+    A file-path surface (an engine module) and a route written without a verb both return ``None``:
+    nothing in them says what the product does, so nothing in them can disagree with the assertion.
+    ``ANY`` is the same - a route that answers every method settles every verb.
+    """
+    words = (route or "").split()
+    if words and words[0].upper() in _ROUTE_VERBS and words[0].upper() != "ANY":
+        return words[0].upper()
+    return None
+
+
+def _assertion_intent(assertion: str) -> tuple[str, frozenset[str]] | None:
+    """The assertion's own verb and the HTTP methods that could settle it, or ``None``.
+
+    A mutation outranks a read when a step says both ("create the booking and see the message") -
+    what the step asks the product to *do* is creation - and otherwise the first intent word in the
+    assertion wins, which is deterministic for a given sentence.
+    """
+    found = [intent for intent in (_INTENT_FORMS.get(word) for word in _product_words(assertion))
+             if intent is not None]
+    if not found:
+        return None
+    mutations = [intent for intent in found if intent[1] - {"GET"}]
+    # "new" is an adjective that implies creation; when the sentence also names the act ("will be
+    # created") the act is the better verb to record, so it is only used as a fallback.
+    for base, methods in mutations:
+        if base != "new":
+            return base, methods
+    if mutations:
+        return mutations[0]
+    return found[0]
+
+
 def product_match(assertion: str, surfaces) -> dict | None:
     """The strongest surface the assertion's words share, or ``None`` when nothing matches.
 
     Deterministic and total: every candidate is scored and the lowest key wins, so the same assertion
     over the same surfaces always names the same route. The ranking, in order, prefers
 
+      0. a surface whose HTTP method is one the assertion's verb is settled by (TESTOPS-72
+         amendment: "create/add/new" -> POST, "read/get/show/display/list" -> GET, "update/edit/
+         change" -> PUT/PATCH, "delete/remove" -> DELETE). This is a rule, not a tie-break: a
+         creation assertion is not evidence about a read route however well the nouns agree;
       1. a word the surface's *route* carries over a word only its claim carries - the route names
          the thing, so a shared route word says the product publishes that thing at an address;
       2. the rarer word, because a word in 3 of 25 surfaces is more specific than one in 12;
@@ -443,6 +543,11 @@ def product_match(assertion: str, surfaces) -> dict | None:
     than :data:`PRODUCT_COMMON_SHARE` of the surfaces is the product's subject rather than this
     surface's. A word must appear literally - "created" does not match "create" - because the matched
     word is quoted back to a reader as the evidence, and a stem nobody wrote is not quotable.
+
+    The returned record always names the assertion's verb, the surface's method and whether they
+    agree. Where they do not, this is still the nearest surface, and :func:`_product_record` records
+    it as a near miss rather than a repeat: the caller decides the verdict, but the evidence names
+    both verbs so the refusal is arguable.
     """
     assertion_words = _product_meaningful(assertion)
     readings = [_surface_reading(surface) for surface in surfaces or ()]
@@ -454,6 +559,8 @@ def product_match(assertion: str, surfaces) -> dict | None:
         for word in doc_words:
             frequency[word] = frequency.get(word, 0) + 1
     assertion_verbs = set(_product_words(assertion)) & PRODUCT_CLAIM_VERBS
+    intent = _assertion_intent(assertion)
+    intent_verb, intent_methods = intent if intent is not None else ("", frozenset())
 
     best = None
     for identifier, route, claims, route_words, claim_words, doc_words in readings:
@@ -461,12 +568,15 @@ def product_match(assertion: str, surfaces) -> dict | None:
         if not shared:
             continue
         agrees = bool(assertion_verbs & claim_words)
+        method = _surface_method(route)
+        method_agrees = not (intent_methods and method and method not in intent_methods)
         for word in sorted(shared):
             if word in PRODUCT_STOP:
                 continue
             if frequency[word] > PRODUCT_COMMON_SHARE * total:
                 continue
-            key = (0 if word in route_words else 1, frequency[word], -len(shared),
+            key = (0 if method_agrees else 1,
+                   0 if word in route_words else 1, frequency[word], -len(shared),
                    0 if agrees else 1, identifier, word)
             if best is None or key < best[0]:
                 best = (key, identifier, route, _claim_carrying(claims, word), word,
@@ -474,8 +584,11 @@ def product_match(assertion: str, surfaces) -> dict | None:
     if best is None:
         return None
     _key, identifier, route, claim_text, word, shared_with, total = best
+    method = _surface_method(route)
     return {"surface": identifier, "route": route, "claim": claim_text, "word": word,
-            "shared_with": shared_with, "surfaces": total}
+            "shared_with": shared_with, "surfaces": total,
+            "assertion_verb": intent_verb, "surface_verb": method or "",
+            "verb_agrees": not (intent_methods and method and method not in intent_methods)}
 
 
 # The four states a claim's product record can be in. They never share wording, and none of them is
@@ -501,7 +614,11 @@ def _product_record(interaction: str, assertion: str, surfaces, state: str, reas
     surfaces = list(surfaces or ())
     record = {"state": PRODUCT_NONE, "needs_browser": interaction in NEEDS_BROWSER,
               "surfaces": len(surfaces), "surface": None, "route": None, "claim": None,
-              "word": None, "shared_with": 0, "reason": ""}
+              "word": None, "shared_with": 0, "reason": "",
+              # The verb rule's evidence, on every record in every state: the assertion's own intent
+              # (when it named one) and, when a surface was read, that surface's method. A near miss
+              # keeps both so a reader can argue with the refusal rather than take it on trust.
+              "assertion_verb": "", "surface_verb": "", "verb_agrees": None, "near_miss": False}
     if not placed or interaction == "U":
         record["reason"] = ("nothing placed this claim, so nothing is known about what would settle "
                             "it and the product is not evidence about it")
@@ -533,6 +650,19 @@ def _product_record(interaction: str, assertion: str, surfaces, state: str, reas
                             f"of them shares a meaningful word with this assertion")
         return record
     record.update(match)
+    if not match["verb_agrees"]:
+        # The nearest surface names the same noun with a different method - a GET route for an
+        # assertion about creation. That is a near miss, not evidence that the product publishes
+        # the act, so the state is ``zero`` (the product was read and settles nothing here), and
+        # both verbs and the route are recorded so the refusal is arguable rather than silent.
+        record["state"] = PRODUCT_ZERO
+        record["near_miss"] = True
+        record["reason"] = (f'the product declares {match["route"]}, and it shares the word '
+                            f'"{match["word"]}", but the assertion\'s verb is "{match["assertion_verb"]}" '
+                            f'and the route\'s method is {match["surface_verb"]} - a '
+                            f'{match["surface_verb"]} route does not settle "{match["assertion_verb"]}" '
+                            f'- so it is not counted as a repeat')
+        return record
     record["state"] = PRODUCT_FOUND
     record["reason"] = (f'the product declares {match["route"]}, whose own claim is '
                         f'"{match["claim"]}", and it shares the word "{match["word"]}" with the '
