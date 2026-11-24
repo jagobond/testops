@@ -618,6 +618,31 @@ def assessment_note(claim: dict) -> list[str]:
     return []
 
 
+def near_miss_sentence(product: dict) -> str:
+    """One sentence saying which route a claim nearly matched and why it was not counted.
+
+    The rule's honesty needs the same three facts everywhere it renders (TESTOPS-78, AC4): the route
+    the product declares, the word the two share, and why that is not a repeat. Two refusals reach
+    here - a method that settles a different act, and an assertion that names no act at all - and
+    each says its own reason rather than one sentence pretending to be both.
+    """
+    route = esc(product.get("route") or "a route")
+    word = esc(product.get("word") or "")
+    no_intent = (product.get("near_miss_kind") == "no_intent"
+                 or not product.get("assertion_verb"))
+    if no_intent:
+        return (f'it declares <span class="code">{route}</span>, which shares the word '
+                f'\u201c{word}\u201d, but the assertion names no act this rule recognises (none '
+                f'of get, create, update or delete), so a shared noun alone says nothing about '
+                f'whether the product already does this.')
+    verb = esc(product.get("assertion_verb") or "")
+    method = esc(product.get("surface_verb") or "")
+    return (f'it declares <span class="code">{route}</span>, which shares the word '
+            f'\u201c{word}\u201d, but its method is {method} and the assertion is about '
+            f'\u201c{verb}\u201d, so it settles a different act and says nothing about whether '
+            f'the product already does this one.')
+
+
 def product_evidence_block(claim: dict) -> list[str]:
     """What the product said about this claim, in the product's own words (TESTOPS-72, AC5).
 
@@ -655,14 +680,8 @@ def product_evidence_block(claim: dict) -> list[str]:
                 f'here says whether this claim repeats it. That is not a zero.</p>']
     if state == "zero":
         if product.get("near_miss"):
-            route = esc(product.get("route") or "a route")
-            word = esc(product.get("word") or "")
-            verb = esc(product.get("assertion_verb") or "")
-            method = esc(product.get("surface_verb") or "")
-            return [f'<p class="meta"><span class="fn">What the product says:</span> it declares '
-                    f'<span class="code">{route}</span>, which shares the word \u201c{word}\u201d, '
-                    f'but its method is {method} and the assertion is about \u201c{verb}\u201d, so '
-                    f'nothing here says the product already does this.</p>']
+            return [f'<p class="meta near-miss"><span class="fn">What the product says:</span> '
+                    f'{near_miss_sentence(product)}</p>']
         total = product.get("surfaces")
         held = (f'it was read and declares {total} surfaces, and none of them shares a meaningful '
                 f'word with this assertion' if isinstance(total, int) and total
@@ -2082,6 +2101,86 @@ def product_block(conn, run: dict) -> list[str]:
     else:
         out.append('<p>No claim in this run needed the product: none of them is settled by a '
                    'browser.</p>')
+    # TESTOPS-78, AC3: the claims the rule looked at and declined, on their own line. They are not
+    # repeats and not blind spots, so folding them into either count would misreport what happened:
+    # the product was read, a noun was shared, and the rule refused to call that evidence.
+    refused = evidence["near_miss"]
+    if refused:
+        out.append(f'<p class="meta">{refused} claim{"s" if refused != 1 else ""} '
+                   f'share{"s" if refused == 1 else ""} a noun with a product route but '
+                   f'{"was" if refused == 1 else "were"} not counted (verb differs '
+                   f'{evidence["near_miss_verb_differs"]} / no intent '
+                   f'{evidence["near_miss_no_intent"]}). '
+                   f'They are <a href="#product-refused">listed below</a>.</p>')
+    return out
+
+
+def near_miss_block(conn, run: dict) -> list[str]:
+    """The claims the product rule looked at and declined, with their sentence, on the run page.
+
+    TESTOPS-78, AC4. A near-miss claim is ``distinct``, so it raises no case and gets no page of its
+    own; before this it was recorded and rendered nowhere. The run page is the page every run has,
+    so the refusals are listed here: each claim's own words, the near-miss sentence (route, shared
+    word, why it is not a repeat), and - where its scenario raised a finding - a link to that
+    scenario's case page, which shows the same sentence in place. A claim whose scenario raised
+    nothing is reachable here; the record is not invisible, it is simply not a finding.
+    """
+    entries = queries.near_miss_claims(conn, run["id"])
+    if not entries:
+        return []
+    links = queries.case_for_scenario(conn, run["id"])
+    total = len(entries)
+    out = ['<h2 class="section" id="product-refused">What the product refused</h2>',
+           f'<p>{_count(total, "claim")} in this run {"shares" if total == 1 else "share"} a noun '
+           f'with a route the product declares, and the rule declined to count '
+           f'{"it" if total == 1 else "them"} as a repeat. The reason for each is below, so the '
+           f'refusal can be argued with.</p>',
+           '<ul class="cases">']
+    for entry in entries:
+        anchor = f"near-miss-claim-{esc(str(entry['id']))}"
+        case_id = links.get(entry["subject_ref"])
+        if case_id:
+            where = (f'<a href="/case/{esc(case_id)}#{anchor}">Read the case page for its '
+                     f'scenario</a>.')
+        else:
+            where = ('Its scenario raised no finding, so it has no case page: this entry is where '
+                     'the claim is recorded.')
+        out.append(f'<li id="{anchor}">'
+                   f'<p class="claimtext">{esc(entry["assertion_text"])}</p>'
+                   f'<p class="meta"><span class="fn">What the product says:</span> '
+                   f'{near_miss_sentence(entry["product"])}</p>'
+                   f'<p class="meta">{where}</p></li>')
+    out.append("</ul>")
+    return out
+
+
+def near_miss_case_block(conn, run_id: str, findings: list[dict]) -> list[str]:
+    """The near misses belonging to this case's own scenarios, on the case page (TESTOPS-78, AC4).
+
+    A near-miss claim cannot be a finding, so it cannot have a case page of its own; but the case
+    page of a sibling finding is the page a reader is already on when the rule's refusal matters.
+    The entries are restricted to the ``subject_ref`` values of this case's own claims, so no other
+    scenario's refusal is borrowed to make this page look more thorough.
+    """
+    scenarios = {claim["subject"] for finding in findings for claim in finding.get("claims") or []}
+    if not scenarios:
+        return []
+    entries = queries.near_miss_claims(conn, run_id, scenarios)
+    if not entries:
+        return []
+    out = [f'<p>{_count(len(entries), "claim")} in this scenario '
+           f'{"shares" if len(entries) == 1 else "share"} a noun with a route the product '
+           f'declares, and the rule declined to count '
+           f'{"it" if len(entries) == 1 else "them"} as a repeat. '
+           f'{"It is" if len(entries) == 1 else "They are"} shown here so the refusal can be '
+           f'argued with.</p>', '<ul class="cases">']
+    for entry in entries:
+        anchor = f"near-miss-claim-{esc(str(entry['id']))}"
+        out.append(f'<li id="{anchor}">'
+                   f'<p class="claimtext">{esc(entry["assertion_text"])}</p>'
+                   f'<p class="meta"><span class="fn">What the product says:</span> '
+                   f'{near_miss_sentence(entry["product"])}</p></li>')
+    out.append("</ul>")
     return out
 
 
@@ -2189,6 +2288,7 @@ def run_response(conn, run_id: str) -> tuple[bytes, int]:
     body.extend(read_counts_block(run))
     body.extend(analysis_scope_block(run))
     body.extend(product_block(conn, run))
+    body.extend(near_miss_block(conn, run))
     body.extend(unplaced_block(conn, run))
 
     if not (run.get("findings") or 0):
@@ -2537,6 +2637,15 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
                     body.append(f'<h3>Claim {j} of {len(f["claims"])}</h3>')
                 sections, next_section = claim_sections(c)
                 body.extend(sections)
+
+    # TESTOPS-78, AC4: the near misses belonging to this case's own scenario. They cannot raise a
+    # finding, so this page is the only place they can sit beside the claim they were refused for.
+    if findings and row.get("run_id"):
+        refused = near_miss_case_block(conn, row["run_id"], findings)
+        if refused:
+            body.append(f'<h2 class="section">{next_section}. What the product refused</h2>')
+            next_section += 1
+            body.extend(refused)
 
     form = decision_form(conn, row, case_id, findings, row["analyser"])
     if form:
