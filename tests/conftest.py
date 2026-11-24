@@ -2,14 +2,17 @@
 
 Two global obligations here:
 
-  * AC10 of an earlier ticket, sharpened by TESTOPS-64: a session-scoped guard digests the repository
-    before the first test and compares it after the last one, so a write by *any* test fails the run
-    regardless of file or collection order. A difference is only a write if no commit made during the
-    run accounts for it: the baseline records ``HEAD`` and the index as well as the digest, and a path
-    whose blob differs between the two commits is reported as *changed by a commit* rather than
-    blamed on the suite. Everything a commit cannot explain - including every untracked addition -
-    still fails and still names the path. What it cannot attribute is stated in ``support``'s
-    docstring: a commit and a test write to the same path in the same run is attributed to the commit.
+  * AC10 of an earlier ticket, sharpened by TESTOPS-64 and TESTOPS-66: a session-scoped guard digests
+    the repository before the first test and compares it after the last one, so a write by *any* test
+    fails the run regardless of file or collection order. A difference is only a write if no commit
+    made during the run accounts for it: the baseline records ``HEAD`` and the index as well as the
+    digest, and a path whose blob differs between the two commits is reported as *changed by a
+    commit* only when the working-tree digest equals the blob the new commit holds. A staged but
+    uncommitted change is its own failure, and git unavailability is reported as unreadable rather
+    than blamed on the suite. Everything a commit cannot explain - including every untracked
+    addition and every content mismatch - still fails and still names the path. What it cannot
+    attribute is stated in ``support``'s docstring: a test write whose bytes equal the commit's blob
+    is indistinguishable from the commit.
   * TESTOPS-35 AC3: the suite cannot open a product store for writing. The guard refuses the
     connection itself, so a fixture script that reaches for ``data/testops.db`` fails at the line
     that reached for it rather than being noticed, if at all, by a digest an hour later. The only
@@ -35,8 +38,9 @@ def store_guard():
 def repo_guard():
     """Session-wide guard against writes to the repository or to ``data/``.
 
-    Yields the baseline (digest, ``HEAD``, index); ``support.guard_report`` turns it into a report
-    that separates changes a commit accounts for from unexplained ones.
+    Yields the baseline (digest, ``HEAD``, index, and whether git was readable);
+    ``support.guard_report`` turns it into a report that separates changes a commit accounts for
+    from staged, unexplained and unreadable ones.
     """
     baseline = guard_baseline()
     # TESTOPS-49: a walk that found no files would make the comparison below vacuously empty, so

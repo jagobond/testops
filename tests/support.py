@@ -3,28 +3,40 @@
 The write guard (``repository_snapshot`` + ``attribute_differences``) compares a digest of the whole
 working tree before the first test with one taken after the last. TESTOPS-64: a difference is only
 evidence of a test writing if *no commit made during the run* accounts for it, so the guard also
-records ``HEAD`` and the index at baseline and reads the two commits' trees at comparison.
+records ``HEAD`` and the index at baseline and reads the two commits' trees at comparison. TESTOPS-66:
+an excuse needs agreement of content, not only of path: the working-tree digest must equal the blob
+the excusing commit holds for the path. A staged-but-uncommitted change is its own failure, and a
+git failure is reported as a git failure, never as a suite write.
 
 What the guard can attribute:
 
-* A path whose blob differs between the baseline commit and the commit at comparison was changed by
-  a commit made during the run. That is reported, counted, and does not fail the suite.
-* A path that appears in the new commit's tree but not the old one was added by that commit; a path
-  that disappears from it was deleted by that commit (reported, not failed, per TESTOPS-64 AC3).
-* Everything else fails: a modified, added or removed path with no commit whose tree differs for it,
-  including every untracked addition. The message names the paths and says no commit accounts for
-  them.
+* A path whose blob differs between the baseline commit and the commit at comparison **and whose
+  working-tree digest equals the blob in the new commit's tree** was changed by that commit. That is
+  reported, counted, and does not fail the suite.
+* A path the new commit added whose working-tree digest equals the committed blob was added by that
+  commit; a path the new commit removed was deleted by that commit (reported, not failed, per
+  TESTOPS-64 AC3).
+* A path whose index entry changed during the run and whose working-tree digest equals the new index
+  blob, while the index differs from ``HEAD``, is a staged but uncommitted change. It fails and is
+  named as staged: that is how a suite write would look if someone ran ``git add`` on it.
+* Everything else fails: a modified, added or removed path with no commit whose tree agrees with it,
+  including every untracked addition and every content mismatch between the working tree and the
+  excusing commit. The message names the paths; for a mismatch it names the expected blob and the
+  observed digest and says the working tree and the commit disagree.
+* When git cannot be read, the difference is reported as unreadable: "the repository could not be
+  read, so nothing could be attributed". It still fails - the invariant is unproven - but git is the
+  suspect, not the suite.
 
 What it cannot attribute:
 
-* *Which* person or process made a commit, or whether a commit and a test write both touched the same
-  path in the same run: if a commit changes path P and a test also writes P, the write is attributed
-  to the commit. The guard proves "the working tree now matches something a commit did", not "no
-  test wrote here".
+* *Which* person or process made a commit. A test write that produces exactly the same bytes as the
+  commit's blob is indistinguishable from the commit's content and is excused; a write that produces
+  different bytes is not.
 * Content restored to its exact baseline bytes by the end of the run (a write reverted by the same
   run), which no digest can see - that is why the store guard below refuses the open instead.
-* Anything at all when git is unavailable, the checkout has no commit, or the walk finds no files:
-  with no commit to consult, every difference is unexplained, which is the loud direction.
+* Anything at all when the checkout has no commit or the walk finds no files: with no commit to
+  consult, every difference is unexplained, which is the loud direction. Git unavailability is the
+  separate unreadable class above.
 """
 from __future__ import annotations
 
@@ -43,7 +55,8 @@ _IGNORED_DIRS = {".git", ".venv", "__pycache__", ".pytest_cache", "build", "dist
 _IGNORED_SUFFIXES = (".pyc",)
 
 
-def _digest(path: Path) -> tuple[int, str]:
+def _raw_digest(path: Path) -> tuple[int, str]:
+    """A sha256 fallback used only when git cannot be run."""
     h = hashlib.sha256()
     with path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
@@ -51,20 +64,55 @@ def _digest(path: Path) -> tuple[int, str]:
     return path.stat().st_size, h.hexdigest()
 
 
+def _blob_digests(root: Path, paths: list[str]) -> dict[str, str] | None:
+    """Git's own blob sha for every working-tree path, with its filters applied.
+
+    ``git hash-object --stdin-paths`` applies the repository's clean filters (including
+    ``core.autocrlf``), so the digest is the blob the excusing commit would hold for the same bytes.
+    A raw sha256 cannot be compared with a committed blob on a checkout with CRLF conversion. Returns
+    ``None`` when git cannot be run, so the caller can fall back to a raw digest and the comparison
+    can report the unreadable class.
+    """
+    if not paths:
+        return {}
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(root), "hash-object", "--stdin-paths"],
+            input="\n".join(paths) + "\n", capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    lines = done.stdout.splitlines()
+    if len(lines) != len(paths):
+        return None
+    return dict(zip(paths, lines))
+
+
 def repository_snapshot(root: Path = ROOT) -> dict[str, tuple[int, str]]:
     """Digest every tracked-by-content file in the repo, ignoring interpreter caches.
 
-    Comparing two snapshots detects an added, removed or modified file anywhere in the working tree,
-    which is what AC10 needs: a test may only write under pytest's ``tmp_path``.
+    The digest is git's blob sha, so it can be compared directly with the blob an excusing commit
+    holds for the path. A raw sha256 fallback is used only when git cannot be run. Comparing two
+    snapshots detects an added, removed or modified file anywhere in the working tree, which is what
+    AC10 needs: a test may only write under pytest's ``tmp_path``.
     """
-    out: dict[str, tuple[int, str]] = {}
+    paths: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(d for d in dirnames if d not in _IGNORED_DIRS)
         for name in sorted(filenames):
             if name.endswith(_IGNORED_SUFFIXES):
                 continue
-            path = Path(dirpath) / name
-            out[path.relative_to(root).as_posix()] = _digest(path)
+            paths.append((Path(dirpath) / name).relative_to(root).as_posix())
+    blobs = _blob_digests(root, paths)
+    out: dict[str, tuple[int, str]] = {}
+    for relative in paths:
+        path = root / relative
+        size = path.stat().st_size
+        digest = blobs.get(relative) if blobs is not None else None
+        if digest is None:
+            size, digest = _raw_digest(path)
+        out[relative] = (size, digest)
     return out
 
 
@@ -88,16 +136,19 @@ def snapshot_difference(before: dict[str, tuple[int, str]],
 
 @dataclass(frozen=True)
 class RepoState:
-    """``HEAD`` and the index at one moment - what the guard needs to attribute a change.
+    """``HEAD``, the index and whether git could be read at one moment.
 
-    ``index`` maps a path to the blob sha the index records for it (``git ls-files -s``), so a path
-    that was tracked at baseline can be told from one that never was. ``head`` is ``None`` when the
-    checkout is not a repository, has no commit, or git cannot be run: then nothing is attributable
-    and every difference stays unexplained.
+    ``index`` maps a path to the blob sha the index records for it (``git ls-files -s``). The
+    comparison uses it to see a staged-but-uncommitted change: an index entry that changed during the
+    run, whose blob equals the working-tree digest and differs from the blob in ``HEAD``'s tree.
+    ``readable`` is false when git could not be run; then nothing is attributable and the comparison
+    reports every difference as unreadable rather than accusing the suite. ``head`` is ``None`` when
+    the checkout has no commit or git is unreadable.
     """
 
     head: str | None
     index: Mapping[str, str]
+    readable: bool = True
 
 
 @dataclass(frozen=True)
@@ -105,50 +156,70 @@ class AttributionReport:
     """A difference between two snapshots, split by what accounts for it.
 
     ``changed_by_commit`` / ``added_by_commit`` / ``deleted_by_commit`` are explained by a commit made
-    during the run and do not fail. ``unexplained`` (modified or removed with no commit accounting
-    for it) and ``untracked`` (an addition no commit contains) are failures.
+    during the run and do not fail. ``staged`` is a staged-but-uncommitted change. ``unexplained``
+    (modified or removed with no commit whose tree agrees with the working tree) and ``untracked`` (an
+    addition no commit contains) are failures. ``unreadable`` is every difference when git could not
+    be read; it is a failure too, but the suspect is git. ``content_mismatches`` carries
+    ``(path, expected_blob, observed_digest)`` for paths where a commit touched the path but the
+    working tree disagrees with the blob it holds.
     """
 
     changed_by_commit: tuple[str, ...] = ()
     added_by_commit: tuple[str, ...] = ()
     deleted_by_commit: tuple[str, ...] = ()
+    staged: tuple[str, ...] = ()
     unexplained: tuple[str, ...] = ()
     untracked: tuple[str, ...] = ()
+    unreadable: tuple[str, ...] = ()
+    content_mismatches: tuple[tuple[str, str, str], ...] = ()
     head_before: str | None = None
     head_after: str | None = None
 
     @property
     def failures(self) -> tuple[str, ...]:
-        return tuple(sorted(self.unexplained + self.untracked))
+        return tuple(sorted(self.unexplained + self.untracked + self.staged + self.unreadable))
 
     @property
     def explained_count(self) -> int:
         return len(self.changed_by_commit) + len(self.added_by_commit)
 
     def summary(self) -> list[str]:
-        """One line per class, with counts, so a reader never has to infer the outcome from a pass."""
-        lines = [
-            f"write guard: {_count(self.explained_count, 'file')} changed by a commit during the run, "
-            f"{_count(len(self.unexplained), 'file')} unexplained"
+        """Every class with its count, so a reader never has to infer the outcome from a pass."""
+        return [
+            "write guard: "
+            f"{_count(self.explained_count, 'file')} changed by a commit during the run, "
+            f"{_count(len(self.deleted_by_commit), 'file')} deleted by a commit during the run, "
+            f"{_count(len(self.staged), 'staged but uncommitted change')}, "
+            f"{_count(len(self.unexplained), 'file')} unexplained, "
+            f"{_count(len(self.untracked), 'untracked addition')} no commit accounts for, "
+            f"{_count(len(self.unreadable), 'unreadable file')}"
         ]
-        if self.deleted_by_commit:
-            lines.append(
-                f"write guard: {_count(len(self.deleted_by_commit), 'file')} deleted by a commit "
-                "during the run")
-        if self.untracked:
-            lines.append(
-                f"write guard: {_count(len(self.untracked), 'untracked addition')} no commit accounts "
-                "for")
-        return lines
 
     def failure_message(self) -> str:
         assert self.failures
-        lines = [
-            "the suite wrote outside tmp_path: no commit made during the run accounts for "
-            f"{', '.join(self.failures)}",
-            f"(HEAD {_short(self.head_before)} -> {_short(self.head_after)})",
-            *self.summary(),
-        ]
+        lines: list[str] = []
+        if self.unreadable:
+            lines.append(
+                "the repository could not be read, so nothing could be attributed: "
+                f"{', '.join(self.unreadable)}")
+            lines.append("(git is the suspect; the suite did not write this)")
+        else:
+            if self.staged:
+                lines.append(
+                    "a staged but uncommitted change appeared during the run: "
+                    f"{', '.join(self.staged)}")
+            blamed = tuple(sorted(set(self.unexplained + self.untracked)
+                                  - {path for path, _, _ in self.content_mismatches}))
+            if blamed:
+                lines.append(
+                    "the suite wrote outside tmp_path: no commit made during the run accounts for "
+                    f"{', '.join(blamed)}")
+            for path, expected, observed in self.content_mismatches:
+                lines.append(
+                    f"{path}: the working tree and the commit disagree "
+                    f"(expected blob {expected}, observed digest {observed})")
+        lines.append(f"(HEAD {_short(self.head_before)} -> {_short(self.head_after)})")
+        lines.extend(self.summary())
         return "\n".join(lines)
 
 
@@ -166,40 +237,94 @@ def attribute_differences(before: Mapping[str, tuple[int, str]],
                           before_state: RepoState,
                           after_state: RepoState,
                           commit_blobs: Callable[[str | None], Mapping[str, str]]) -> AttributionReport:
-    """Split the difference between two snapshots into commit-explained and unexplained paths.
+    """Split the difference between two snapshots into exactly one class per path.
 
-    ``commit_blobs(commit)`` returns the path-to-blob-sha map of that commit's tree, so the guard can
-    ask whether a changed path's blob differs between the baseline commit and the commit at
-    comparison. When ``HEAD`` did not move - or either side has no commit - nothing is explained and
-    every difference is a failure, which is the loud direction.
+    ``commit_blobs(commit)`` returns the path-to-blob-sha map of that commit's tree. A commit excuses
+    a path only when it touched the path **and** the working-tree digest equals the blob the new
+    commit holds for it; a path the commit added or removed must be present or absent in the new tree
+    as appropriate. A staged-but-uncommitted change is detected from the index when its entry changed
+    during the run and the working tree matches the new index blob. When git is unreadable, every
+    difference is reported as unreadable and nothing is blamed on the suite. When ``HEAD`` did not
+    move - or either side has no commit - nothing is explained, which is the loud direction.
     """
     difference = snapshot_difference(dict(before), dict(after))
+    all_paths = sorted(set(difference["added"]) | set(difference["removed"])
+                       | set(difference["changed"]))
+    if not before_state.readable or not after_state.readable:
+        return AttributionReport(unreadable=tuple(all_paths),
+                                 head_before=before_state.head,
+                                 head_after=after_state.head)
+
     moved = bool(before_state.head and after_state.head and before_state.head != after_state.head)
     before_tree: Mapping[str, str] = commit_blobs(before_state.head) if moved else {}
     after_tree: Mapping[str, str] = commit_blobs(after_state.head) if moved else {}
 
-    def committed(path: str) -> bool:
-        """True when a commit made during the run changed this path's blob (or added/removed it)."""
-        return moved and before_tree.get(path) != after_tree.get(path)
+    def digest_of(path: str) -> str:
+        return after[path][1]
 
-    added_by_commit, untracked, deleted_by_commit = [], [], []
+    def index_changed(path: str) -> bool:
+        return before_state.index.get(path) != after_state.index.get(path)
+
+    def staged(path: str) -> bool:
+        """A staged-but-uncommitted change: the index moved and the working tree agrees with it."""
+        if not index_changed(path):
+            return False
+        if path in difference["removed"]:
+            # A staged deletion: the index no longer has the path, but HEAD's tree still does.
+            return path in after_tree and path not in after_state.index
+        blob = after_state.index.get(path)
+        return blob is not None and blob == digest_of(path) and blob != after_tree.get(path)
+
+    changed_by_commit: list[str] = []
+    added_by_commit: list[str] = []
+    deleted_by_commit: list[str] = []
+    staged_paths: list[str] = []
+    unexplained: list[str] = []
+    untracked: list[str] = []
+    mismatches: list[tuple[str, str, str]] = []
+
     for path in difference["added"]:
-        # AC3: an addition is attributed only when the new commit's tree actually contains it.
-        # Nothing else excuses a new file, however much HEAD moved.
-        (added_by_commit if committed(path) else untracked).append(path)
+        if staged(path):
+            staged_paths.append(path)
+        elif moved and path in after_tree and digest_of(path) == after_tree[path]:
+            added_by_commit.append(path)
+        elif moved and path in after_tree:
+            # The commit added the path, but its bytes are not the commit's bytes.
+            unexplained.append(path)
+            mismatches.append((path, after_tree[path], digest_of(path)))
+        else:
+            # AC3: an addition is attributed only when the new commit's tree actually contains it.
+            untracked.append(path)
+
     for path in difference["removed"]:
-        if committed(path):
+        if staged(path):
+            staged_paths.append(path)
+        elif moved and path in before_tree and path not in after_tree:
             deleted_by_commit.append(path)
-    unanswered_removed = [p for p in difference["removed"] if not committed(p)]
-    changed_by_commit = [p for p in difference["changed"] if committed(p)]
-    unexplained = [p for p in difference["changed"] if not committed(p)] + unanswered_removed
+        else:
+            # A commit that merely modified the path does not account for its disappearance.
+            unexplained.append(path)
+
+    for path in difference["changed"]:
+        if staged(path):
+            staged_paths.append(path)
+        elif moved and path in after_tree and before_tree.get(path) != after_tree.get(path):
+            if digest_of(path) == after_tree[path]:
+                changed_by_commit.append(path)
+            else:
+                unexplained.append(path)
+                mismatches.append((path, after_tree[path], digest_of(path)))
+        else:
+            unexplained.append(path)
 
     return AttributionReport(
-        changed_by_commit=tuple(changed_by_commit),
-        added_by_commit=tuple(added_by_commit),
-        deleted_by_commit=tuple(deleted_by_commit),
+        changed_by_commit=tuple(sorted(changed_by_commit)),
+        added_by_commit=tuple(sorted(added_by_commit)),
+        deleted_by_commit=tuple(sorted(deleted_by_commit)),
+        staged=tuple(sorted(staged_paths)),
         unexplained=tuple(sorted(unexplained)),
-        untracked=tuple(untracked),
+        untracked=tuple(sorted(untracked)),
+        content_mismatches=tuple(sorted(mismatches)),
         head_before=before_state.head,
         head_after=after_state.head,
     )
@@ -241,7 +366,10 @@ class GitRepository:
         return out.strip() if out and out.strip() else None
 
     def state(self) -> RepoState:
-        """``HEAD`` and the index now; empty and ``None`` when git is not available."""
+        """``HEAD`` and the index now; ``readable=False`` when git cannot be run."""
+        inside = self._git("rev-parse", "--is-inside-work-tree")
+        if inside is None or inside.strip() != "true":
+            return RepoState(head=None, index={}, readable=False)
         index: dict[str, str] = {}
         listing = self._git("ls-files", "-s", "-z")
         prefix = self._relative_prefix()
