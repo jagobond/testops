@@ -77,6 +77,7 @@ VERDICT_LABEL = {
     "review": "Checked, but over-tested for what it asserts",
     "gap": "Not proved \u2014 nothing runs a browser",
     "duplicate": "Checked, but this repeats another test",
+    "repeats_product": "Checked, but the product already exposes this",
     "unplaced": "Cannot tell",
 }
 STATE_LABEL = {"open": "Open", "needs_fix": "Needs a fix", "resolved": "Resolved",
@@ -560,6 +561,16 @@ def wrong_sentence(claim: dict, quote: str | None) -> str:
                 f"the same thing, so the project runs it twice.")
     if verdict == "unplaced":
         return f"The test asserts the step {q}, but {fact}."
+    if verdict == "repeats_product":
+        # The evidence below the scan block names the route, the word and the surface's own claim;
+        # this sentence is the judgement a reader acts on (TESTOPS-72, AC5). It stays short because
+        # the headline above it and the action below it carry the rest, and a long step text must not
+        # push the scan block past the prose lint's sentence limit.
+        product = (claim.get("detail") or {}).get("product") or {}
+        route = product.get("route")
+        where = (f"already declares {esc(route)}" if route else "already exposes this")
+        return (f"The test asserts the step {q} through a browser, but the product {where}, so the "
+                f"check re-verifies work the developer has already done.")
     if verdict == "review" and does is not None:
         return f"The test asserts the step {q}, but {fact}, and {rich_prose(does)} to read it."
     if does is not None:
@@ -604,6 +615,60 @@ def assessment_note(claim: dict) -> list[str]:
     assessment = claim.get("assessment") or {}
     if assessment.get("state") in (sources.ZERO, sources.NOT_RECORDED) and assessment.get("sentence"):
         return [f'<p class="meta">{esc(assessment["sentence"])}</p>']
+    return []
+
+
+def product_evidence_block(claim: dict) -> list[str]:
+    """What the product said about this claim, in the product's own words (TESTOPS-72, AC5).
+
+    A verdict that says the test repeats the product is only checkable if the page shows the route
+    the product declares, the word the two share, and the claim the surface makes for itself. The
+    block also speaks for the two states that are not a match: a product that was read and offered
+    nothing, and a product nobody could consult. A claim the product is not evidence about (it does
+    not need a browser) renders nothing - the claim's record still carries the state, but a line on
+    every case page saying "the product is irrelevant here" is noise, not evidence.
+    """
+    product = (claim.get("detail") or {}).get("product")
+    if not isinstance(product, dict):
+        return []
+    state = product.get("state")
+    if state == "none":
+        return []
+    if state == "found":
+        route = esc(product.get("route") or "a route")
+        word = esc(product.get("word") or "")
+        shared = product.get("shared_with")
+        total = product.get("surfaces")
+        own = esc(product.get("claim") or "")
+        surface = (f'it declares <span class="code">{route}</span>, and its own claim for that '
+                   f'route is \u201c{own}\u201d' if own
+                   else f'it declares <span class="code">{route}</span>')
+        counted = (f', which appears in {shared} of the product\u2019s {total} surfaces'
+                   if isinstance(shared, int) and isinstance(total, int) else "")
+        return [f'<p class="meta"><span class="fn">What the product says:</span> {surface}. The '
+                f'assertion and that surface share the word \u201c{word}\u201d{counted}, so it is '
+                f'not the noun the whole product is about.</p>']
+    if state == "not_assessable":
+        reason = (product.get("reason") or "").strip().rstrip(".")
+        return [f'<p class="meta"><span class="fn">What the product says:</span> '
+                f'{esc(reason) if reason else "the product could not be consulted"}, so nothing '
+                f'here says whether this claim repeats it. That is not a zero.</p>']
+    if state == "zero":
+        if product.get("near_miss"):
+            route = esc(product.get("route") or "a route")
+            word = esc(product.get("word") or "")
+            verb = esc(product.get("assertion_verb") or "")
+            method = esc(product.get("surface_verb") or "")
+            return [f'<p class="meta"><span class="fn">What the product says:</span> it declares '
+                    f'<span class="code">{route}</span>, which shares the word \u201c{word}\u201d, '
+                    f'but its method is {method} and the assertion is about \u201c{verb}\u201d, so '
+                    f'nothing here says the product already does this.</p>']
+        total = product.get("surfaces")
+        held = (f'it was read and declares {total} surfaces, and none of them shares a meaningful '
+                f'word with this assertion' if isinstance(total, int) and total
+                else 'it was read and declares no surface at all')
+        return [f'<p class="meta"><span class="fn">What the product says:</span> {held}, so nothing '
+                f'here says the product already does this.</p>']
     return []
 
 
@@ -687,6 +752,7 @@ _OTHER_LEVEL = {
     "gap": "not proved, because nothing runs what would settle it",
     "unplaced": "not judged, because no instrument that settles it could be identified",
     "distinct": "already asserted at the level it should be",
+    "repeats_product": "already exposed by the product, so a browser check re-verifies it",
 }
 
 
@@ -831,6 +897,7 @@ LIST_JUDGEMENT = {
     "distinct": "Checked",
     "review": "Checked, but over-tested",
     "duplicate": "Already asserted elsewhere",
+    "repeats_product": "Already exposed by the product",
     "gap": "Not proved",
     "unplaced": "Cannot tell",
 }
@@ -1425,6 +1492,7 @@ def claim_sections(c: dict) -> tuple[list[str], int]:
     out.extend(provenance_line(c))
     out.extend(binding_provenance_block(c))
     out.extend(assessment_note(c))
+    out.extend(product_evidence_block(c))
     out.extend(pass_aside(c))
     out.extend(also_reported_block(c))
     out.extend([f'<h2 class="section">{number}. The step that is asserted</h2>'])
@@ -1981,6 +2049,42 @@ def _repository_read_as(role: str, entry: dict) -> str:
     return f"{where[0].upper()}{where[1:]} was read as {title}{counted}."
 
 
+def product_block(conn, run: dict) -> list[str]:
+    """What the product said about this run's claims: two counts, kept apart (TESTOPS-72, AC6).
+
+    A run page that showed only the repeats would hide the claims nobody could judge, and a page
+    that added them together would report a blind spot as a finding. A run from before this analysis
+    recorded no product reading at all, and says exactly that instead of printing two zeroes.
+    """
+    evidence = queries.product_evidence(conn, run["id"])
+    if not evidence["recorded"]:
+        return ['<h2 class="section">What the product says</h2>',
+                '<p class="quiet">This run recorded no reading of the product for its claims, so '
+                'nothing here says whether any of them repeats work the product already exposes. '
+                'That is not a zero.</p>']
+    repeats, unconsulted = evidence["repeats"], evidence["unconsulted"]
+    out = ['<h2 class="section">What the product says</h2>']
+    if repeats:
+        out.append(f'<p>{_count(repeats, "claim")} repeat work the product already exposes: each '
+                   f'shares a meaningful word with a route the product declares, so a browser check '
+                   f'on {"it" if repeats == 1 else "them"} re-verifies what the developer has '
+                   f'already published.</p>')
+    else:
+        out.append('<p>No claim in this run repeats work the product already exposes.</p>')
+    if unconsulted:
+        out.append(f'<p>{_count(unconsulted, "claim")} needed a browser and the product could not be '
+                   f'consulted, so nothing here says whether '
+                   f'{"it repeats" if unconsulted == 1 else "they repeat"} it. '
+                   f'{"It is" if unconsulted == 1 else "They are"} not counted among the repeats '
+                   f'above.</p>')
+    elif evidence["matched"] or repeats:
+        out.append('<p>Every claim that needed the product could be judged against it.</p>')
+    else:
+        out.append('<p>No claim in this run needed the product: none of them is settled by a '
+                   'browser.</p>')
+    return out
+
+
 def read_counts_block(run: dict) -> list[str]:
     """How many files of each kind each repository gave this run, zeroes included (TESTOPS-55).
 
@@ -2084,6 +2188,7 @@ def run_response(conn, run_id: str) -> tuple[bytes, int]:
     body.extend(ecosystem_block(run))
     body.extend(read_counts_block(run))
     body.extend(analysis_scope_block(run))
+    body.extend(product_block(conn, run))
     body.extend(unplaced_block(conn, run))
 
     if not (run.get("findings") or 0):

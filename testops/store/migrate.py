@@ -30,6 +30,12 @@ v5 trigger body in place - so a v5 store has its two verdict triggers dropped he
 the ``executescript`` that follows. Rows are not copied or rewritten; only the guard above them is
 replaced.
 
+v7 (TESTOPS-72) adds ``repeats_product`` to the vocabulary table and refreshes the two refusal
+messages that name the set. Same shape as v6: the triggers are dropped and recreated so the stored
+refusal sentence matches what the store accepts. The vocabulary row arrives through the
+``INSERT OR IGNORE`` in ``schema.sql``, which runs on every open, so a v6 store gains it without a
+copy of any claim.
+
 SQLite cannot add a table-level CHECK to an existing table, and AC4's refusal has to live in the
 database - a Python guard in ``add_claim`` would be skippable by the next caller. So the ``claim``
 table is rebuilt: same rows, same ids, same values, new columns defaulted to "not recorded", and the
@@ -51,7 +57,9 @@ from ..config import LEGACY_PROJECTS
 # be written, not the shape of any stored row, so no existing row is copied or rewritten to get them.
 # v6 widens the INSERT trigger's allowed set to every name the product has ever emitted (TESTOPS-46),
 # so a store can be restored from its own history; the trigger is replaced, no row is touched.
-CURRENT_VERSION = 6
+# v7 adds `repeats_product` to the vocabulary (TESTOPS-72) and refreshes the two refusal messages,
+# which name the set; the triggers are replaced again and no row is touched.
+CURRENT_VERSION = 7
 
 # The oldest store this build can still open. v1 is readable: its claims are evidence.
 MIN_SUPPORTED_VERSION = 1
@@ -134,9 +142,10 @@ def prepare(conn: sqlite3.Connection, schema_text: str) -> int:
         # different from recording that nothing was missing - a rebuild refuses rather than guess.
         conn.execute("ALTER TABLE snapshot ADD COLUMN meta TEXT NOT NULL DEFAULT '{}'")
 
-    if version is not None and version < 6:
-        # schema.sql creates a trigger only if it is absent, so a v5 body would survive the
-        # executescript below. Drop it here and let the canonical DDL install v6's guard.
+    if version is not None and version < 7:
+        # schema.sql creates a trigger only if it is absent, so a v6 body - whose refusal message
+        # names five verdicts - would survive the executescript below. Drop both and let the
+        # canonical DDL install v7's guard and v7's wording.
         conn.execute("DROP TRIGGER IF EXISTS claim_verdict_insert")
         conn.execute("DROP TRIGGER IF EXISTS claim_verdict_update")
 

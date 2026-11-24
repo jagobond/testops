@@ -34,6 +34,7 @@ VERDICT_TONE = {
     "review": ALARM,         # checked, but over-tested for what it asserts
     "gap": ALARM,            # not proved: nothing runs what the assertion needs
     "duplicate": ALARM,      # checked, but this repeats another test
+    "repeats_product": ALARM,  # checked, but the product already publishes it (TESTOPS-72)
     "unplaced": SOFT,        # cannot tell: no comparison could be made
     # Retired vocabulary (TESTOPS-9), still carried by stored evidence.
     "necessary": SETTLED,

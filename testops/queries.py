@@ -313,6 +313,45 @@ def observations_in_snapshot(conn, claim: dict) -> int | None:
     return int(total)
 
 
+# The two questions a run page must keep apart (TESTOPS-72, AC6): claims the product's own routes
+# show are repeats of work already done, and claims that needed the product and could not be judged
+# against it. Folding the second into the first would report a blind spot as a finding.
+PRODUCT_NOT_CONSULTED = "not_assessable"
+PRODUCT_FOUND = "found"
+
+
+def product_evidence(conn, run_id: str) -> dict:
+    """What the product said about one run's claims, counted from the run's own rows.
+
+    ``recorded`` is whether any claim carries a product record at all - a run from before TESTOPS-72
+    recorded none, and a page must say that rather than print two zeroes nobody produced. ``repeats``
+    counts claims whose verdict says the product already publishes them; ``unconsulted`` counts
+    claims that needed the product and whose record says it could not be consulted. The two sets do
+    not overlap: a claim nobody could judge is never counted as a repeat, and a repeat is never
+    counted as unconsulted.
+    """
+    rows = conn.execute(
+        """SELECT c.id, c.verdict, c.interaction_code,
+                  (SELECT i.output FROM inference i WHERE i.claim_id = c.id
+                    ORDER BY i.id DESC LIMIT 1) AS output
+             FROM claim c WHERE c.run_id = ? ORDER BY c.id""", (run_id,)).fetchall()
+    recorded = repeats = unconsulted = examined = 0
+    for row in rows:
+        detail = _json(row["output"]) if row["output"] else {}
+        product = detail.get("product") if isinstance(detail, dict) else None
+        if not isinstance(product, dict):
+            continue
+        recorded += 1
+        if row["verdict"] == "repeats_product":
+            repeats += 1
+        elif product.get("state") == PRODUCT_NOT_CONSULTED:
+            unconsulted += 1
+        elif product.get("state") == PRODUCT_FOUND:
+            examined += 1
+    return {"recorded": recorded, "claims": len(rows), "repeats": repeats,
+            "unconsulted": unconsulted, "matched": examined}
+
+
 def _attach_sources(conn, claim: dict) -> dict:
     """Attach what the run recorded about its sources, and the assessment they support.
 

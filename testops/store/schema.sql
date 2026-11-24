@@ -38,6 +38,12 @@
 -- retired name is a rewrite of evidence, not a restore; the 128 historical rows are read, never
 -- rewritten. Restore is INSERT, so widening INSERT is enough and leaves UPDATE's original
 -- protection intact.
+--
+-- schema_version 7 (TESTOPS-72) adds one name to the vocabulary, `repeats_product`, and the two
+-- trigger messages that name the set in a refusal. The INSERT trigger reads the table, so its
+-- *behaviour* did not change - but a refusal sentence naming five verdicts while the store accepts
+-- six is a small lie, and `CREATE TRIGGER IF NOT EXISTS` cannot replace a body. A v6 store has both
+-- triggers dropped and recreated on open, exactly as v6 did for v5; no row is copied or rewritten.
 
 CREATE TABLE IF NOT EXISTS schema_meta (
   key TEXT PRIMARY KEY,
@@ -104,6 +110,7 @@ INSERT OR IGNORE INTO verdict_vocabulary (name, status, retired_by) VALUES
   ('review',    'current', NULL),
   ('unplaced',  'current', NULL),
   ('duplicate', 'current', NULL),
+  ('repeats_product', 'current', NULL),
   ('optimal',   'retired', 'TESTOPS-9'),
   ('overbuilt', 'retired', 'TESTOPS-9'),
   ('necessary', 'retired', 'TESTOPS-9');
@@ -123,7 +130,7 @@ CREATE TABLE IF NOT EXISTS claim (
   analyser_version TEXT NOT NULL,
   subject_ref TEXT NOT NULL,               -- scenario:<feature>#<name> | issue:COTW-12
   statement TEXT NOT NULL,                 -- the claim's own heading, in plain words
-  verdict TEXT NOT NULL,                   -- distinct | gap | review | unplaced | duplicate
+  verdict TEXT NOT NULL,                   -- distinct | gap | review | unplaced | duplicate | repeats_product
   confidence REAL NOT NULL DEFAULT 0.0,
   support TEXT NOT NULL DEFAULT '[]',      -- json: [observation ids]
   schema_version INTEGER NOT NULL DEFAULT 1,
@@ -176,7 +183,7 @@ BEFORE INSERT ON claim
 WHEN NEW.verdict NOT IN (SELECT name FROM verdict_vocabulary)
 BEGIN
   SELECT RAISE(ABORT,
-    'claim.verdict is not a verdict this product has ever emitted: current are distinct|gap|review|unplaced|duplicate; retired are necessary|optimal|overbuilt, accepted only from a restore');
+    'claim.verdict is not a verdict this product has ever emitted: current are distinct|gap|review|unplaced|duplicate|repeats_product; retired are necessary|optimal|overbuilt, accepted only from a restore');
 END;
 
 CREATE TRIGGER IF NOT EXISTS claim_verdict_update
@@ -184,7 +191,7 @@ BEFORE UPDATE OF verdict ON claim
 WHEN NEW.verdict NOT IN (SELECT name FROM verdict_vocabulary WHERE status = 'current')
 BEGIN
   SELECT RAISE(ABORT,
-    'claim.verdict is not one of distinct|gap|review|unplaced|duplicate: a stored verdict may not be rewritten to an unknown or retired name');
+    'claim.verdict is not one of distinct|gap|review|unplaced|duplicate|repeats_product: a stored verdict may not be rewritten to an unknown or retired name');
 END;
 
 CREATE TABLE IF NOT EXISTS inference (
