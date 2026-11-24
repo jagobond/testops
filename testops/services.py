@@ -160,6 +160,13 @@ _CONTEXT_PAIR = re.compile(rf"(?i)(?<![A-Za-z0-9])({_CONTEXT_WORDS})[ \t]*[:=][ 
 # wrapped continuation from a second settings line: the line break is the only evidence there is, and
 # the rule reads it the loud way on purpose (a settings line nobody meant is refused, never the other
 # way round). A reader who meets a refusal for a sentence they wrapped knows why from this paragraph.
+#
+# The tab decision has one false-positive family of its own, stated here beside that limit rather
+# than discovered later (TESTOPS-71 AC5): because a tab is a line boundary, a prose line separated
+# from its continuation by a tab - "notes\tkey: in the vault" - is refused as configuration. A tab is
+# what a pasted table row or spreadsheet cell uses, and reading every one of those as a settings row
+# is the loud direction; the price is that a handful of sentences containing a tab are refused. That
+# is the tab's false-positive family, named with the wrapped-sentence limit instead of left implicit.
 _BARE_KEY_PAIR = re.compile(r"(?im)(?:^|(?<=[^A-Za-z0-9_ ]))[ \t]*keys?[ \t]*[:=][ \t]*"
                             r"(?P<value>[^\s,;]+)")
 # The key family as a *name*: the spellings AC3 normalises to one reading.
@@ -175,6 +182,23 @@ _REFERENCE_VALUE = re.compile(
         | [a-z][a-z0-9+.-]*://                       # any scheme: postgres://, amqp://, redis://
         | [.~]?[/\\] | [A-Za-z]:[\\/] | https?://    # a path or a URL: a location, not a secret
         )[^\s]*$""")
+# TESTOPS-71 AC4: a placeholder is a slot with a human-readable label, not a secret. A filter that
+# refuses `YOUR_KEY_HERE` teaches the reader to paste the real value instead, so a value that says
+# "put it here" is configuration. The vocabulary is deliberately narrow and whole-value: a
+# placeholder is the entire value (or the whole query parameter), never a fragment of one, so
+# `hunter2`, a 36-character base62 body and an `AKIA`-shaped value are still refused by the rules
+# below. `xxxx` and `***` are what a redacted or template example really contains.
+_PLACEHOLDER_VALUE = re.compile(
+    r"""(?ix)^(?:
+          your[ _-](?:api[ _-]?)?(?:keys?|tokens?|secrets?|passwords?|pwd)(?:[ _-]here)?
+        | <[a-z0-9][a-z0-9 ._-]{0,40}>       # <your-key>, <api-key>
+        | change[ _-]?me
+        | x{4,}
+        | \*{3,}
+        | redacted
+        | todo
+        | example(?:[ _-][a-z0-9_-]+)?       # example, example-value
+        )$""")
 # A URL that carries its own password - `scheme://user:secret@host/db` - is not a location: the
 # credential is written into it. `dsn=postgres://app:***@db/qa` is the secret itself, while
 # `dsn=postgres://db.example/qa` and `cert=/etc/ssl/ca.pem` are references. TESTOPS-68 AC3: this is a
@@ -209,11 +233,38 @@ _URL_QUERY_PASSWORD = re.compile(
     r"client[_-]?secrets?|authorization)=\s*(?P<value>[^&\s#]+)")
 
 
+def _is_placeholder(value: str) -> bool:
+    """Whether ``value`` is wholly a placeholder ("YOUR_KEY_HERE", "<your-key>", "***")."""
+    return bool(_PLACEHOLDER_VALUE.match(value.strip()))
+
+
+def _is_placeholder_assignment(text: str) -> bool:
+    """``name=<placeholder>`` / ``?name=<placeholder>``: a slot named with a label, not a secret.
+
+    Whole-value on purpose: ``token=YOUR_KEY_HERE`` is configuration, while ``token=hunter2`` and a
+    literal beside a placeholder stay secret. Used by :func:`_looks_like_secret` so the later
+    identifier rule cannot re-refuse a placeholder the pair branch has already accepted (TESTOPS-71
+    AC4).
+    """
+    if _is_placeholder(text):
+        return True
+    for separator in ("=", ":"):
+        if separator in text:
+            _, _, value = text.partition(separator)
+            if _is_placeholder(value):
+                return True
+    return False
+
+
 def _is_reference(value: str) -> bool:
-    """Whether a pair's value names a slot/location rather than carrying a secret (TESTOPS-65 AC4)."""
+    """Whether a pair's value names a slot/location rather than carrying a secret (TESTOPS-65 AC4).
+
+    A placeholder names a slot exactly as ``${API_KEY}`` does - it is a label for where the credential
+    belongs - so it is a reference too (TESTOPS-71 AC4).
+    """
     if _INLINE_PASSWORD.search(value):
         return False
-    return bool(_REFERENCE_VALUE.match(value))
+    return bool(_REFERENCE_VALUE.match(value)) or _is_placeholder(value)
 
 
 # Compounds whose *name* is a credential in ordinary use, not a kind of thing: a seed phrase is the
@@ -667,6 +718,12 @@ def _looks_like_secret(value: str) -> str | None:
     plain = (value or "").strip()
     if not plain:
         return None
+    # TESTOPS-71 AC4: a placeholder says "put the credential here" and is the opposite of a secret.
+    # Refusing it teaches the reader to paste the real value, so a whole-value placeholder -
+    # `YOUR_KEY_HERE`, `<your-key>`, `changeme`, `xxxx`, `***`, `REDACTED`, `TODO`, `example`, alone
+    # or as the whole value of a pair or query parameter - is configuration.
+    if _is_placeholder_assignment(plain):
+        return None
     # 0. TESTOPS-68 AC3: a password written into a URL (`scheme://user:secret@host`) is a shape, not
     #    a vocabulary lookup. It is refused anywhere in the value, with or without a credential word
     #    beside it, which is what makes this a floor: `postgres://app:secret@db/qa` on its own is
@@ -687,9 +744,12 @@ def _looks_like_secret(value: str) -> str | None:
     #    names the field, never the value. TESTOPS-65 AC4: a key-family name whose value is a slot
     #    reference (`${API_KEY}`, `from-env`, `os.environ[...]`) names where the credential lives and
     #    is configuration, while a literal after the same name is the credential itself - which is
-    #    also why `apikey`, `api_key`, `api-key` and `apiKey` cannot disagree here.
+    #    also why `apikey`, `api_key`, `api-key` and `apiKey` cannot disagree here. TESTOPS-71 AC3:
+    #    the reference check is not the key family's alone - a slot reference is a slot reference
+    #    whichever strong word names it, so `?token=${TOKEN}` and `token=os.environ["X"]` are
+    #    configuration exactly as `api_key=...` is. The reason for refusing still names the field.
     for pair in _CREDENTIAL_PAIR.finditer(plain):
-        if _KEY_FAMILY.match(pair.group(1)) and _is_reference(pair.group("value")):
+        if _is_reference(pair.group("value")):
             continue
         return (f"it reads as a credential: the name {pair.group(1)!r} is followed by '=' or ':' "
                 f"and a value")

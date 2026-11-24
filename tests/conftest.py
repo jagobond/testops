@@ -19,7 +19,10 @@ Two global obligations here:
     policy covers *untracked* churn only: a path the index or a commit tracks is never pruned or
     ignored by name, so a committed artefact is attributed like any other file (TESTOPS-69 AC4), and
     the summary states ``git readable: yes/no`` in every run, because the unreadable count is
-    difference-driven and a zero cannot say whether git was read at all (TESTOPS-69 AC3).
+    difference-driven and a zero cannot say whether git was read at all (TESTOPS-69 AC3). An unknown
+    tracked set is not an empty one: when the tracked-path lookup fails, every walked path is content
+    and nothing is pruned or ignored by name (TESTOPS-71 AC1), and ``git readable`` is ``no`` because
+    that lookup is one of the reads it answers for (TESTOPS-71 AC2).
     Everything a commit cannot explain - including every untracked addition and every content
     mismatch - still fails and still names the path. What it cannot attribute is stated in
     ``support``'s docstring: a test write whose bytes equal the commit's blob is indistinguishable

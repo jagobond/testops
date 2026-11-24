@@ -311,7 +311,13 @@ def test_the_partition_counts_every_difference_exactly_once(repo_guard):
 
 
 def test_a_write_under_a_policy_ignored_directory_is_visible_not_attributed(tmp_path):
-    """AC1: a write to build/ is counted and named in the summary, and is not a failure."""
+    """AC1: a write to build/ is counted and named in the summary, and is not a failure.
+
+    The directory is a git repository (TESTOPS-71 AC1): the ignore policy applies only when the walk
+    *knows* what is tracked. An empty tracked set from a readable repository is a real answer; an
+    unknown one is not, and there every path is content.
+    """
+    _git(tmp_path, "init", "-q")
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "a.txt").write_bytes(b"kept\n")
     (tmp_path / "build").mkdir()
