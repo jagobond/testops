@@ -15,7 +15,11 @@ Two global obligations here:
     Policy-ignored paths - ``build/``, ``dist/``, ``__pycache__/``, ``.pytest_cache/`` and ``*.pyc`` -
     are walked and counted, and the summary always states how many changed and that they are
     not attributed; the policy is **report-only**, so a legitimate build or cache write does not fail
-    the run but can never be mistaken for "0 files" outside the guard's view (TESTOPS-67 AC1).
+    the run but can never be mistaken for "0 files" outside the guard's view (TESTOPS-67 AC1). The
+    policy covers *untracked* churn only: a path the index or a commit tracks is never pruned or
+    ignored by name, so a committed artefact is attributed like any other file (TESTOPS-69 AC4), and
+    the summary states ``git readable: yes/no`` in every run, because the unreadable count is
+    difference-driven and a zero cannot say whether git was read at all (TESTOPS-69 AC3).
     Everything a commit cannot explain - including every untracked addition and every content
     mismatch - still fails and still names the path. What it cannot attribute is stated in
     ``support``'s docstring: a test write whose bytes equal the commit's blob is indistinguishable
