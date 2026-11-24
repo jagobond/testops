@@ -63,7 +63,7 @@ _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 #      reset flow" is configuration and is stored. TESTOPS-59 AC3 states the boundary structurally -
 #      see :func:`_names_a_credential` - rather than by a word list, and TESTOPS-61 AC1/AC2 makes it
 #      read *every* part: a determiner or possessive in any position names an instance, unless the
-#      parts form a clause (`this-is-not-a-password`);
+#      parts are a predication about the credential word (`this-is-not-a-password`, TESTOPS-62);
 #   4. a known credential prefix with the body that format really issues, at any position;
 #   5. a known credential prefix with a body *too short* for that format (TESTOPS-61 AC3): a cut-off
 #      paste of the most recognisable prefix is refused with a reason that says so, never accepted
@@ -204,28 +204,67 @@ def _truncated_token_in(value: str) -> tuple[str, int, int] | None:
 # the front, which is what TESTOPS-61 AC1 fixes.
 #
 # The one thing a determiner cannot do is make a *statement* into a noun phrase. `this-is-not-a-password`
-# opens with a determiner and ends with a credential word, but `is` is a finite verb: the name is a
-# sentence about a password, not a label for one, so the determiner belongs to the sentence. A negator
-# does the same work without a verb - `xox-not-a-slack-token` is a denial, not a label. That is the
-# rule that decides the boundary (AC2) - an instance label carries a determiner and states nothing; a
-# sentence-name states something - and it is the whole of the argument. `vault-token` is accepted
-# because, like `session-token`, it is a compound noun whose head names a kind of token and which
-# carries no determiner at all (AC4: a grammatical reason, not an appeal to any vendor's vocabulary).
+# opens with a determiner and ends with a credential word, but `is` is a finite verb and the credential
+# word is its complement: the name is a predication *about* a password, not a label for one, so the
+# determiner belongs to the sentence. TESTOPS-62 narrows that to what it says: a verb or a negator
+# *anywhere* is not a statement - the parts must be a predication, with a subject before the predicate
+# head and the credential word as the complement after it. `my-password-is-here` and
+# `this-token-was-leaked` make the credential word the verb's subject, so they label an instance and
+# are refused; `has-my-token` and `never-the-api-token` are fragments with no subject before the head.
+# A true negator reads as an elided copula, which is why `xox-not-a-slack-token` - a subject (`xox`),
+# a negator and the credential word as its complement - remains a denial and not a label, while a
+# negator with nothing before it is a fragment. `vault-token` is accepted because, like
+# `session-token`, it is a compound noun whose head names a kind of token and which carries no
+# determiner at all (AC4: a grammatical reason, not an appeal to any vendor's vocabulary).
 _DETERMINERS = frozenset({
     "my", "your", "our", "their", "his", "her", "its", "the", "a", "an", "this", "that", "these",
     "those", "some", "any", "another", "every", "each", "no",
 })
 # The finite verbs English supplies as copulas and auxiliaries: the closed class that makes a group of
-# words a clause. A negator alone does not make a clause - a clause needs a verb - but a negator does
-# make a phrase a *denial* rather than a label: `xox-not-a-slack-token` names no token, it says what
-# the thing is not, which is why the twenty ordinary values of the TESTOPS-59 review include it.
+# words a clause. A finite verb is necessary for a predication but not sufficient - the words before it
+# must be a subject, and the credential word must be its complement (see `_is_predication`).
 _FINITE_VERBS = frozenset({
     "am", "is", "are", "was", "were", "be", "been", "being",
     "have", "has", "had", "do", "does", "did",
     "will", "would", "shall", "should", "can", "could", "may", "might", "must",
 })
+# A true negator makes a phrase a *denial* rather than a label when it has a subject before it and the
+# credential word as its complement: `xox-not-a-slack-token` is "xox [is] not a Slack token", a
+# predication with the copula elided. A negator with nothing before it (`never-the-api-token`) is a
+# fragment and states nothing. TESTOPS-62 AC3: `no` is also a determiner, and the precedence is stated
+# here - it is read as a determiner, never as a predicate head. It therefore takes a name into the
+# instance test (`acme-no-password`) and can never excuse it.
 _NEGATORS = frozenset({"not", "never", "no"})
+# The heads that can carry a predication. `no` is deliberately absent: a word in two classes must not
+# satisfy both tests (TESTOPS-62 AC3).
+_PREDICATE_HEADS = (_FINITE_VERBS | _NEGATORS) - _DETERMINERS
 _CREDENTIAL_WORD = re.compile(rf"(?i)^{_CREDENTIAL_NAME}$")
+
+
+def _is_predication(lowered: list[str], credential_index: int) -> bool:
+    """Whether the parts are a predication whose complement is the credential word (TESTOPS-62).
+
+    A subject - at least one part before the head that is not itself a verb or negator - sits before
+    a predicate head, and the credential word is the final part after it. `this-is-not-a-password`:
+    subject `this`, head `is`, complement `a-password`. `xox-not-a-slack-token`: subject `xox`, head
+    `not` (copula elided), complement `a-slack-token`. `my-password-is-here` fails because the
+    credential word is before the head (it is the subject); `has-my-token` fails because nothing
+    precedes the head; `x-not-a-token-but-abcdef` fails because the credential word is not the final
+    complement.
+
+    `no` is not a head here (see `_PREDICATE_HEADS`): it is a determiner first, so it can never
+    supply the excuse its other class would (AC3).
+    """
+    if credential_index != len(lowered) - 1:
+        return False                                  # the credential word is not the complement
+    for index, part in enumerate(lowered):
+        if part not in _PREDICATE_HEADS:
+            continue
+        subject = [word for word in lowered[:index]
+                   if word not in _FINITE_VERBS and word not in _NEGATORS]
+        if subject and index < credential_index:
+            return True
+    return False
 
 
 def _names_a_credential(parts: list[str]) -> bool:
@@ -233,50 +272,68 @@ def _names_a_credential(parts: list[str]) -> bool:
 
     TESTOPS-59 AC3 replaced the TESTOPS-56 "last part and at most three parts" rule, which refused
     `session-token` while accepting `passwords-list` and would have refused `password-list` only
-    because its word match was singular. TESTOPS-61 AC1/AC2 closes the two ends that rule left open:
-    it read the first part and the last part, and nothing in between.
+    because its word match was singular. TESTOPS-61 AC1/AC2 closed the two ends that rule left open:
+    it read the first part and the last part, and nothing in between. TESTOPS-62 closes the excuse
+    TESTOPS-61 left open: a verb or a negator anywhere in the name is not a statement, so several
+    instance labels and fragments were accepted as if they said something.
 
     The rule, stated once:
 
       * a bare credential word (`password`, `tokens`) names the thing itself - refused;
-      * a name that **ends** in a credential word and carries a determiner or possessive **in any
-        position** (`my-password`, `acme-their-password`, `an-api-token`, `the-secret`) names a
-        particular instance - refused;
-      * unless the parts form a **statement**: a finite verb (`is`, `has`, `must`, ...) makes the
-        words a clause, and a negator (`not`, `never`, `no`) makes them a denial. A determiner inside
-        a clause or a denial belongs to the sentence, not to the credential word -
-        `this-is-not-a-password` and `xox-not-a-slack-token` name no credential and are accepted;
-      * every other compound is a compound *noun* - a kind of thing or a tool, where the credential
-        word is the head (`session-token`, `vault-token`) or not the head at all
-        (`password-manager`, `token-bucket-limiter`) - and is accepted.
+      * a name that carries no determiner or possessive (`session-token`, `vault-token`) is a
+        compound *noun* naming a kind of thing, and is accepted;
+      * a name that carries a determiner names a particular instance - refused - unless the parts are
+        a **predication about the credential word**: a subject before a predicate head (a finite verb,
+        or a true negator reading as an elided copula), with the credential word as the complement
+        after the head and the last part of the name. `this-is-not-a-password` and
+        `xox-not-a-slack-token` state something about a password/token and are accepted;
+      * `my-password-is-here`, `this-token-was-leaked` and `my-secret-has-value` are not predications
+        *about* the credential word - it is the subject of the verb - so the name labels an instance
+        and is refused;
+      * `has-my-token`, `is-my-password`, `never-the-api-token`, `no-password-yet` and
+        `x-not-a-token-but-abcdef` are fragments, not clauses (no subject before the head, or no
+        head at all, or the credential word is not the complement), and are refused;
+      * every other determiner-bearing name whose credential word is not the final part is a compound
+        noun (`password-manager`, `token-bucket-limiter`, `the-token-service`) and is accepted.
+
+    Precedence (TESTOPS-62 AC3), stated once and pinned in the tests: `no` belongs to both the
+    determiner class and the negator class, and is read **only as a determiner**. It therefore takes
+    a name into the instance test and can never excuse it as a predicate head - `acme-no-password`
+    and `no-password-yet` are labels, not denials. A negator only excuses when it is a true negator
+    with a subject before it and the credential word as its complement.
 
     Singular and plural are matched alike, so `password-list` and `passwords-list` are decided
     together: both are the name of a collection, and both are accepted.
 
-    Neither list is a vocabulary of technical terms: determiners and finite verbs are closed
-    grammatical classes, and no entry names a credential, a product or a vendor. `session-token` and
-    `vault-token` are accepted by the same reason, that the compound names a kind of token and
+    Neither list is a vocabulary of technical terms: determiners, finite verbs and negators are
+    closed grammatical classes, and no entry names a credential, a product or a vendor. `session-token`
+    and `vault-token` are accepted by the same reason, that the compound names a kind of token and
     carries no determiner.
 
     Residual risk, stated rather than hidden: a compound whose head is a credential word but which
     carries no determiner (`prod-db-password`) is accepted as a type name, and a name whose only
-    determiner is inside a statement (`not-my-password`, `this-is-my-password`) is accepted because
-    it states something rather than labelling a credential. Both are labels or jokes; a pasted
-    credential is caught by rules 1, 2, 4 and 5 wherever it sits in the value.
+    determiner is inside a predication about the credential word (`this-is-my-password`) is accepted
+    because it states something rather than labelling a credential. Both are labels or jokes; a
+    pasted credential is caught by rules 1, 2, 4 and 5 wherever it sits in the value.
     """
     credential = [i for i, part in enumerate(parts) if _CREDENTIAL_WORD.fullmatch(part)]
     if not credential:
         return False
     if len(parts) == 1:
         return True                                   # `password` on its own names the thing
-    if credential[-1] != len(parts) - 1:
-        return False                                  # the credential word is not the head
+    head = credential[-1]
     lowered = [part.lower() for part in parts]
     if not any(part in _DETERMINERS for part in lowered):
         return False                                  # a kind name: `session-token`, `vault-token`
-    # AC1: any position, not only the first. AC2: a clause or a denial is a statement about a
-    # credential, not a label for one, so its determiner decides nothing about the name.
-    return not any(part in _FINITE_VERBS or part in _NEGATORS for part in lowered)
+    # TESTOPS-62: a word in the name is not a clause. A verb or negator anywhere makes the name a
+    # candidate statement, but it is only a statement when the credential word is its complement;
+    # otherwise the parts label an instance and the determiner decides the name.
+    if any(part in _FINITE_VERBS or part in _NEGATORS for part in lowered):
+        return not _is_predication(lowered, head)
+    if head != len(parts) - 1:
+        return False                                  # the head is a later noun: a compound noun
+    return True                                       # a determiner and a credential head: an instance
+
 
 
 # What divides a structured key into readable parts. `COTW-PROJ-KEY-0123456789-ABCDEFG` and a UUID
@@ -347,7 +404,8 @@ def _looks_like_secret(value: str) -> str | None:
                 "and one unbroken value")
     # 3. One short unbroken identifier naming a credential instance: `my-password`,
     #    `acme-their-password`, `an-api-token` - a determiner or possessive in any position, unless
-    #    the parts state something (`this-is-not-a-password`, TESTOPS-61 AC1/AC2). Whitespace means
+    #    the parts are a predication about the credential word (`this-is-not-a-password`, TESTOPS-62
+    #    AC1: subject, predicate head, credential word as complement). Whitespace means
     #    prose is not a token, a repository coordinate or path (a '/') is a coordinate, and a longer
     #    snake_cased label (`test_password_reset_flow`) is a name, not a secret. TESTOPS-59 AC3 states
     #    the rule itself in :func:`_names_a_credential`. The pair, PEM, JWT and prefix rules catch a
