@@ -2,7 +2,7 @@
 id: TESTOPS-90
 title: The validator refuses the good explanation for naming its own citation
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-88
 ---

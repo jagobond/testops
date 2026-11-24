@@ -106,6 +106,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-88 | A Foundry agent that explains a case, measured against the same case without it | F2 | in progress | Harry's call: deterministic verdicts stay, a Foundry agent narrates them, and an A/B with a cost ledger decides whether the narration earns its cost |
 | TESTOPS-89 | The managed identity is on the app and the agent still says it has no token | F2 | in progress | Deployed container renders the honest no-token fallback although the identity and role exist; record the real cause and expose it on /agent-check (never the token) |
 | TESTOPS-90 | The validator refuses the good explanation for naming its own citation | F2 | in progress | deepseek-flash returns good cited prose and the number scan rejects it for the citation id; fix the scan, fix the prompt, add one repair round, measure accept rate on ten real cases |
+| TESTOPS-91 | The reply that is 90 percent of an answer is thrown away instead of repaired | F2 | in progress | From the T90 review: 3 of 10 real replies carry prose but no citations, are classified malformed, and never reach the repair round built for exactly that shape |
 
 |----|-------|---------|--------|------|
 
