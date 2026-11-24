@@ -738,6 +738,17 @@ def run_read(conn, run_id: str) -> dict | None:
     return record
 
 
+# The three shapes of "the tool could not tell" (TESTOPS-60, AC1). Every unplaced claim belongs
+# to exactly one; the page uses the key to state the shared reason once instead of once per row.
+GROUP_NO_BINDING = "no-binding-match"
+GROUP_NO_PATTERNS = "no-patterns"
+GROUP_OTHER = "other"
+GROUP_ORDER = (GROUP_NO_BINDING, GROUP_NO_PATTERNS, GROUP_OTHER)
+
+UNPLACED_NO_BINDING = "no binding matches these words"
+UNPLACED_NO_PATTERNS = "this run declared no binding patterns"
+
+
 def unplaced_claims(conn, run_id: str) -> list[dict]:
     """The claims a run could not place, each with the nearest patterns the suite declared.
 
@@ -747,8 +758,13 @@ def unplaced_claims(conn, run_id: str) -> list[dict]:
     run's own binding observations - the same comparison the ecosystem's ``explain_unmatched``
     makes - so a page opened months later still says what the suite came closest to matching.
 
-    The order is the claim id, which is the order the run wrote them. That keeps the section's
-    ``unplaced-<n>`` anchors stable across renders: an anchor a reader cites does not move.
+    TESTOPS-60 adds ``group`` and ``reason``. The group says which of three shapes of failure the
+    claim is, so the page can state the shared sentence once per group rather than repeating it on
+    every row. A snapshot that declared no patterns at all is its own group: the nearest-pattern
+    comparison could not run, and the page must not imply that it did.
+
+    The order is the claim id, which is the order the run wrote them, and the id itself is the
+    anchor (``#unplaced-claim-<id>``), so pruning an earlier claim cannot move a cited anchor.
     """
     row = conn.execute("SELECT snapshot_id FROM run WHERE id = ?", (run_id,)).fetchone()
     if row is None:
@@ -761,8 +777,37 @@ def unplaced_claims(conn, run_id: str) -> list[dict]:
         entry = dict(claim)
         text = entry.get("assertion_text") or entry.get("statement") or ""
         entry["nearly"] = _nearest_patterns(patterns, text, 2)
+        entry["group"], entry["reason"] = _classify_unplaced(entry, patterns)
         out.append(entry)
     return out
+
+
+def _classify_unplaced(entry: dict, patterns: list[str]) -> tuple[str, str]:
+    """Which shape of "could not place" this claim is, and the reason clause for its group.
+
+    With no declared patterns there was nothing to compare the words with, whatever an older
+    claim recorded, so that state wins: the page must not claim nearest patterns it does not have.
+    """
+    recorded = " ".join(str(entry.get("established_by") or "").split()).rstrip(".")
+    if not patterns:
+        return GROUP_NO_PATTERNS, UNPLACED_NO_PATTERNS
+    if recorded.lower().startswith(UNPLACED_NO_BINDING):
+        return GROUP_NO_BINDING, UNPLACED_NO_BINDING
+    return GROUP_OTHER, recorded or "no reason was recorded"
+
+
+def unplaced_groups(entries: list[dict]) -> list[dict]:
+    """The entries of one run grouped by shape of failure, in the fixed order of the three.
+
+    An empty group is omitted rather than shown with a zero, so a reader never reads a heading
+    that says "0 steps". The group's count is ``len`` of its own entries, so it cannot disagree
+    with what is rendered under it.
+    """
+    buckets: dict[str, list[dict]] = {key: [] for key in GROUP_ORDER}
+    for entry in entries:
+        buckets.setdefault(entry.get("group") or GROUP_OTHER, []).append(entry)
+    return [{"key": key, "entries": buckets[key]}
+            for key in GROUP_ORDER if buckets.get(key)]
 
 
 def _declared_patterns(conn, snapshot_id: str) -> list[str]:

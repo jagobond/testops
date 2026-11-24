@@ -605,7 +605,7 @@ def test_P20_unplaced_claims_are_rendered_with_the_soft_tone(first_run_html):
     marker = "What this run could not place"
     assert marker in page, "the run page does not give unplaced claims a section of their own"
     section = page.split(marker, 1)[1].split("<h2", 1)[0]
-    entries = re.findall(r'<li id="unplaced-\d+">', section)
+    entries = re.findall(r'<li id="unplaced-claim-\d+">', section)
     assert entries, "the unplaced section lists no entries"
     count = re.search(r"(\d+) steps? in this run (?:was|were) not assessed", text(section))
     assert count, "the unplaced section does not say how many claims it lists"
