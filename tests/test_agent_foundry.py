@@ -343,12 +343,17 @@ def test_no_fallback_unless_asked_and_the_fallback_is_said_out_loud(tmp_path, st
     finally:
         conn.close()
     text = _text(body)
-    assert "agent-text" in text and "was rejected" not in text
+    # The block's own marker is in the markup, not in its prose: ``_text`` strips tags, so the
+    # class is asserted against the raw bytes and the prose against the stripped text.
+    assert b'<div class="agent-text">' in body and "was rejected" not in text
     assert "served by: model-route" in text
     assert "falling back to the model route" in text
     assert "foundry-hosted-agent" in text, "the page names the route that failed, too"
     assert "the reader is told" in text.lower()
-    assert routes == ["foundry", "model"], "one failed agent call, then one model call"
+    assert routes == ["foundry", "foundry", "model"], (
+        "two agent calls, both refused and both in the ledger - the first view's, and the "
+        "fallback view's, which is then answered once by the model route. A failed attempt that "
+        "the ledger dropped would make the fallback look free")
 
 
 def test_a_rejected_reply_is_never_re_asked_of_the_other_route(tmp_path, stub):

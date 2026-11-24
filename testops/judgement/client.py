@@ -610,6 +610,23 @@ def read_agent_reply(payload) -> tuple[str, AgentUsage]:
     return split_usage("\n".join(texts))
 
 
+def agent_responses_url(endpoint_url: str, agent: str = "") -> str:
+    """The URL one agent request is sent to, from a configured endpoint.
+
+    ``TESTOPS_AGENT_ROUTE_ENDPOINT`` may name either the agent's own responses URL or the origin a
+    gateway stands in front of. A URL that carries a path is used verbatim - the deployment said
+    which surface it means - and an endpoint with no path (an origin such as a local stub, or a
+    project root) has the agent's own surface appended, which is the shape the ticket verified
+    live: ``/agents/{name}/endpoint/protocols/openai/responses?api-version=v1``.
+    """
+    split = urllib.parse.urlsplit(str(endpoint_url or ""))
+    if split.path not in ("", "/"):
+        return str(endpoint_url)
+    base = urllib.parse.urlunsplit((split.scheme, split.netloc, "", "", ""))
+    return (f"{base}/agents/{agent or DEFAULT_AGENT_NAME}"
+            f"/endpoint/protocols/openai/responses?api-version=v1")
+
+
 def complete_agent(system: str, user: str, *, endpoint_url: str, api_key: str,
                    agent: str = "", timeout: float = DEFAULT_AGENT_TIMEOUT) -> Completion:
     """One call to the hosted agent. Raises ``urllib`` errors and ``AgentReplyError``.
@@ -624,7 +641,7 @@ def complete_agent(system: str, user: str, *, endpoint_url: str, api_key: str,
     prompt_hash = hashlib.sha256(f"{prompt}\n--\n{chosen}".encode()).hexdigest()[:16]
     body = json.dumps({"input": json.dumps({"system": system, "user": user})}).encode()
     request = urllib.request.Request(
-        endpoint_url, data=body,
+        agent_responses_url(endpoint_url, chosen), data=body,
         headers={"api-key": api_key, "Content-Type": "application/json"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         raw = response.read()

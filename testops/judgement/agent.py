@@ -242,6 +242,11 @@ class Outcome:
         if self.served:
             return ""
         if self.route == ROUTE_FOUNDRY:
+            if self.cause == "not_configured" and self.detail:
+                # The configuration's own explanation, which names which setting is absent: the
+                # credential and the endpoint fail the same way to a reader and differently to an
+                # operator, so the sentence has to be the specific one.
+                return self.detail
             route_sentences = REFUSALS_FOUNDRY if not self.fallback_from else REFUSALS
             return route_sentences.get(self.cause) or REFUSALS["unexpected"]
         return REFUSALS.get(self.cause) or REFUSALS["unexpected"]
@@ -1262,6 +1267,13 @@ def failure_cause(route: str, exc: BaseException) -> str:
         return "non_200"
     if isinstance(exc, client.AgentReplyError):
         return exc.kind
+    # A URLError means the request never got an answer: the connect was refused, the host was not
+    # found, or the connect itself timed out (Windows reports a refused loopback connect as a
+    # connect timeout when the deadline is short). Either way the endpoint was unreachable, which is
+    # a different fact from a request that reached the endpoint and waited too long - that one
+    # raises a bare TimeoutError while the response is being read.
+    if isinstance(exc, urllib.error.URLError):
+        return "unreachable"
     reason = getattr(exc, "reason", None)
     if isinstance(exc, TimeoutError) or isinstance(reason, TimeoutError):
         return "timeout"
@@ -1315,7 +1327,10 @@ def _explain_case(conn, record: dict, *, cfg: Config, completer,
         return Outcome(state=STATE_UNCONFIGURED, model=model, cause="not_configured",
                        detail=cfg.why_not, prompt_hash=prompt_hash)
 
-    hit = cached_explanation(conn, case_id, prompt_hash, model)
+    # The stored explanation is the model route's cache. The agent route always asks the agent: the
+    # ledger exists to price what the hosted agent actually cost, per call, and a cached page would
+    # report a route whose calls - and whose own USAGE counts - were never made.
+    hit = cached_explanation(conn, case_id, prompt_hash, model) if route != ROUTE_FOUNDRY else None
     if hit is not None:
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=0, tokens_out=0, cached=True,

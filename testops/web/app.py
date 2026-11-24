@@ -2963,6 +2963,11 @@ def case_response(conn, case_id: str, *, variant: str = agent.VARIANT_OFF,
     # claims that carry the verdict and before the decision. Every failure path adds one sentence
     # and nothing else: with the agent off nothing above or below this point changes at all.
     outcome = None
+    if variant == agent.VARIANT_FOUNDRY and view_id is None:
+        # A caller that renders the foundry page without opening its view still gets a ledger row:
+        # the page carries an explanation's cost, and a cost no view accounts for is not measurable.
+        # The ``on`` path is left exactly as it was, so the model route's behaviour is unchanged.
+        view_id = agent.start_view(conn, case_id, variant)
     if variant == agent.VARIANT_ON:
         if findings:
             record = agent.case_record(conn, case_id, row=row, findings=findings) or {}
