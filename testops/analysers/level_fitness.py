@@ -1,4 +1,29 @@
-"""Level fitness v0.12 - one claim per assertion, in words a reader can act on.
+"""Level fitness v0.13 - one claim per assertion, in words a reader can act on.
+
+v0.13 is TESTOPS-79: display copy is not the subject of the claim.
+
+  * **a word that appears only in the assertion's display copy is not a candidate shared word.**
+    The first real corpus run proposed nine repeats and eight were wrong on one shape: "Visitor
+    will get Booking Successful! message" shares the word "message" with a contact message's
+    ``GET /{id}`` route. The assertion is about a banner; the route returns a different service's
+    entity. A word that occurs *only* inside text the assertion reproduces - a quoted string, or a
+    capitalised banner the sentence hands to a person ("Thanks for getting in touch message") - is
+    display copy, and sharing it with the product says the two sentences use the same English noun,
+    not that the product publishes what the check is about. Such a claim is a near miss
+    (``near_miss_kind: "display_copy"``) whose reason names the word and the copy it sits in. The
+    rule is typographic, not a list of nouns: a quoted placeholder (``'<room_name>'``) is a slot,
+    not copy, and a capitalised domain noun with no display phrase in front of it ("New Booking is
+    created") stays a candidate - so the room-creation assertion still repeats ``POST /``;
+  * **a quoted verb is not the assertion's intent.** ``Visitor sees "Booking created"`` used to
+    read ``create`` from the quoted copy and let a POST route outrank the sentence's own verb
+    (``see``, a GET). Display copy is now excluded from the intent as well, so a word inside it can
+    neither be the shared word nor decide the act;
+  * **a ``KP`` claim is not silently outside the product question.** A claim settled by the page
+    the server sends used to record the product as irrelevant, so a whole class of browser claims
+    never reached the rule. Where the run drove a browser, the claim is now assessed like any other
+    browser claim: the product's surface, route and word are recorded (its verdict stays
+    ``review`` - the browser was the waste, which is the stronger finding). Where no browser ran,
+    the record says why the product is not evidence instead of falling silent.
 
 v0.12 is TESTOPS-78: two holes in the product verdict that v0.11 left open.
 
@@ -227,7 +252,7 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.12"
+version = "0.13"
 uses_model = False
 
 # What this analyser's verdict rests on, and what it would like to check itself against but does
@@ -477,10 +502,129 @@ def _product_words(text: str) -> list[str]:
     return _PRODUCT_WORD.findall((text or "").lower())
 
 
-def _product_meaningful(text: str) -> set[str]:
-    """The words of a phrase that could be evidence: not generic, not a one- or two-letter token."""
+def _product_meaningful(text: str, *, skip: frozenset[str] = frozenset()) -> set[str]:
+    """The words of a phrase that could be evidence: not generic, not a one- or two-letter token.
+
+    ``skip`` removes words the caller has already refused as evidence - display copy (TESTOPS-79).
+    It is a set rather than a rule here so this function stays the one place that decides *which*
+    words are too generic to count, and the caller stays the one place that decides *which* words
+    the assertion is actually about.
+    """
     return {word for word in _product_words(text)
-            if len(word) >= 3 and word not in PRODUCT_STOP}
+            if len(word) >= 3 and word not in PRODUCT_STOP and word not in skip}
+
+
+# ------------------------------------------------------- the assertion's display copy (v0.13)
+#
+# A word a person is *shown* is not the subject of the check. "Visitor will get Booking Successful!
+# message" is about a banner; "message" is part of the copy on it, and the product's ``get message``
+# route is a contact message in another service. Sharing the word says the two sentences use the
+# same English noun, not that the product publishes what the check is about.
+#
+# Display copy is recognised from the assertion's own typography, never from a list of nouns:
+#
+#   * a quoted run (``"..."``, ``'...'``, the curly forms) is text the assertion reproduces. A
+#     quoted *placeholder* (``'<room_name>'``, ``'{room}'``) is a parameter, not copy, and stays a
+#     candidate word - ``room`` in the room-creation assertion is a slot, not a literal;
+#   * a capitalised phrase introduced by a display verb (``get``, ``see``, ``show``, ``display``,
+#     ``render``) is a banner: a mid-sentence capital is the typographic mark of a title or a
+#     banner, and the phrase runs to the next connective, determiner, verb, quote or the end of the
+#     sentence. "Thanks for getting in touch message" is one such phrase.
+#
+# A word is display copy only when *every* occurrence of it lies in such a run. A capitalised
+# domain noun with no display phrase in front of it ("New Booking is created") is therefore still a
+# candidate, which is why this rule cannot refuse the room-creation assertion by accident. The
+# detector can only ever *withhold* a candidate from the match; it can never manufacture one, so a
+# misread banner can turn a repeat into a near miss but can never turn a claim into an accusation.
+_DISPLAY_VERBS = frozenset({"get", "gets", "getting", "got", "see", "sees", "saw", "seen",
+                            "seeing", "show", "shows", "showed", "shown", "showing", "display",
+                            "displays", "displayed", "displaying", "render", "renders",
+                            "rendered", "rendering"})
+
+# Where a banner phrase stops. These are connectives, determiners and auxiliaries - words that
+# cannot be part of a banner's own text - and not prepositions: "Thanks for getting in touch" has
+# three of those inside it, and cutting at one would stop the phrase before the word it explains.
+_BANNER_STOPS = frozenset({"regarding", "about", "concerning", "and", "or", "but", "then", "while",
+                           "when", "after", "before", "if", "because", "the", "a", "an", "this",
+                           "that", "these", "those", "its", "their", "his", "her", "will", "is",
+                           "are", "was", "were", "has", "have", "had", "can", "could", "should",
+                           "must", "shall", "may", "might"})
+
+_WORD_TOKEN = re.compile(r"[A-Za-z0-9]+")
+# Straight and curly quotes, each pair matched on the same line - an assertion is one line of
+# Gherkin, so an unbalanced quote is a typo rather than a sign to read further.
+_QUOTED_RUN = re.compile(r"'[^']*'|\"[^\"]*\"|\u2018[^\u2019]*\u2019|\u201c[^\u201d]*\u201d")
+
+
+def _is_slot(content: str) -> bool:
+    """True when a quoted run names a parameter rather than reproducing text.
+
+    ``'<room_name>'`` and ``'{roomPrice}'`` are slots: the step substitutes a value, so the words
+    inside them are the parameter's name, not copy a person is shown. An empty literal is the same
+    kind of thing - a value, not a caption.
+    """
+    text = content.strip()
+    return (not text or "<" in text or ">" in text
+            or (text.startswith("{") and text.endswith("}")))
+
+
+def _quoted_runs(text: str) -> list[tuple[int, int]]:
+    """The character spans of the assertion's quoted literals, excluding placeholder slots."""
+    return [(match.start() + 1, match.end() - 1) for match in _QUOTED_RUN.finditer(text)
+            if not _is_slot(match.group(0)[1:-1])]
+
+
+def _display_runs(text: str) -> list[tuple[int, int]]:
+    """The character spans of the assertion's quoted copy and banner phrases (TESTOPS-79)."""
+    runs = list(_quoted_runs(text))
+    tokens = [(match.group(0), match.start(), match.end())
+              for match in _WORD_TOKEN.finditer(text)]
+    quoted = [any(start <= s and e <= stop for start, stop in runs) for _w, s, e in tokens]
+    for index, (word, start, _end) in enumerate(tokens):
+        if index == 0 or quoted[index]:
+            continue
+        # A capitalised word that is not an all-caps acronym: the typographic mark of a title.
+        if not (word[0].isupper() and not word.isupper()):
+            continue
+        previous = tokens[index - 1][0].lower()
+        j = index
+        while j < len(tokens):
+            candidate, _s, _e = tokens[j]
+            if j > index and (quoted[j] or candidate.lower() in _BANNER_STOPS):
+                break
+            j += 1
+        last = j - 1
+        phrase_end = tokens[last][2]
+        opened_by_verb = previous in _DISPLAY_VERBS
+        exclaims = "!" in text[start:phrase_end] or "?" in text[start:phrase_end]
+        if opened_by_verb or exclaims:
+            runs.append((start, phrase_end))
+    return runs
+
+
+def _display_copy(assertion: str) -> dict[str, str]:
+    """``word -> the display copy it occurs in``, for words that occur *only* there (TESTOPS-79).
+
+    A word with even one occurrence outside display copy is absent: the assertion names it as its
+    subject somewhere, and that occurrence is the one the product may be evidence about.
+    """
+    text = assertion or ""
+    runs = _display_runs(text)
+    display: dict[str, str] = {}
+    outside: set[str] = set()
+    for match in _WORD_TOKEN.finditer(text):
+        start, end = match.start(), match.end()
+        spans = [(run_start, run_end) for run_start, run_end in runs
+                 if run_start <= start and end <= run_end]
+        if not spans:
+            outside.add(match.group(0).lower())
+            continue
+        # The widest run containing the word is the phrase a reader is shown - a banner can open at
+        # more than one capital, and the shortest span would quote only its tail.
+        run_start, run_end = max(spans, key=lambda span: span[1] - span[0])
+        display.setdefault(match.group(0).lower(), " ".join(text[run_start:run_end].split()))
+    return {word: phrase for word, phrase in display.items() if word not in outside}
+
 
 
 def _surface_field(surface, name: str, default):
@@ -553,15 +697,20 @@ def _surface_method(route: str) -> str | None:
     return None
 
 
-def _assertion_intent(assertion: str) -> tuple[str, frozenset[str]] | None:
+def _assertion_intent(assertion: str, *, skip: frozenset[str] = frozenset()
+                      ) -> tuple[str, frozenset[str]] | None:
     """The assertion's own verb and the HTTP methods that could settle it, or ``None``.
 
     A mutation outranks a read when a step says both ("create the booking and see the message") -
     what the step asks the product to *do* is creation - and otherwise the first intent word in the
     assertion wins, which is deterministic for a given sentence.
+
+    ``skip`` is the display copy (TESTOPS-79): a verb inside a quoted banner is the banner's word,
+    not the assertion's act. ``Visitor sees "Booking created"`` is a read; the quoted ``create``
+    must not outrank the sentence's own ``see`` and hand the claim a POST route.
     """
-    found = [intent for intent in (_INTENT_FORMS.get(word) for word in _product_words(assertion))
-             if intent is not None]
+    found = [intent for intent in (_INTENT_FORMS.get(word) for word in _product_words(assertion)
+                                   if word not in skip) if intent is not None]
     if not found:
         return None
     mutations = [intent for intent in found if intent[1] - {"GET"}]
@@ -603,10 +752,17 @@ def product_match(assertion: str, surfaces) -> dict | None:
     it as a near miss rather than a repeat: the caller decides the verdict, but the evidence names
     both verbs so the refusal is arguable. An assertion that names no act at all has no verb to
     agree with anything, and a shared noun alone is likewise a near miss, not a repeat (TESTOPS-78).
+
+    TESTOPS-79: a word that occurs only in the assertion's display copy is not a candidate. When a
+    surface shares nothing but such a word, the nearest one is still returned - with
+    ``display_copy`` set and the copy it sits in - so the refusal names the route, the word and the
+    banner rather than falling silent.
     """
-    assertion_words = _product_meaningful(assertion)
+    display = _display_copy(assertion)
+    display_words = frozenset(display)
+    assertion_words = _product_meaningful(assertion, skip=display_words)
     readings = [_surface_reading(surface) for surface in surfaces or ()]
-    if not assertion_words or not readings:
+    if not readings or not (assertion_words or display_words):
         return None
     total = len(readings)
     frequency: dict[str, int] = {}
@@ -614,31 +770,43 @@ def product_match(assertion: str, surfaces) -> dict | None:
         for word in doc_words:
             frequency[word] = frequency.get(word, 0) + 1
     assertion_verbs = set(_product_words(assertion)) & PRODUCT_CLAIM_VERBS
-    intent = _assertion_intent(assertion)
+    intent = _assertion_intent(assertion, skip=display_words)
     intent_verb, intent_methods = intent if intent is not None else ("", frozenset())
 
-    best = None
-    for identifier, route, claims, route_words, claim_words, doc_words in readings:
-        shared = assertion_words & doc_words
-        if not shared:
-            continue
+    def key_for(identifier, route, route_words, claim_words, word, shared):
         agrees = bool(assertion_verbs & claim_words)
         method = _surface_method(route)
         method_agrees = not (intent_methods and method and method not in intent_methods)
-        for word in sorted(shared):
+        return (0 if method_agrees else 1,
+                0 if word in route_words else 1, frequency[word], -len(shared),
+                0 if agrees else 1, identifier, word)
+
+    best, refused = None, None
+    for identifier, route, claims, route_words, claim_words, doc_words in readings:
+        visible = assertion_words & doc_words
+        hidden = display_words & doc_words
+        for word in sorted(visible):
             if word in PRODUCT_STOP:
                 continue
             if frequency[word] > PRODUCT_COMMON_SHARE * total:
                 continue
-            key = (0 if method_agrees else 1,
-                   0 if word in route_words else 1, frequency[word], -len(shared),
-                   0 if agrees else 1, identifier, word)
+            key = key_for(identifier, route, route_words, claim_words, word, visible)
             if best is None or key < best[0]:
                 best = (key, identifier, route, _claim_carrying(claims, word), word,
-                        frequency[word], total)
-    if best is None:
+                        frequency[word], total, False)
+        # The same ranking over the words refused as display copy, kept only in case nothing the
+        # assertion actually names matches. A refused word is never allowed to beat a real one.
+        for word in sorted(hidden):
+            if frequency[word] > PRODUCT_COMMON_SHARE * total:
+                continue
+            key = key_for(identifier, route, route_words, claim_words, word, hidden)
+            if refused is None or key < refused[0]:
+                refused = (key, identifier, route, _claim_carrying(claims, word), word,
+                           frequency[word], total, True)
+    chosen = best or refused
+    if chosen is None:
         return None
-    _key, identifier, route, claim_text, word, shared_with, total = best
+    _key, identifier, route, claim_text, word, shared_with, total, is_copy = chosen
     method = _surface_method(route)
     return {"surface": identifier, "route": route, "claim": claim_text, "word": word,
             "shared_with": shared_with, "surfaces": total,
@@ -648,6 +816,9 @@ def product_match(assertion: str, surfaces) -> dict | None:
             # carried separately so the record can say *which* refusal it is - a method that
             # differs, or an assertion that names no act at all.
             "intent_known": intent is not None,
+            # The word is display copy the assertion reproduces, not the subject of the check
+            # (TESTOPS-79). ``display_text`` is the phrase it sits in, so the refusal can quote it.
+            "display_copy": is_copy, "display_text": display.get(word, "") if is_copy else "",
             "verb_agrees": (intent is not None
                             and not (intent_methods and method and method not in intent_methods))}
 
@@ -664,13 +835,21 @@ PRODUCT_NONE = "none"
 
 
 def _product_record(interaction: str, assertion: str, surfaces, state: str, reason: str, *,
-                    placed: bool = True) -> dict:
+                    placed: bool = True, uses_browser: bool = False) -> dict:
     """What the product said about one claim, as a record the claim and the page carry (AC1).
 
     Every claim gets one, so no verdict can be read as if the product had been silent when it was
     consulted, or as if it had said zero when nobody could read it. ``state`` is the caller's record
     of the product arm (``found``/``zero``/``not_assessable``, or ``""`` for a caller that recorded
     nothing) - the analyser never reads a product itself.
+
+    ``uses_browser`` decides what a ``KP`` claim records (TESTOPS-79, AC7). A claim settled by the
+    page the server sends was previously excluded from the product rule outright, which put a whole
+    class of browser claims outside the question the tool exists to ask. When the run drove a
+    browser, the product's surfaces are evidence about that claim like any other: the route and the
+    word are recorded, and the verdict stays ``review`` (the browser was the waste - a stronger
+    finding than "the product already publishes this"). When no browser ran there is nothing to
+    repeat, and the record says that rather than falling silent.
     """
     surfaces = list(surfaces or ())
     record = {"state": PRODUCT_NONE, "needs_browser": interaction in NEEDS_BROWSER,
@@ -681,13 +860,21 @@ def _product_record(interaction: str, assertion: str, surfaces, state: str, reas
               # keeps both so a reader can argue with the refusal rather than take it on trust.
               "assertion_verb": "", "surface_verb": "", "verb_agrees": None, "near_miss": False,
               # Which near miss this is, when it is one (TESTOPS-78, AC3): a method that differs,
-              # or an assertion with no recognised act at all. ``None`` on every other record.
-              "near_miss_kind": None, "intent_known": None}
+              # an assertion with no recognised act at all, or a word that is only display copy
+              # (TESTOPS-79). ``None`` on every other record.
+              "near_miss_kind": None, "intent_known": None,
+              # The display copy a refused word sat in, so the page can quote it (TESTOPS-79).
+              "display_text": ""}
     if not placed or interaction == "U":
         record["reason"] = ("nothing placed this claim, so nothing is known about what would settle "
                             "it and the product is not evidence about it")
         return record
-    if interaction not in NEEDS_BROWSER:
+    if interaction == "KP" and not uses_browser:
+        record["reason"] = ("this claim is settled by the page the server sends, and the run did "
+                            "not drive a browser, so no browser was spent and the product's routes "
+                            "are not evidence about it")
+        return record
+    if interaction not in NEEDS_BROWSER and interaction != "KP":
         record["reason"] = ("this claim does not need a browser, so the product is not evidence "
                             "about it")
         return record
@@ -714,6 +901,22 @@ def _product_record(interaction: str, assertion: str, surfaces, state: str, reas
                             f"of them shares a meaningful word with this assertion")
         return record
     record.update(match)
+    if match["display_copy"]:
+        # The only word the two share is text the assertion reproduces - a banner or a quoted
+        # string (TESTOPS-79, AC1/AC3). It says the two sentences use the same English noun, not
+        # that the product publishes what the check is about, so the claim is a near miss whose
+        # reason names the word and the copy it sits in.
+        record["state"] = PRODUCT_ZERO
+        record["near_miss"] = True
+        record["near_miss_kind"] = "display_copy"
+        own = f', whose own claim is "{match["claim"]}"' if match["claim"] else ""
+        record["reason"] = (f'the product declares {match["route"]}{own}, and the only word the '
+                            f'two share is "{match["word"]}", which appears only inside the '
+                            f'assertion\'s display copy "{match["display_text"]}" - text a person '
+                            f'is shown rather than the subject of the check - so it is not counted '
+                            f'as a repeat. Name the thing the assertion checks rather than the copy '
+                            f'it is shown in, or check this one by hand')
+        return record
     if not match["verb_agrees"]:
         # The nearest surface names the same noun without settling the assertion - a GET route for
         # an assertion about creation, or a bare noun for an assertion that names no act at all.
@@ -1310,7 +1513,8 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                 # in rather than falling silent - and a claim that does not need a browser says so,
                 # instead of borrowing a zero it never looked for.
                 product = _product_record(interaction, step.text, surfaces, product_state,
-                                          product_reason, placed=unbound is None)
+                                          product_reason, placed=unbound is None,
+                                          uses_browser=uses_browser)
                 if unbound is not None:
                     # The ecosystem's own account of why nothing placed this step. The claim is
                     # unplaced for that reason, whoever else was bound in the scenario.

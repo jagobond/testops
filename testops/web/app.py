@@ -628,6 +628,14 @@ def near_miss_sentence(product: dict) -> str:
     """
     route = esc(product.get("route") or "a route")
     word = esc(product.get("word") or "")
+    if product.get("near_miss_kind") == "display_copy":
+        shown = esc(product.get("display_text") or "")
+        copy = f'\u201c{shown}\u201d' if shown else "the words it reproduces"
+        return (f'it declares <span class="code">{route}</span>, and the only word the two share is '
+                f'\u201c{word}\u201d, which appears only inside the assertion\u2019s display copy '
+                f'{copy} \u2014 text a person is shown rather than the subject of the check \u2014 '
+                f'so it is display, not a shared subject, and says nothing about whether the '
+                f'product already does this.')
     no_intent = (product.get("near_miss_kind") == "no_intent"
                  or not product.get("assertion_verb"))
     if no_intent:
@@ -2110,7 +2118,8 @@ def product_block(conn, run: dict) -> list[str]:
                    f'share{"s" if refused == 1 else ""} a noun with a product route but '
                    f'{"was" if refused == 1 else "were"} not counted (verb differs '
                    f'{evidence["near_miss_verb_differs"]} / no intent '
-                   f'{evidence["near_miss_no_intent"]}). '
+                   f'{evidence["near_miss_no_intent"]} / display copy '
+                   f'{evidence["near_miss_display_copy"]}). '
                    f'They are <a href="#product-refused">listed below</a>.</p>')
     return out
 
