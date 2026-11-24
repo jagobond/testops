@@ -2,7 +2,7 @@
 id: TESTOPS-91
 title: The reply that is 90 percent of an answer is thrown away instead of repaired
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-90
 ---
