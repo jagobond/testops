@@ -641,6 +641,9 @@ def run_level_fitness(project: Project, token: str,
                        # so rebuilding from this snapshot alone cannot invent a clean bill of health
                        # and cannot invent a source state the run did not have.
                        meta={"sources_missing": missing_sources,
+                             # TESTOPS-74 AC4: the noun these counts are counted in. Written, not
+                             # derived at render time, so an old snapshot keeps the sentence it had.
+                             "count_unit": sources.COUNT_UNIT_FILES,
                              "arms": {"test": project.test.slug,
                                       **({"product": project.product.slug}
                                          if project.product is not None else {})},

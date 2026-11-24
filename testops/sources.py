@@ -76,6 +76,12 @@ FOUND = "found"
 # and it is not ``found``. A file nothing read is never counted as consulted.
 NOT_READABLE = "not_readable"
 
+# TESTOPS-74 AC4. What a GitHub reading counts: files fetched and read from the repository. A run
+# records this beside its registry, so its page can say "returned 190 files" and a reader can look
+# the number up in the run's own artefact list. A snapshot that predates the field counts "items",
+# which is what its page said when it was rendered; nothing is retro-fitted.
+COUNT_UNIT_FILES = "file"
+
 
 @dataclass(frozen=True)
 class Reading:
@@ -324,6 +330,10 @@ class Assessment:
     observed: int | None = None
     blind_spots: tuple[BlindSpot, ...] = ()
     readings: tuple[Reading, ...] = ()
+    # TESTOPS-74 AC4. The noun the count is counted in, singular: "item" for a record written
+    # before the run said what it was counting, "file" for a run whose readings are files fetched
+    # from the repositories. The sentence never prints a bare number without it.
+    unit: str = "item"
 
     @property
     def assessable(self) -> bool:
@@ -351,7 +361,8 @@ class Assessment:
             parts = " ".join(_blind_sentence(spot) for spot in self.blind_spots
                              if spot.state != NOT_READABLE)
             if self.readings:
-                clauses = "; ".join(_reading_clause(reading) for reading in self.readings)
+                clauses = "; ".join(_reading_clause(reading, self.unit)
+                                    for reading in self.readings)
                 return f"Cannot assess this claim: {clauses}. {parts}".strip()
             return f"Cannot assess this claim: nobody could look at {titles}. {parts}".strip()
         if self.state == ZERO:
@@ -361,14 +372,14 @@ class Assessment:
         if self.state == FOUND:
             verb = "were" if plural else "was"
             count = self.observed if self.observed is not None else 0
-            item = "item" if count == 1 else "items"
+            item = self.unit if count == 1 else self.unit + "s"
             # TESTOPS-43. An aggregate is only enough when it hides nothing: every capability it
             # adds up returned something, and none of them lost a file it would have read. When a
             # capability returned nothing, the total cannot say which one did, so each capability
             # is named with its own count - "code and test code returned 2 items" is true of a
             # 2-and-0 and of a 1-and-1, and a reader cannot tell them apart.
             if any(reading.observed == 0 for reading in self.readings if reading.readable):
-                return "Assessed: " + "; ".join(_result_clause(reading)
+                return "Assessed: " + "; ".join(_result_clause(reading, self.unit)
                                                 for reading in self.readings) + "."
             partial = _lost_clause([entry for reading in self.readings
                                     for entry in reading.lost])
@@ -399,17 +410,17 @@ def _blind_sentence(spot: BlindSpot) -> str:
     return f"{spot.title} is {spot.state}: {reason}." if reason else f"{spot.title} is {spot.state}."
 
 
-def _reading_clause(reading: Reading) -> str:
+def _reading_clause(reading: Reading, unit: str = "item") -> str:
     """One capability, in the reader's words: what it returned, or why it could not be read."""
     title = CAPABILITY_TITLE.get(reading.capability, reading.capability)
     if reading.readable:
         count = reading.observed or 0
-        item = "item" if count == 1 else "items"
+        item = unit if count == 1 else unit + "s"
         return f"{title} was consulted and returned {count} {item}"
     return f"{title} was not read: {reading.unreadable.strip().rstrip('.')}"
 
 
-def _result_clause(reading: Reading) -> str:
+def _result_clause(reading: Reading, unit: str = "item") -> str:
     """One capability in a sentence that names each: what it returned, and what it lost.
 
     Used when the capabilities' counts must not be added up (TESTOPS-43): a total cannot say
@@ -418,7 +429,7 @@ def _result_clause(reading: Reading) -> str:
     """
     title = CAPABILITY_TITLE.get(reading.capability, reading.capability)
     count = reading.observed or 0
-    item = "item" if count == 1 else "items"
+    item = unit if count == 1 else unit + "s"
     clause = f"{title} returned {count} {item}"
     lost = _lost_clause(reading.lost)
     return f"{clause} ({lost})" if lost else clause
@@ -753,6 +764,11 @@ def _stored_assessment(meta: dict | None, analyser: str, field: str) -> Assessme
     if not isinstance(record, dict) or not isinstance(spec, dict) or not spec.get(field):
         return None
     assessment = Registry.from_record(record).assess(spec[field])
+    # TESTOPS-74 AC4. The noun the run recorded for its counts. A snapshot written before the field
+    # existed keeps "item", which is the sentence it rendered; a run that recorded files says files.
+    unit = meta.get("count_unit")
+    if isinstance(unit, str) and unit.strip():
+        assessment = replace(assessment, unit=unit.strip())
     if field == "needs":
         # TESTOPS-42A. A suite whose ecosystem this build cannot read is not assessable, whatever
         # the sources said: the vocabulary that would read its steps does not exist here. The fact

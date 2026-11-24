@@ -16,6 +16,13 @@ TESTOPS-70. A Java product is no longer one of those absent languages. ``.java``
 routes were read is ``found``, one whose Java declares no route is ``zero``, and ``not_assessable``
 is now reserved for a repository holding nothing these readers can parse.
 
+TESTOPS-74. A mapping the reader cannot place is no longer a surface with a guessed route. A
+class-level prefix inherited from a superclass or an implemented interface is read from that type
+in the same repository, one level, and the resolution is recorded; a type this repository does not
+hold, or a path that is not a string literal, makes the mapping ``unread`` with a reason - and
+``unread`` is carried on the run, not dropped, so the page can say how many mappings it could not
+read and why.
+
 The languages this reader can parse are :data:`LANGUAGES`, which is data. Adding one widens the
 reader; it does not make a repository it cannot parse look empty.
 """
@@ -55,18 +62,28 @@ class Discovery:
     ``state`` is ``found`` (there are surfaces), ``zero`` (this reader read the files and found
     none) or ``not_assessable`` (there was nothing here it could read, with the language and the
     file count in ``reason``). A caller must not print the second and the third the same way.
+
+    ``unread`` is the mappings the reader saw but could not turn into a route: a constant path, or a
+    class prefix it could not resolve. They are here so the run can report them; a mapping in this
+    list has no surface, because a route the reader invented is worse than a route it did not read.
+    ``inherited`` records every prefix it recovered from a superclass, so the resolution is a fact a
+    reader can check rather than an assumption.
     """
     surfaces: tuple[Surface, ...]
     state: str
     reason: str = ""
     languages: tuple[tuple[str, int], ...] = ()
     parsed: int = 0        # files this reader could parse
+    unread: tuple[java.Unread, ...] = ()
+    inherited: tuple[dict, ...] = ()
 
     def record(self) -> dict:
         return {"state": self.state, "surfaces": len(self.surfaces), "parsed": self.parsed,
                 "reason": self.reason,
                 "languages": [{"suffix": suffix, "count": count}
-                              for suffix, count in self.languages]}
+                              for suffix, count in self.languages],
+                "unread": [entry.record() for entry in self.unread],
+                "inherited_prefixes": [dict(entry) for entry in self.inherited]}
 
 
 def _first_sentence(text: str) -> str:
@@ -99,6 +116,56 @@ def _reader() -> str:
     if len(named) < 2:
         return "".join(named)
     return ", ".join(named[:-1]) + " and " + named[-1]
+
+
+# A type declaration, read without lexing the file that holds it. Comments are stripped first, so a
+# word in a comment cannot make a refusal claim the repository holds something it does not.
+_TYPE_DECLARATION = re.compile(r"\b(?:class|interface|enum|record)\s+([A-Za-z_$][A-Za-z0-9_$]*)")
+_COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
+
+
+def _declared_type_names(text: str) -> list[str]:
+    """The type names a file declares, as far as they can be read without lexing it."""
+    return _TYPE_DECLARATION.findall(_COMMENTS.sub(" ", text))
+
+
+def _inherited_prefix(name: str, path: str, declared_types: dict[str, list[str]],
+                      unreadable_types: dict[str, list[str]],
+                      readings: dict[str, java.Reading]
+                      ) -> tuple[tuple[str, ...] | None, str | None, tuple[str, str] | None]:
+    """The prefix a class-level ``@RequestMapping`` on ``name`` supplies, or why it cannot be known.
+
+    Returns ``(prefix, file, None)`` when the type is held once and declares a literal prefix;
+    ``(None, None, None)`` when it is held once and declares no prefix at all (there is none to
+    drop); and ``(None, None, (reason, detail))`` when knowing it would take a guess. The reason
+    carried for a parent whose own prefix is a constant is the parent's own, named against the
+    parent, so the child is refused for the fact that made the parent unreadable.
+    """
+    simple = name.rsplit(".", 1)[-1]
+    candidates = [candidate for candidate in declared_types.get(simple, []) if candidate != path]
+    if len(candidates) > 1:
+        return None, None, (java.REASON_PREFIX_NOT_READ,
+                            f"{name}, which this repository holds more than once")
+    if not candidates:
+        held = unreadable_types.get(simple, [])
+        if held:
+            return None, None, (java.REASON_PREFIX_NOT_READ,
+                                f"{name} ({held[0]}), which this repository holds but this "
+                                f"reader could not read")
+        return None, None, (java.REASON_PREFIX_NOT_READ,
+                            f"{name}, which this repository does not hold")
+    parent = readings[candidates[0]]
+    if parent.class_problem is not None:
+        reason, expression = parent.class_problem
+        return None, None, (reason, f"{name}, whose own prefix could not be read "
+                                    f"({reason}: {expression})")
+    if parent.own_prefix is not None:
+        return parent.own_prefix, candidates[0], None
+    if parent.superclass:
+        return None, None, (java.REASON_PREFIX_NOT_READ,
+                            f"{name}, whose own prefix is inherited from {parent.superclass} "
+                            f"(this reader reads one level)")
+    return None, None, None
 
 
 def discover(files: dict[str, str]) -> Discovery:
@@ -150,12 +217,77 @@ def discover(files: dict[str, str]) -> Discovery:
     # Spring MVC: a route is what a mapping annotation says, prefixed by its class's @RequestMapping.
     # Two methods that map the same route are two surfaces - the duplicate is a fact worth showing -
     # so the id carries the source and the method, and never collapses two declarations into one.
-    for path in sorted(java_files):
-        read = java.routes(files[path], path)
-        if read is None:
+    readings: dict[str, java.Reading] = {}
+    for path in java_files:
+        reading = java.read(files[path], path)
+        if reading is None:
             continue                       # not lexed as Java; not counted as a file this read
         parsed += 1
-        for declared in read:
+        readings[path] = reading
+
+    # TESTOPS-74 AC1. A class-level prefix can live on a superclass or on an interface the class
+    # implements; Spring honours both, so both are read - one level, no more - from this repository,
+    # and every resolution is recorded. When the type is not held, is held more than once, or its
+    # own prefix could not be read, every mapping under the subclass is unread and names the type it
+    # needed: the alternative is emitting ``GET /{id}`` for a route that is really
+    # ``GET /booking/{id}``. A refusal is never dropped just because it arrived through an interface.
+    declared_types: dict[str, list[str]] = {}
+    unreadable_types: dict[str, list[str]] = {}
+    for path in sorted(readings):
+        name = readings[path].type_name
+        if name:
+            declared_types.setdefault(name, []).append(path)
+    for path in java_files:
+        if path in readings:
+            continue
+        # A file this repository holds but that does not lex may still declare the type a
+        # subclass needs. Its declarations are readable without lexing it, and saying "held but
+        # not read" keeps the refusal true: the file is there (review 2026-11-24, concern 3).
+        for name in _declared_type_names(files[path]):
+            unreadable_types.setdefault(name, []).append(path)
+
+    inherited: list[dict] = []
+    for path in sorted(readings):
+        reading = readings[path]
+        if reading.own_prefix is not None or reading.class_problem is not None:
+            continue                       # its own prefix answers the question, or already refuses
+        sources: list[tuple[str, str]] = []
+        if reading.superclass:
+            sources.append(("superclass", reading.superclass))
+        sources.extend(("interface", name) for name in reading.interfaces)
+        if not sources:
+            continue
+        prefixes: list[tuple[str, str, str | None, tuple[str, ...]]] = []
+        refusal: tuple[str, str] | None = None
+        for kind, name in sources:
+            prefix, read_from, why = _inherited_prefix(
+                name, path, declared_types, unreadable_types, readings)
+            if why is not None:
+                refusal = refusal or why       # one unknown source is enough: never guess a route
+            elif prefix is not None:
+                prefixes.append((kind, name, read_from, prefix))
+        if refusal is not None:
+            readings[path] = java.read(files[path], path, unresolved=refusal) or reading
+            continue
+        if len(prefixes) > 1:
+            named = ", ".join(f"{kind} {name}" for kind, name, _from, _prefix in prefixes)
+            readings[path] = java.read(files[path], path, unresolved=(
+                java.REASON_PREFIX_NOT_READ,
+                f"{named}, whose prefixes it inherits through more than one type "
+                f"(this reader reads one level)")) or reading
+            continue
+        if not prefixes:
+            continue                       # the types are here and declare no prefix to drop
+        kind, name, read_from, prefix = prefixes[0]
+        readings[path] = java.read(files[path], path, inherited=prefix) or reading
+        inherited.append({"source": path, "type": reading.type_name, kind: name,
+                          "read_from": read_from, "prefix": list(prefix)})
+
+    unread: list[java.Unread] = []
+    for path in sorted(readings):
+        declared_routes = readings[path]
+        unread.extend(declared_routes.unread)
+        for declared in declared_routes.routes:
             target = f"{declared.verb} {declared.path}"
             sid = f"api:{target}@{path}:{declared.method}"
             if sid in routes:
@@ -179,7 +311,8 @@ def discover(files: dict[str, str]) -> Discovery:
             reason = (f"the surface reader parses {reader} only, and the product repository holds no "
                       f"file it can read: {held}" + (", ..." if len(languages) > 4 else ""))
         return Discovery((), NOT_ASSESSABLE, reason, languages, 0)
-    if not surfaces:
+    if not surfaces and not unread:
         return Discovery((), ZERO, "", languages, parsed)
-    return Discovery(surfaces, FOUND, "", languages, parsed)
+    return Discovery(surfaces, FOUND, "", languages, parsed, tuple(unread),
+                     tuple(inherited))
 

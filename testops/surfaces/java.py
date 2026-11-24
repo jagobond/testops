@@ -16,6 +16,20 @@ report it as one. The parser understands the two things Spring puts a route in:
 
 It does not compile Java, and does not claim to: it reads the declarations this question depends on
 and reports routes, never types, and never anything it could not lex.
+
+TESTOPS-74. Two shapes this reader used to get silently wrong, both a wrong answer that looks like a
+right one:
+
+  * a class that extends a base controller, or implements an interface, carrying the
+    ``@RequestMapping`` prefix (Spring honours both). Dropping the prefix turns
+    ``GET /booking/{id}`` into ``GET /{id}`` - a route that does not exist, presented as one that
+    does. The reader now records the types it saw (``Reading.superclass``, ``Reading.interfaces``)
+    and leaves the prefix to its caller, which can read them in the same repository; when the caller
+    cannot, the mapping is *unread* and says so, naming the type. This file never guesses a prefix.
+  * a mapping path that is not a string literal, e.g. ``@GetMapping(Paths.BOOKING)``. The old reader
+    found no string, fell back to ``/`` and invented a route at the root of the service. A path this
+    reader cannot resolve is now *unread*, with a reason naming the expression, and produces no
+    surface at all.
 """
 from __future__ import annotations
 
@@ -45,6 +59,48 @@ class Route:
     claims: tuple[str, ...]
     method: str
     source: str
+
+
+@dataclass(frozen=True)
+class Unread:
+    """One mapping declaration this reader could not turn into a route, and why.
+
+    ``reason`` is the sentence the run page groups by (``path is a constant``); ``detail`` names the
+    thing a reader needs to check the reason against - the expression, or the superclass.
+    """
+    source: str
+    method: str
+    reason: str
+    detail: str = ""
+
+    def record(self) -> dict:
+        return {"source": self.source, "method": self.method,
+                "reason": self.reason, "detail": self.detail}
+
+
+@dataclass(frozen=True)
+class Reading:
+    """What one file declared: its routes, what could not be read, and what the caller must resolve.
+
+    ``own_prefix`` is ``None`` when the type declares no class-level ``@RequestMapping``; a tuple when
+    it does. ``superclass`` is the type it ``extends`` (as written), and ``interfaces`` the types a
+    class ``implements``: Spring honours a class-level ``@RequestMapping`` on either, so the caller
+    may read them in the same repository to recover an inherited prefix. ``class_problem`` is set
+    when the type's own prefix could not be read as a literal, so no method under it can be placed.
+    """
+    type_name: str | None
+    superclass: str | None
+    own_prefix: tuple[str, ...] | None
+    routes: tuple[Route, ...]
+    unread: tuple[Unread, ...] = ()
+    class_problem: tuple[str, str] | None = None
+    interfaces: tuple[str, ...] = ()
+
+
+# Why a mapping is unread. Fixed wording, grouped on the run page (TESTOPS-74 AC3).
+REASON_PATH_CONSTANT = "path is a constant"
+REASON_CLASS_PATH_CONSTANT = "class prefix is a constant"
+REASON_PREFIX_NOT_READ = "class prefix is inherited and its superclass was not read"
 
 
 @dataclass(frozen=True)
@@ -199,6 +255,103 @@ def _strings(tokens: tuple[_Token, ...]) -> list[str]:
     return [token.value for token in tokens if token.kind == "string"]
 
 
+def _expression(tokens: tuple[_Token, ...]) -> str:
+    """The tokens as the source wrote them, close enough to name the expression in a reason."""
+    out = ""
+    for token in tokens:
+        piece = f'"{token.value}"' if token.kind == "string" else token.value
+        if out and piece != "." and not out.endswith("."):
+            out += " "
+        out += piece
+    return out
+
+
+def _elements(tokens: tuple[_Token, ...]) -> list[tuple[_Token, ...]]:
+    """The path arguments: one bare expression, or the members of an array initialiser."""
+    body = tokens
+    if body and body[0].value == "{" and body[-1].value == "}":
+        body = body[1:-1]
+    return [part for part in _split(tuple(body), ",") if part]
+
+
+def _path_argument(annotation: _Annotation) -> tuple[list[str], str] | None:
+    """The literal paths a mapping names, or the expression it names instead of one.
+
+    Returns ``None`` when the annotation gives no path at all (``@PostMapping``, or
+    ``@RequestMapping(method = GET)``), a list when every element is a string literal, and an empty
+    list plus the expression's text when it is not. An empty list is never a route at ``/``.
+    """
+    for key in ("value", "path", ""):
+        if key in annotation.args:
+            elements = _elements(annotation.args[key])
+            if elements and all(len(element) == 1 and element[0].kind == "string"
+                                for element in elements):
+                return [element[0].value for element in elements], ""
+            return [], _expression(annotation.args[key])
+    return None
+
+
+def _extends(header: tuple[_Token, ...]) -> str | None:
+    """The type a class header extends, as written (``com.example.BaseController``)."""
+    for index, token in enumerate(header):
+        if token.kind != "word" or token.value != "extends":
+            continue
+        parts: list[str] = []
+        for following in header[index + 1:]:
+            if following.kind == "word" and following.value == "implements":
+                break
+            if following.kind == "word":
+                parts.append(following.value)
+            elif following.kind == "symbol" and following.value == ".":
+                parts.append(".")
+            else:
+                break
+        name = "".join(parts).strip(".")
+        return name or None
+    return None
+
+
+def _implements(header: tuple[_Token, ...]) -> tuple[str, ...]:
+    """The types a class header implements, as written, in order (``[BookingApi, Audited]``).
+
+    Spring serves a class-level ``@RequestMapping`` declared on an interface the controller
+    implements, so these types matter to the caller exactly as much as ``extends`` does. Generic
+    arguments are skipped (the name is what identifies the type); the list ends at anything that is
+    not a name, a dot, a comma, or a generic bracket.
+    """
+    for index, token in enumerate(header):
+        if token.kind != "word" or token.value != "implements":
+            continue
+        names: list[str] = []
+        parts: list[str] = []
+        depth = 0
+        for following in header[index + 1:]:
+            if following.kind == "symbol" and following.value == "<":
+                depth += 1
+                continue
+            if following.kind == "symbol" and following.value == ">":
+                depth = max(depth - 1, 0)
+                continue
+            if depth:
+                continue
+            if following.kind == "word":
+                parts.append(following.value)
+            elif following.kind == "symbol" and following.value == ".":
+                parts.append(".")
+            elif following.kind == "symbol" and following.value == ",":
+                name = "".join(parts).strip(".")
+                if name:
+                    names.append(name)
+                parts = []
+            else:
+                break
+        name = "".join(parts).strip(".")
+        if name:
+            names.append(name)
+        return tuple(names)
+    return ()
+
+
 def _verbs(tokens: tuple[_Token, ...]) -> list[str]:
     """``RequestMethod.GET`` and ``{RequestMethod.GET, RequestMethod.POST}`` -> ``["GET", ...]``."""
     out: list[str] = []
@@ -217,11 +370,21 @@ def _verbs(tokens: tuple[_Token, ...]) -> list[str]:
 # --------------------------------------------------------------------------- parsing
 
 class _Parser:
-    def __init__(self, tokens: list[_Token], source: str):
+    def __init__(self, tokens: list[_Token], source: str,
+                 inherited: tuple[str, ...] | None = None,
+                 unresolved: tuple[str, str] | None = None):
         self.tokens = tokens
         self.source = source
+        self.inherited = inherited          # a superclass prefix, read by the caller
+        self.unresolved = unresolved        # (reason, detail) when it could not be
         self.index = 0
         self.routes: list[Route] = []
+        self.unread: list[Unread] = []
+        self.type_name: str | None = None
+        self.superclass: str | None = None
+        self.interfaces: tuple[str, ...] = ()
+        self.own_prefix: tuple[str, ...] | None = None
+        self.class_problem: tuple[str, str] | None = None
 
     # -- token helpers
 
@@ -252,11 +415,14 @@ class _Parser:
 
     # -- structure
 
-    def parse(self) -> list[Route]:
-        self._scope(prefixes=())
-        return self.routes
+    def parse(self) -> Reading:
+        self._scope(depth=0, prefixes=(), unresolved=self.unresolved)
+        return Reading(self.type_name, self.superclass, self.own_prefix,
+                       tuple(self.routes), tuple(self.unread), self.class_problem,
+                       self.interfaces)
 
-    def _scope(self, prefixes: tuple[str, ...]) -> None:
+    def _scope(self, depth: int, prefixes: tuple[str, ...],
+               unresolved: tuple[str, str] | None) -> None:
         """Walk declarations until the scope's closing brace (or the end of the file)."""
         doc: str | None = None
         annotations: list[_Annotation] = []
@@ -275,20 +441,68 @@ class _Parser:
                     annotations.append(annotation)
                 continue
             if token.kind == "word" and (token.value in TYPE_KEYWORDS or self._type_ahead()):
-                if token.value not in TYPE_KEYWORDS:
-                    self.index = self._type_ahead()
-                self.index += 1
+                keyword = self.index if token.value in TYPE_KEYWORDS else self._type_ahead()
+                kind = self.tokens[keyword].value
+                self.index = keyword + 1
+                header: list[_Token] = []
                 while self.index < len(self.tokens) and not self._at("{") and not self._at(";"):
+                    header.append(self.tokens[self.index])
                     self.index += 1
+                name = header[0].value if header and header[0].kind == "word" else None
+                extends = _extends(tuple(header)) if kind in ("class", "interface") else None
+                implements = _implements(tuple(header)) if kind == "class" else ()
+                child_prefixes, child_unresolved = self._type_prefixes(
+                    depth, prefixes, annotations, unresolved)
+                if depth == 0:
+                    self.type_name, self.superclass = name, extends
+                    self.interfaces = implements
                 if self._at("{"):
                     self.index += 1
-                    self._scope(prefixes + self._class_prefixes(annotations))
+                    self._scope(depth + 1, child_prefixes, child_unresolved)
                 elif self._at(";"):
                     self.index += 1
                 doc, annotations = None, []
                 continue
-            self._member(prefixes, doc, annotations)
+            self._member(prefixes, unresolved, doc, annotations)
             doc, annotations = None, []
+
+    def _type_prefixes(self, depth: int, prefixes: tuple[str, ...],
+                       annotations: list[_Annotation],
+                       unresolved: tuple[str, str] | None
+                       ) -> tuple[tuple[str, ...], tuple[str, str] | None]:
+        """The prefix methods under this type carry, and the reason when there is none to carry.
+
+        The prefix is the type's own ``@RequestMapping`` when it has one. A type with none inherits
+        its superclass's - but only the caller can read that superclass, so at the top level this
+        returns *no* prefix and the caller re-reads the file with ``inherited`` or ``unresolved``.
+        """
+        own: tuple[str, ...] | None = None
+        problem: tuple[str, str] | None = None
+        for annotation in annotations:
+            if annotation.name != "RequestMapping":
+                continue
+            found = _path_argument(annotation)
+            if found is None:
+                own = ("",)
+            else:
+                paths, expression = found
+                if paths:
+                    own = tuple(paths)
+                else:
+                    problem = (REASON_CLASS_PATH_CONSTANT, expression)
+            break
+        if depth > 0:
+            if problem is not None:
+                return (), problem
+            return (own if own is not None else prefixes), None
+        self.own_prefix, self.class_problem = own, problem
+        if own is not None:
+            return own, None
+        if problem is not None:
+            return (), problem
+        if unresolved is not None:
+            return (), unresolved
+        return self.inherited or (), None
 
     def _type_ahead(self) -> int:
         """Index of a type keyword this declaration carries, past its modifiers; 0 when there is none.
@@ -304,8 +518,8 @@ class _Parser:
             index += 1
         return 0
 
-    def _member(self, prefixes: tuple[str, ...], doc: str | None,
-                annotations: list[_Annotation]) -> None:
+    def _member(self, prefixes: tuple[str, ...], unresolved: tuple[str, str] | None,
+                doc: str | None, annotations: list[_Annotation]) -> None:
         """One declaration: a method (read for its route and its claim), or something to skip."""
         declared: str | None = None      # the identifier immediately before the parameter list
         while self.index < len(self.tokens):
@@ -319,12 +533,12 @@ class _Parser:
             if token.kind == "symbol" and token.value == "{":
                 self.index = _close(self.tokens, self.index, "{", "}")
                 if declared is not None:
-                    self._routes(declared, prefixes, doc, annotations)
+                    self._routes(declared, prefixes, unresolved, doc, annotations)
                 return
             if token.kind == "symbol" and token.value == ";":
                 self.index += 1
                 if declared is not None:
-                    self._routes(declared, prefixes, doc, annotations)
+                    self._routes(declared, prefixes, unresolved, doc, annotations)
                 return                    # a field, an import, or an abstract/interface method
             if token.kind == "symbol" and token.value == "}":
                 return                    # let the enclosing scope consume it
@@ -332,31 +546,30 @@ class _Parser:
 
     # -- routes and claims
 
-    def _class_prefixes(self, annotations: list[_Annotation]) -> tuple[str, ...]:
-        for annotation in annotations:
-            if annotation.name == "RequestMapping":
-                paths = self._paths(annotation)
-                return tuple(paths) if paths else ("",)
-        return ()
-
-    @staticmethod
-    def _paths(annotation: _Annotation) -> list[str]:
-        for key in ("value", "path"):
-            if key in annotation.args:
-                strings = _strings(annotation.args[key])
-                if strings:
-                    return strings
-        return _strings(annotation.args.get("", ()))
-
-    def _routes(self, name: str, prefixes: tuple[str, ...], doc: str | None,
+    def _routes(self, name: str, prefixes: tuple[str, ...],
+                unresolved: tuple[str, str] | None, doc: str | None,
                 annotations: list[_Annotation]) -> None:
         mapping = next((annotation for annotation in annotations if annotation.name in MAPPINGS), None)
         if mapping is None:
             return                        # a method, not a surface: it exposes nothing
+        # A prefix this file cannot supply makes the mapping unreadable, not routeless: emitting it
+        # at the method path would report a route the class does not serve (TESTOPS-74 AC1).
+        if unresolved is not None:
+            self.unread.append(Unread(self.source, name, unresolved[0], unresolved[1]))
+            return
+        found = _path_argument(mapping)
+        paths: list[str]
+        if found is None:
+            paths = [""]                  # no path argument is a mapping at the class prefix itself
+        else:
+            paths, expression = found
+            if not paths:
+                # A path this reader cannot resolve is unread, never a route at ``/`` (AC2).
+                self.unread.append(Unread(self.source, name, REASON_PATH_CONSTANT, expression))
+                return
         claims = self._claims(name, doc, annotations)
         verbs = [MAPPINGS[mapping.name]] if MAPPINGS[mapping.name] else (
             _verbs(mapping.args.get("method", ())) or [ANY])
-        paths = self._paths(mapping) or [""]
         for prefix in prefixes or ("",):
             for path in paths:
                 for verb in verbs:
@@ -419,11 +632,17 @@ def _humanise(name: str) -> str:
     return " ".join(_CAMEL.sub(" ", name).replace("_", " ").split()).lower()
 
 
-def routes(text: str, source: str = "") -> list[Route] | None:
-    """The routes this file declares, or ``None`` when it could not be lexed as Java.
+def read(text: str, source: str = "", *,
+         inherited: tuple[str, ...] | None = None,
+         unresolved: tuple[str, str] | None = None) -> Reading | None:
+    """Everything this file declares, or ``None`` when it could not be lexed as Java.
 
-    ``None`` is not an empty list: a file whose delimiters do not balance was not read, and the
+    ``None`` is not an empty reading: a file whose delimiters do not balance was not read, and the
     caller must not count it as a file that was read and held nothing.
+
+    ``inherited`` is a class-level prefix the *caller* read from this file's superclass in the same
+    repository; ``unresolved`` is the reason it could not. Both exist for one level of inheritance,
+    which is the depth this reader can see without pretending to compile the project.
     """
     tokens = lex(text)
     depth = 0
@@ -438,4 +657,14 @@ def routes(text: str, source: str = "") -> list[Route] | None:
                 return None
     if depth != 0:
         return None
-    return _Parser(tokens, source).parse()
+    return _Parser(tokens, source, inherited, unresolved).parse()
+
+
+def routes(text: str, source: str = "") -> list[Route] | None:
+    """The routes this file declares on its own, with no inherited prefix applied.
+
+    A convenience for callers that only want the routes; :func:`read` is the honest reading, because
+    it also says which declarations could not be placed and which superclass the caller must look at.
+    """
+    reading = read(text, source)
+    return None if reading is None else list(reading.routes)
