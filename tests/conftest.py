@@ -9,10 +9,17 @@ Two global obligations here:
     digest, and a path whose blob differs between the two commits is reported as *changed by a
     commit* only when the working-tree digest equals the blob the new commit holds. A staged but
     uncommitted change is its own failure, and git unavailability is reported as unreadable rather
-    than blamed on the suite. Everything a commit cannot explain - including every untracked
-    addition and every content mismatch - still fails and still names the path. What it cannot
-    attribute is stated in ``support``'s docstring: a test write whose bytes equal the commit's blob
-    is indistinguishable from the commit.
+    than blamed on the suite. A repository whose tree cannot be read (corrupt object store) is
+    unreadable too, never staged, and git is named. A comparison whose two snapshots used different
+    digest alphabets (git blob vs sha256) is unreadable as "not comparable" and compares nothing.
+    Policy-ignored paths - ``build/``, ``dist/``, ``__pycache__/``, ``.pytest_cache/`` and ``*.pyc`` -
+    are walked and counted, and the summary always states how many changed and that they are
+    not attributed; the policy is **report-only**, so a legitimate build or cache write does not fail
+    the run but can never be mistaken for "0 files" outside the guard's view (TESTOPS-67 AC1).
+    Everything a commit cannot explain - including every untracked addition and every content
+    mismatch - still fails and still names the path. What it cannot attribute is stated in
+    ``support``'s docstring: a test write whose bytes equal the commit's blob is indistinguishable
+    from the commit.
   * TESTOPS-35 AC3: the suite cannot open a product store for writing. The guard refuses the
     connection itself, so a fixture script that reaches for ``data/testops.db`` fails at the line
     that reached for it rather than being noticed, if at all, by a digest an hour later. The only
