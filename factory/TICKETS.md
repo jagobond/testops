@@ -92,6 +92,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-74 | The Java reader drops an inherited prefix and invents a route from a constant | F1 | ready | From the T70 review: parent `@RequestMapping` prefix lost, `@GetMapping(Paths.BOOKING)` becomes `GET /`; also "items" undefined in the assessment sentence |
 | TESTOPS-75 | Two sentences and one regex: polish from the residuals review | F1 | ready | A guard message cites a ticket id; `example-<word>` counts as a placeholder; the loud direction's ~72s cost is undocumented |
 | TESTOPS-76 | The source band says "consulted" where it means "read" | F1 | ready | From the T73 review: product tag cannot distinguish read-from-used; test-only sentence asserts blind spots the case never had; absence line untruthful until links are populated |
+| TESTOPS-77 | The Java reader refuses for the right reason - two false reasons left | F1 | ready | From the T74 round-2 review: type names harvested from string literals; interface refusals name a superclass that does not exist |
 
 |----|-------|---------|--------|------|
 

@@ -2,7 +2,7 @@
 id: TESTOPS-74
 title: The Java reader drops an inherited prefix and invents a route from a constant
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-70
 ---
