@@ -1,6 +1,8 @@
 """The smallest web surface that lets a person verify a finding and decide on it.
 
-Two screens. Server-rendered HTML, one form, no JavaScript, nothing behind a disclosure.
+Two screens. Server-rendered HTML, one form, no JavaScript. The one disclosure is a fold: an
+over-long list is collapsed behind a stated count, never silently truncated, and every folded entry
+keeps a permalink that reveals it.
 
 The list is the way in, and every row is a link a reader would follow: a judgement in the verdict's
 own words and the scenario title, never the raw assertion fragment it used to print, and never a
@@ -1786,44 +1788,116 @@ def analysis_scope_block(run: dict) -> list[str]:
     return out
 
 
+# TESTOPS-60 AC2: each group shows this many entries before folding the remainder into a
+# disclosure. The threshold is stated on the page whenever it is reached, never silent.
+UNPLACED_PREVIEW = 20
+
+# TESTOPS-60 AC1/AC3: the heading and the shared sentence for each shape of failure. The reason
+# clause that TESTOPS-57 repeated on every entry lives here, once per group.
+UNPLACED_GROUP_COPY = {
+    queries.GROUP_NO_BINDING: (
+        "No binding matches these words",
+        "{these} this in common: no step binding declared by this run matches their words, so no "
+        "binding could place the step. Why they were not assessed: no binding matches these "
+        "words. The nearest declared patterns shown under a step are the closest ones the suite "
+        "declared; none of them matches these words."),
+    queries.GROUP_NO_PATTERNS: (
+        "This run declared no binding patterns",
+        "{these} this in common: the run's snapshot declared no binding patterns at all, so "
+        "there was nothing to compare the steps' words with. No nearest patterns are claimed for "
+        "these steps, because the run declared none."),
+    queries.GROUP_OTHER: (
+        "Other reasons",
+        "{these} this in common: they were left unplaced for a reason other than the two above."),
+}
+
+
+def _unplaced_entry(entry: dict, *, show_reason: bool = True) -> list[str]:
+    """One entry: the step's own words and patterns, under a structural anchor.
+
+    The anchor is the claim id (``#unplaced-claim-<id>``), so deleting an earlier claim cannot
+    move it. There is deliberately no ordinal anchor (``#unplaced-<n>``): it was positional, so
+    pruning the first claim of a group re-rendered it onto the next claim and silently changed
+    what an old citation meant. A link that moves is worse than a link that no longer exists.
+    """
+    claim_id = entry["id"]
+    anchor = f"unplaced-claim-{esc(str(claim_id))}"
+    text = entry.get("assertion_text") or entry.get("statement") or ""
+    nearest = [pattern for pattern in entry.get("nearly") or [] if pattern]
+    out = [f'<li id="{anchor}">',
+           f'{verdict_badge({"verdict": "unplaced"})}'
+           f'<p class="claimtext">{esc(text)}</p>']
+    if entry.get("group") == queries.GROUP_NO_BINDING and nearest:
+        quoted = " and ".join(f'<span class="code">{esc(pattern)}</span>' for pattern in nearest)
+        out.append(f'<p class="meta">Nearest declared patterns: {quoted}.</p>')
+    elif entry.get("group") == queries.GROUP_OTHER and show_reason and entry.get("reason"):
+        out.append(f'<p class="meta">Why it was not assessed: {esc(entry["reason"])}.</p>')
+    out.append("</li>")
+    return out
+
+
 def unplaced_block(conn, run: dict) -> list[str]:
-    """The claims the run could not place, each with its own anchor and its own soft badge.
+    """The claims the run could not place, grouped by why, with a disclosure and stable anchors.
 
     TESTOPS-57. An unplaced claim is the one verdict whose point is "I could not tell", and it is
     the most actionable thing the run produces: the suite and the code do not meet. It does not
     become a case - a case per unplaced claim would bury the real findings in near-identical
     pages - so the run page gives the claims a section of their own instead. The count and the
     entries are both derived from the same list, so the sentence cannot disagree with the list.
+
+    TESTOPS-60. The section groups the claims by shape of failure, states the shared reason once
+    per group, and folds each group past ``UNPLACED_PREVIEW`` into a disclosure that says exactly
+    how many it holds. At 351 claims the reader sees three headings and three counts before any
+    row, not a flat wall.
     """
     entries = queries.unplaced_claims(conn, run["id"])
     if not entries:
         return []
     count = len(entries)
+    groups = queries.unplaced_groups(entries)
     out = ['<h2 class="section">What this run could not place</h2>',
            f"<p>{_count(count, 'step')} in this run {'was' if count == 1 else 'were'} not "
            f"assessed. They are not absent from the run: each is a claim the suite recorded but "
-           f"could not place, so the tool reached no conclusion about it.</p>",
-           '<ul class="unplaced">']
-    for number, entry in enumerate(entries, start=1):
-        text = entry.get("assertion_text") or entry.get("statement") or ""
-        nearest = [pattern for pattern in entry.get("nearly") or [] if pattern]
-        reason = (entry.get("established_by") or "").strip().rstrip(".")
-        if "no binding matches these words" in reason:
-            reason = "no binding matches these words"
-        out.append(f'<li id="unplaced-{number}">')
-        out.append(f'{verdict_badge({"verdict": "unplaced"})}'
-                   f'<p class="claimtext">{esc(text)}</p>')
-        if nearest:
-            quoted = " and ".join(f'<span class="code">{esc(pattern)}</span>'
-                                  for pattern in nearest)
-            out.append(f'<p class="meta">The nearest declared patterns are {quoted}; none of '
-                       f'them matches these words, so no binding places the step.</p>')
-        else:
-            out.append('<p class="meta">This run declared no binding patterns to compare with.</p>')
-        if reason:
-            out.append(f'<p class="meta">Why it was not assessed: {esc(reason)}.</p>')
-        out.append("</li>")
-    out.append("</ul>")
+           f"could not place, so the tool reached no conclusion about it.</p>"]
+    if len(groups) > 1:
+        out.append(f"<p class=\"meta\">They fall into {len(groups)} groups; each group states "
+                   f"what its steps have in common.</p>")
+    for group in groups:
+        items = group["entries"]
+        title, sentence = UNPLACED_GROUP_COPY[group["key"]]
+        these = ("This step has" if len(items) == 1
+                 else f"These {len(items)} steps have")
+        common = sentence.replace("{these}", these)
+        show_reason = True
+        if group["key"] == queries.GROUP_OTHER:
+            reasons = sorted({entry.get("reason") or "" for entry in items})
+            if len(reasons) == 1:
+                # One recorded reason for the whole group: state it once here, not on each row.
+                common += f" Why they were not assessed: {reasons[0]}."
+                show_reason = False
+            else:
+                common += " Why each was not assessed is stated under its entry."
+        out.append(f'<h3 class="unplaced-group">{esc(title)} '
+                   f'<span class="meta unplaced-group-count">'
+                   f'{_count(len(items), "step")}</span></h3>')
+        out.append(f'<p class="unplaced-common">{esc(common)}</p>')
+        shown = items[:UNPLACED_PREVIEW]
+        hidden = items[UNPLACED_PREVIEW:]
+        out.append('<ul class="unplaced">')
+        for entry in shown:
+            out.extend(_unplaced_entry(entry, show_reason=show_reason))
+        out.append("</ul>")
+        if hidden:
+            out.append(f'<p class="meta">{len(shown)} of {len(items)} shown in this group; '
+                       f'the other {len(hidden)} are folded below. Expand the disclosure to '
+                       f'read them, or open any entry directly by its anchor '
+                       f'(<span class="code">#unplaced-claim-&lt;claim id&gt;</span>).</p>')
+            out.append(f'<details class="unplaced-overflow">'
+                       f'<summary>Show the other {len(hidden)} of {len(items)} steps in this '
+                       f'group</summary><ul class="unplaced">')
+            for entry in hidden:
+                out.extend(_unplaced_entry(entry, show_reason=show_reason))
+            out.append("</ul></details>")
     return out
 
 
