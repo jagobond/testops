@@ -79,6 +79,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-61 | The grammatical rule reads the first word and the last part only | F1 | ready | From the T59 review: `this-is-not-a-password` refused, `acme-their-password` accepted; `github_pat_` truncation goes green silently; drop the vendor appeal |
 | TESTOPS-62 | The clause exemption fires on a word, not a clause | F1 | ready | From the T61 review: `my-password-is-here`, `has-my-token`, `acme-no-password` all accepted. Require a predication whose complement is the credential word |
 | TESTOPS-63 | `key` missing from the credential vocabulary | F1 | ready | From the T62 review: `the-api-key-is-xyz`, `my-private-key` bypass every branch because only `apikeys?` and `_keys?` are matched. Qualify the word, protect the honest `key` names |
+| TESTOPS-64 | The isolation tripwire cannot tell a commit from a write | F1 | ready | It failed on `main` because a ticket file was committed mid-run; a tripwire that fires on its own repository gets ignored |
 
 |----|-------|---------|--------|------|
 
