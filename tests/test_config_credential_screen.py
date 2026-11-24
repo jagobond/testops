@@ -420,7 +420,8 @@ BOUNDARY = [
     ("passwords", "refused", "the plural names the things themselves"),
     ("session-token", "accepted", "a compound naming a kind of token: the credential word is a head"),
     ("vault-token", "accepted",
-     "the same grammatical shape as session-token; HashiCorp's own name for a Vault credential"),
+     "the same grammatical shape as session-token: a compound noun naming a kind of token, with no "
+     "determiner"),
     ("client-secret", "accepted",
      "a compound naming a kind of secret, like session-token; a determiner is what marks an instance"),
     ("shhh-secret", "accepted", "a compound noun whose head is a credential word: a label"),
@@ -432,6 +433,29 @@ BOUNDARY = [
     ("ghp_notes", "accepted",
      "below the GitHub classic floor (36); the prefix alone is not a shape"),
     ("github_pat_docs", "accepted", "below the fine-grained floor (82): a documentation name"),
+    # --- TESTOPS-61 AC1/AC2/AC3/AC5: every part is read, a statement is not a label, and a cut-off
+    #     prefix is refused with its reason rather than accepted silently.
+    ("this-is-not-a-password", "accepted",
+     "a clause: 'is' is a finite verb, so the determiner belongs to the sentence, not to a credential"),
+    ("this-is-my-password", "accepted", "a clause for the same reason: it states something"),
+    ("xox-not-a-slack-token", "accepted",
+     "a denial: 'not' makes the phrase a statement, not a label"),
+    ("not-a-password", "accepted", "a denial: it names no credential, only what the thing is not"),
+    ("acme-their-password", "refused",
+     "a possessive in a middle position names a particular credential as plainly as my-password"),
+    ("their-password", "refused", "a possessive and a credential head: an instance"),
+    ("acme-our-token", "refused", "a possessive in a middle position: an instance"),
+    ("my-old-api-token", "refused",
+     "a determiner, two modifiers and a credential head: an instance label"),
+    ("acme-their-prod-db-password", "refused",
+     "a possessive anywhere is enough: the parts state nothing, so the name is a label"),
+    ("prod-db-password", "accepted", "no determiner or possessive anywhere: a type name"),
+    ("github_pat_" + FINE_BODY, "refused",
+     "a real prefix with 22 of its 82 characters: a cut-off paste, refused with that reason"),
+    ("ghp_" + "aB3dE5fG7hJ9kL2mN4p", "refused",
+     "a real prefix with 19 of its 36 characters: a cut-off paste"),
+    ("AKIA" + "Q7FZ2K9M4T8X1B", "refused",
+     "a real prefix with 15 of its 16 characters: a cut-off paste"),
     ("glpat-migration-plan", "accepted", "a lowercase word chain, not a token body"),
     # --- AC2: prose with ordinary words must still be accepted
     ("the password reset flow is documented", "accepted", "prose"),
@@ -608,15 +632,72 @@ def test_singular_and_plural_credential_words_are_decided_together():
     assert services._looks_like_secret("my-passwords") is not None
 
 
+# TESTOPS-61 AC1: the rule reads every part, not the first and the last.
+def test_a_determiner_or_possessive_in_any_position_names_an_instance():
+    for value in ("my-password", "acme-their-password", "acme-our-token", "their-password",
+                  "my-old-api-token", "acme-their-prod-db-password"):
+        assert services._looks_like_secret(value) is not None, \
+            f"{value!r} names a particular credential and was accepted"
+    # The other direction: without a determiner the same head names a kind, wherever the word sits.
+    for value in ("session-token", "vault-token", "prod-db-password", "password-list"):
+        assert services._looks_like_secret(value) is None, f"{value!r} names a kind and was refused"
+
+
+# TESTOPS-61 AC2: a statement about a credential is not a label for one. The deciding rule is stated
+# in services._names_a_credential: a determiner marks an instance unless the parts are a clause (a
+# finite verb) or a denial (a negator). The boundary is the same five parts without the verb.
+def test_a_statement_about_a_credential_is_not_an_instance_label():
+    assert services._looks_like_secret("this-is-not-a-password") is None, \
+        "a sentence-name was refused for opening with a determiner"
+    assert services._looks_like_secret("this-is-my-password") is None, "a clause is not a label"
+    assert services._looks_like_secret("xox-not-a-slack-token") is None, "a denial is not a label"
+    assert services._looks_like_secret("acme-their-prod-db-password") is not None, \
+        "the boundary: the same possessive with no verb or negator is a label"
+
+
+# TESTOPS-61 AC3: a cut-off prefix is refused with a reason that says it is too short, and the
+# alphabet - not the length alone - is what keeps a word-shaped body a name.
+def test_a_truncated_prefix_is_refused_and_the_reason_says_it_is_too_short():
+    value = "github_pat_" + FINE_BODY
+    reason = services._looks_like_secret(value)
+    assert reason is not None, "a 22-character fine-grained paste was accepted silently"
+    assert "github_pat_" in reason, "the reason should name the prefix it recognised"
+    assert "too short" in reason, "the reason should say why it was refused"
+    assert value not in reason, "the refusal printed the paste"
+    assert services._looks_like_secret("github_pat_docs") is None, \
+        "a lower-case word after the same prefix is a name, not a fragment"
+    assert services._looks_like_secret("ghp_notes") is None
+
+
+def test_a_truncated_fine_grained_prefix_is_refused_over_http(live):
+    base, path = live
+    _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
+    value = "github_pat_" + FINE_BODY
+    status, body = _post(f"{base}/config/services", _service_fields(name=value))
+    assert status == 400, "a cut-off fine-grained paste was stored"
+    assert "github_pat_" in body and "too short" in body
+    assert value not in body, "the refusal page printed the paste"
+    conn = db.connect(path)
+    try:
+        assert services.list_services(conn, "team") == []
+    finally:
+        conn.close()
+
+
 # TESTOPS-59 AC4: every prefix has a floor and a ceiling from the format's real body.
 def test_every_prefix_carries_a_floor_and_a_ceiling():
     for prefix, _pattern, floor, ceiling, _words in services._TOKEN_FORMATS:
         assert 0 < floor <= ceiling, f"{prefix} has no usable body range"
-    # `ghp_notes` is below the classic floor and is a name; a truncated classic paste is a name too.
+    # `ghp_notes` is below the classic floor and is a name, because its body is a word.
     assert services._looks_like_secret("ghp_notes") is None
-    assert services._looks_like_secret("ghp_" + "aB3dE5fG7hJ9kL2mN4p") is None
-    # A fine-grained token is 82 body characters, not 22: a 22-character paste is a truncation.
-    assert services._looks_like_secret("github_pat_" + FINE_BODY) is None
+    # TESTOPS-61 AC3: a fragment of a real body below the floor is a cut-off paste, and is refused
+    # with a reason that says so - no silent green tick on a recognisable prefix.
+    cut_off = services._looks_like_secret("ghp_" + "aB3dE5fG7hJ9kL2mN4p")
+    assert cut_off is not None and "too short" in cut_off
+    # A fine-grained token is 82 body characters, not 22: a 22-character paste is a truncation, and
+    # TESTOPS-61 AC3 refuses it by name rather than accepting it silently.
+    truncated = services._looks_like_secret("github_pat_" + FINE_BODY)
+    assert truncated is not None and "too short" in truncated
     assert services._looks_like_secret("github_pat_" + FINE_BODY + "_" + FINE_TAIL) is not None
     # And a body past the ceiling is not the format's body.
     assert services._looks_like_secret("ghp_" + "aB3d" * 11) is None
