@@ -94,6 +94,9 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-76 | The source band says "consulted" where it means "read" | F1 | ready | From the T73 review: product tag cannot distinguish read-from-used; test-only sentence asserts blind spots the case never had; absence line untruthful until links are populated |
 | TESTOPS-77 | The Java reader refuses for the right reason - two false reasons left | F1 | ready | From the T74 round-2 review: type names harvested from string literals; interface refusals name a superclass that does not exist |
 | TESTOPS-78 | A verb-less assertion still accuses, and the near miss is never shown | F1 | ready | From the T72 round-2 review: `booking details present` matched a DELETE on the bare noun; near-miss records are stored but no page renders them |
+| TESTOPS-79 | Eight of nine repeats are homonyms - quoted UI copy is not an entity | F1 | ready | From the first real corpus run: the word `message` in a banner sentence matched the message service's GET /{id}; only 1 of 9 repeats is defensible |
+| TESTOPS-80 | The source band says the product's routes were not consulted while the verdict rests on them | F1 | ready | The band answers "were its routes read" with the test-ecosystem detector: it reports 0 of 3 ecosystems and 169 files while 142 .java files gave 25 routes |
+| TESTOPS-81 | A bare POST / is not a route a reader can act on - name the service | F1 | ready | Three services each declare POST /; a reader told to "call POST /" cannot, and two routes from different modules render identically |
 
 |----|-------|---------|--------|------|
 
