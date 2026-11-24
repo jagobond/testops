@@ -44,12 +44,33 @@ COMMIT = "a" * 40
 PATH = "features/panel_api.feature"
 LINE = 17
 
-# A reply that only uses facts the seeded record holds. Every test that expects an explanation to be
-# served uses this text, so a failure here is a change in the checker, not in a fixture.
-GOOD_REPLY = ("This test asserts that the panel is served. The rule found that the assertion is "
-              "settled by the page the server sends, and that the run reached the browser to "
-              "arrive at it. The next step is to move that step into a test that reads the "
-              "response instead.")
+# A reply that only uses facts the seeded record holds: structured evidence, each sentence citing the
+# record identifier it rests on. Every test that expects an explanation to be served uses this, so a
+# failure here is a change in the checker, not in a fixture.
+GOOD_SENTENCES = (
+    ("This test asserts that the panel is served.", ("claim",)),
+    ("The rule found that the assertion is settled by the page the server sends.", ("claim",)),
+    ("The next step is to read the response instead of driving a browser.", ("claim",)),
+)
+
+
+def _reply(pairs, explanation=None):
+    """A JSON reply from (sentence, facts) pairs - the shape the prompt asks for."""
+    sentences = [sentence for sentence, _ in pairs]
+    return json.dumps({"explanation": explanation or " ".join(sentences),
+                       "citations": [{"sentence": number, "facts": list(facts)}
+                                     for number, (_, facts) in enumerate(pairs, start=1)]})
+
+
+def _claim_id(conn) -> int:
+    return int(conn.execute("SELECT id FROM claim ORDER BY id LIMIT 1").fetchone()[0])
+
+
+def _good_reply(conn) -> str:
+    """The honest reply for the seeded record: it re-quotes the claim id and nothing invented."""
+    claim = f"claim:{_claim_id(conn)}"
+    return _reply([(sentence, (claim,)) for sentence, _ in GOOD_SENTENCES])
+
 
 CONFIG = agent.Config(project="testops-resource",
                       endpoint="https://example.invalid/openai/v1/chat/completions",
@@ -60,7 +81,8 @@ class FakeModel:
     """A model that answers from a script: a string, a Completion, or an exception to raise."""
 
     def __init__(self, *replies):
-        self.replies = list(replies) or [GOOD_REPLY]
+        assert replies, "a fake model needs at least one scripted reply"
+        self.replies = list(replies)
         self.calls: list[dict] = []
 
     def __call__(self, system, user, model, **kwargs):
@@ -245,7 +267,7 @@ def test_on_is_the_off_page_plus_one_labelled_block(tmp_path):
     conn = _seed(tmp_path)
     try:
         off = _off(conn)
-        fake = FakeModel(GOOD_REPLY)
+        fake = FakeModel(_good_reply(conn))
         on = _on(conn, fake)
     finally:
         conn.close()
@@ -262,7 +284,7 @@ def test_the_explanation_is_written_from_the_record_and_nothing_else(tmp_path):
     """The prompt carries the stored facts - assertion, verdict, matched word, route, reason."""
     conn = _seed(tmp_path, reason="the product declares GET /rooms, which shares the word \u201crooms\u201d")
     try:
-        fake = FakeModel(GOOD_REPLY)
+        fake = FakeModel(_good_reply(conn))
         _on(conn, fake)
     finally:
         conn.close()
@@ -282,7 +304,7 @@ def test_the_record_is_read_from_the_store_not_written_by_the_agent(tmp_path):
     try:
         record = agent.case_record(conn, CASE)
         before = json.dumps(record, sort_keys=True)
-        _on(conn, FakeModel(GOOD_REPLY))
+        _on(conn, FakeModel(_good_reply(conn)))
         after = json.dumps(agent.case_record(conn, CASE), sort_keys=True)
     finally:
         conn.close()
@@ -290,15 +312,75 @@ def test_the_record_is_read_from_the_store_not_written_by_the_agent(tmp_path):
 
 
 # --------------------------------------------------------------------------- AC3: the check
+#
+# The review probed the old check with four ordinary lies and all four got through: a wrong verb on a
+# real route, a real filename with a wrong line number before a full stop, a count written as a word,
+# and a confident claim citing nothing. Each is pinned here as a reply that is now rejected, and the
+# honest prose that re-quotes the record is pinned as a reply that still survives.
 
-def test_a_fabricated_route_is_discarded_and_the_page_falls_back(tmp_path):
+def _record(findings: int = 6) -> dict:
+    """The shape of record the review probed: a route, a file and line, and counts."""
+    claim = {"id": 1, "verdict": "gap", "path": PATH, "line": LINE,
+             "product": {"route": "GET /rooms", "word": "rooms"}}
+    return {"case": {"id": CASE},
+            "counts": {"findings": findings, "claims": findings, "sources": 2},
+            "findings": [{"claims": [dict(claim)]} for _ in range(findings)]}
+
+
+@pytest.mark.parametrize("sentence,facts,expected", [
+    # 1. A real route with the wrong verb. The record says GET; the reply says PATCH.
+    ("The product declares PATCH /rooms, which is where the panel is served.",
+     ["route:GET /rooms"], "the verb PATCH"),
+    # 2. A real filename with a wrong line number, with the digit before a full stop.
+    (f"The assertion lives in {PATH}, line 99.", [f"file:{PATH}:{LINE}"], "the line 99"),
+    # 3. A count written as a word. The record says 6; the reply says four.
+    ("The analyser raised four findings for this case.", ["count:findings:6"], "the number four"),
+    # 4. A confident product claim that cites nothing at all.
+    ("The product validates the token before the handler runs.", [], "the sentence 1"),
+])
+def test_each_of_the_reviewers_four_lies_is_rejected(sentence, facts, expected):
+    record = _record()
+    # The facts the replies below cite, or fail to cite, are ones the record really offers - so each
+    # rejection is the check disagreeing, not the citation being unknown.
+    for fact in facts:
+        assert fact in agent.citation_index(record), fact
+    reply, cause = agent.parse_reply(_reply([(sentence, facts)]))
+    assert cause == "" and reply is not None, "the reply is well-formed; its content is the problem"
+    found = agent.violations(reply, record)
+    assert any(expected in violation for violation in found), found
+
+
+def test_honest_prose_that_requotes_the_record_survives():
+    """The opposite failure: re-quoting the record's own route, file, count and word is accepted."""
+    record = _record()
+    honest = [
+        ("The analyser raised 6 findings, and the first of them is about the panel.",
+         ["count:findings:6"]),
+        (f"The assertion lives in {PATH}, line {LINE}.", [f"file:{PATH}:{LINE}"]),
+        ("The product declares GET /rooms, matched on the word rooms.", ["route:GET /rooms"]),
+        ("The next step is to read the response instead of driving a browser.", ["claim:1"]),
+    ]
+    reply, cause = agent.parse_reply(_reply(honest))
+    assert cause == "" and reply is not None
+    assert agent.violations(reply, record) == []
+
+
+def test_a_citation_the_record_does_not_offer_is_rejected():
+    record = _record()
+    reply, cause = agent.parse_reply(_reply([
+        ("The product already serves the orders endpoint.", ["route:/api/orders"])]))
+    assert cause == "" and reply is not None
+    assert agent.violations(reply, record) == ["the citation route:/api/orders"]
+
+
+def test_a_fabricated_route_citation_is_discarded_and_the_page_falls_back(tmp_path):
     conn = _seed(tmp_path)
-    fabricated = ("The assertion checks GET /api/orders, which the product already serves, so the "
-                  "browser is not needed.")
+    fabricated = _reply([("The assertion checks GET /api/orders, which the product already serves, "
+                          "so the browser is not needed.", ["route:/api/orders"])])
     try:
         off = _off(conn)
         on = _on(conn, FakeModel(fabricated))
-        call = conn.execute("SELECT outcome, cause, tokens_in, tokens_out FROM agent_call"
+        call = conn.execute("SELECT outcome, cause FROM agent_call"
                             " ORDER BY id DESC LIMIT 1").fetchone()
         stored = conn.execute("SELECT COUNT(*) FROM agent_explanation").fetchone()[0]
     finally:
@@ -311,39 +393,73 @@ def test_a_fabricated_route_is_discarded_and_the_page_falls_back(tmp_path):
     assert stored == 0, "a rejected reply must never be stored as an explanation"
 
 
-def test_a_fabricated_file_a_wrong_count_and_an_invented_name_are_all_caught(tmp_path):
-    record = {"case": {"id": CASE}, "counts": {"findings": 1},
-              "findings": [{"claims": [{"verdict": "gap", "path": PATH, "line": 17}]}]}
-    assert agent.violations("it reads CheckoutController.cs", record) == [
-        "the file CheckoutController.cs", "the name CheckoutController"]
-    assert agent.violations("there are 3 copies at line 17", record) == ["the number 3"]
-    assert agent.violations("the class CheckoutService decides it", record) == [
-        "the name CheckoutService"]
-    assert agent.violations("the route /api/orders is used", record) == ["the route /api/orders"]
-    # A fact the record does hold is not a violation, and a short file name for a stored path is
-    # an abbreviation rather than an invention.
-    assert agent.violations(f"it is at {PATH} line 17, one finding", record) == []
-    assert agent.violations("it is in panel_api.feature", record) == []
-
-
-def test_the_rejection_sentence_names_the_invented_fact(tmp_path):
+def test_a_wrong_verb_on_a_real_route_reaches_the_page_and_is_rejected(tmp_path):
+    """The first lie, end to end: the page falls back and the sentence names the verb."""
     conn = _seed(tmp_path)
-    fabricated = "The route /api/orders is what the test should have called."
+    written = _reply([("The product declares PATCH /rooms, matched on the word rooms.",
+                       ["route:GET /rooms"])])
     try:
         off = _off(conn)
-        on = _on(conn, FakeModel(fabricated))
+        on = _on(conn, FakeModel(written))
+        row = conn.execute("SELECT outcome, cause FROM agent_call ORDER BY id DESC LIMIT 1").fetchone()
     finally:
         conn.close()
-    sentence = ("The model-written explanation was rejected because it named the route "
-                "/api/orders, which is not in this case's record. Nothing it wrote was added to "
-                "this page.")
+    assert row["outcome"] == "rejected" and "PATCH" in row["cause"]
+    assert b"agent-text" not in on
+    sentence = ("The model-written explanation was rejected: the verb PATCH, where the record says "
+                "GET /rooms. Nothing it wrote was added to this page.")
     import html as htmllib
     assert on.decode("utf-8") == _with_note(off, htmllib.escape(sentence))
 
 
-def test_the_prompt_quotes_the_first_findings_and_the_check_uses_them_all():
-    """A case with dozens of findings buys a bounded prompt; the check still reads the whole record."""
-    findings = [{"title": f"finding {i}", "claims": [{"verdict": "gap"}]} for i in range(9)]
+def test_an_honest_reply_that_requotes_the_record_is_served(tmp_path):
+    """A reply that cites the record's own route, file, count and claim is served, not refused."""
+    conn = _seed(tmp_path)
+    claim = f"claim:{_claim_id(conn)}"
+    honest = _reply([
+        ("The analyser raised 1 finding, settled by the page the server sends.",
+         ["count:findings:1", claim]),
+        (f"The assertion lives in {PATH} line {LINE}.", [f"file:{PATH}:{LINE}"]),
+        ("The product declares GET /rooms, matched on the word rooms.", ["route:GET /rooms"]),
+        ("The next step is to read the response instead of driving a browser.", [claim]),
+    ])
+    try:
+        on = _on(conn, FakeModel(honest))
+        row = conn.execute("SELECT outcome FROM agent_call ORDER BY id DESC LIMIT 1").fetchone()
+        stored = conn.execute("SELECT text FROM agent_explanation").fetchone()
+        view = conn.execute("SELECT served FROM agent_view ORDER BY id DESC LIMIT 1").fetchone()
+    finally:
+        conn.close()
+    assert row["outcome"] == "ok"
+    assert b"agent-text" in on and "rejected" not in _text(on)
+    assert stored is not None and stored["text"].startswith("The analyser raised 1 finding")
+    assert view is None or view["served"] in ("fresh", "off")
+
+
+def test_a_fabricated_file_and_an_invented_name_are_both_caught():
+    record = _record()
+    reply, _ = agent.parse_reply(_reply([
+        ("The check runs in CheckoutController.cs and the class CheckoutService decides it.",
+         ["claim:1"])]))
+    found = agent.violations(reply, record)
+    assert "the file CheckoutController.cs, which no cited fact names" in found
+    assert "the name CheckoutService, which no cited fact holds" in found
+
+
+def test_a_reply_that_is_not_the_agreed_json_is_unusable(tmp_path):
+    conn = _seed(tmp_path)
+    try:
+        on = _on(conn, FakeModel("The product declares GET /rooms and that is all there is to say."))
+        row = conn.execute("SELECT outcome, cause FROM agent_call ORDER BY id DESC LIMIT 1").fetchone()
+    finally:
+        conn.close()
+    assert row["outcome"] == "error" and row["cause"] == "malformed"
+    assert b"agent-text" not in on
+
+
+def test_the_prompt_offers_the_citations_and_the_check_reads_the_whole_record():
+    """A case with dozens of findings buys a bounded prompt; every fact still has an identifier."""
+    findings = [{"title": f"finding {i}", "claims": [{"id": i, "verdict": "gap"}]} for i in range(9)]
     findings[-1]["claims"][0]["path"] = "late/last_one.feature"
     record = {"case": {"id": CASE}, "counts": {"findings": 9}, "findings": findings}
     text = agent.facts_text(record)
@@ -351,15 +467,37 @@ def test_the_prompt_quotes_the_first_findings_and_the_check_uses_them_all():
     assert f"the first {agent.PROMPT_FINDING_LIMIT} are quoted" in text
     assert "title: finding 5" in text    # the sixth and last quoted one
     assert "title: finding 6" not in text  # the seventh is not
-    # A fact the prompt did not quote is still in the record, so it is not a fabrication.
-    assert agent.violations("it is in late/last_one.feature", record) == []
+    # Every citation the record offers is printed in the prompt, including one from a finding the
+    # prompt did not quote - so the model can cite what it was told, and the check accepts it.
+    index = agent.citation_index(record)
+    assert "file:late/last_one.feature" in index
+    assert "CITATIONS" in text and "file:late/last_one.feature" in text
+    reply, _ = agent.parse_reply(_reply([
+        ("The finding is recorded in late/last_one.feature.", ["file:late/last_one.feature"])]))
+    assert agent.violations(reply, record) == []
+
+
+def test_the_rejection_sentence_names_the_invented_fact(tmp_path):
+    conn = _seed(tmp_path)
+    fabricated = _reply([("The route /api/orders is what the test should have called.",
+                          ["route:/api/orders"])])
+    try:
+        off = _off(conn)
+        on = _on(conn, FakeModel(fabricated))
+    finally:
+        conn.close()
+    sentence = ("The model-written explanation was rejected: the citation route:/api/orders. "
+                "Nothing it wrote was added to this page.")
+    import html as htmllib
+    assert on.decode("utf-8") == _with_note(off, htmllib.escape(sentence))
+
 
 
 # --------------------------------------------------------------------------- AC5: the cache
 
 def test_a_second_view_is_served_from_the_store_and_says_so(tmp_path):
     conn = _seed(tmp_path)
-    fake = FakeModel(GOOD_REPLY)
+    fake = FakeModel(_good_reply(conn))
     try:
         first = _on(conn, fake)
         second = _on(conn, fake)
@@ -375,7 +513,7 @@ def test_a_second_view_is_served_from_the_store_and_says_so(tmp_path):
 
 def test_the_cache_key_is_case_prompt_hash_and_model(tmp_path):
     conn = _seed(tmp_path)
-    fake = FakeModel(GOOD_REPLY)
+    fake = FakeModel(_good_reply(conn))
     try:
         _on(conn, fake)
         record = agent.case_record(conn, CASE)
@@ -397,8 +535,8 @@ def test_the_page_offers_two_plain_links_and_no_script(tmp_path):
     conn = _seed(tmp_path)
     try:
         view_id = agent.start_view(conn, CASE, "on")
-        on = _on(conn, FakeModel(GOOD_REPLY), view_id=view_id)
-        agent.finish_view(conn, view_id, agent.Outcome(state="explanation"))
+        on = _on(conn, FakeModel(_good_reply(conn)), view_id=view_id)
+        agent.finish_view(conn, view_id, agent.Outcome(state=agent.STATE_FRESH))
     finally:
         conn.close()
     text = on.decode("utf-8")
@@ -415,8 +553,8 @@ def test_one_view_counts_one_vote_and_the_report_counts_it_per_variant(tmp_path)
     conn = _seed(tmp_path)
     try:
         view_id = agent.start_view(conn, CASE, "on")
-        _on(conn, FakeModel(GOOD_REPLY), view_id=view_id)
-        conn.execute("UPDATE agent_view SET served='explanation' WHERE id=?", (view_id,))
+        _on(conn, FakeModel(_good_reply(conn)), view_id=view_id)
+        conn.execute("UPDATE agent_view SET served='fresh' WHERE id=?", (view_id,))
         conn.commit()
         first, first_code = app.feedback_page(conn, CASE, str(view_id), "helped")
         second, second_code = app.feedback_page(conn, CASE, str(view_id), "did_not_help")
@@ -445,7 +583,7 @@ def test_a_vote_for_a_page_that_showed_no_explanation_is_refused(tmp_path):
 
 def test_the_report_arithmetic_is_the_ledger(tmp_path):
     conn = _seed(tmp_path)
-    fake = FakeModel(GOOD_REPLY)
+    fake = FakeModel(_good_reply(conn))
     try:
         for _ in range(2):
             view_id = agent.start_view(conn, CASE, "on")
@@ -468,6 +606,105 @@ def test_the_report_arithmetic_is_the_ledger(tmp_path):
     assert rows["off"]["views"] == 1
     assert rows["off"]["total_tokens"] == 0
     assert rows["off"]["mean_tokens_per_explanation"] is None
+    # The same ledger, broken down by what each view actually was.
+    fresh, cached = on["states"]["fresh"], on["states"]["cached"]
+    assert fresh["views"] == 1 and fresh["explanations_written"] == 1
+    assert fresh["total_tokens"] == 180 and fresh["helped"] == 1
+    assert cached["views"] == 1 and cached["cache_hits"] == 1
+    assert cached["total_tokens"] == 0 and cached["explanations_written"] == 0
+
+
+def _other_config(model: str) -> agent.Config:
+    """The same deployment, a different model: a different cache key, so the model is really asked."""
+    return agent.Config(project="testops-resource", endpoint="https://example.invalid/v1/chat",
+                        model=model, token="test-token-value")
+
+
+def test_the_report_separates_every_state_so_value_and_loss_are_not_confused(tmp_path):
+    """Six kinds of view, and each figure counted in the state it belongs to.
+
+    A fresh explanation, a cached one, a rejected reply (paid for, thrown away), a failure where the
+    model could not answer, a view with no token, and an agent-off view. The point of the breakdown:
+    the cached view adds no value of its own, and the rejected and failed views are not a loss of a
+    reader's explanation - they are cost, and they say so.
+    """
+    conn = _seed(tmp_path)
+    try:
+        # A fresh explanation, which is also the one the cache will serve.
+        fresh_view = agent.start_view(conn, CASE, "on")
+        _on(conn, FakeModel(_good_reply(conn)), view_id=fresh_view)
+        # A second view of the same case: served from the store, zero tokens.
+        cached_view = agent.start_view(conn, CASE, "on")
+        _on(conn, FakeModel(_good_reply(conn)), view_id=cached_view)
+        # A rejected reply: the model was paid for it and nothing was shown. A different model is a
+        # different cache key, so the store cannot answer for this view.
+        rejected_view = agent.start_view(conn, CASE, "on")
+        _on(conn, FakeModel(_reply([("The product declares PATCH /rooms, which is where the panel "
+                                     "is served.", ["route:GET /rooms"])])), view_id=rejected_view,
+            cfg=_other_config("reject-model"))
+        # A failure where the model could not be reached.
+        failed_view = agent.start_view(conn, CASE, "on")
+        _on(conn, FakeModel(urllib.error.URLError("no route to host")), view_id=failed_view,
+            cfg=_other_config("fail-model"))
+        # No token: nothing was attempted, so there is nothing to attribute to the model.
+        unconfigured = agent.Config(project="p", endpoint="https://x.invalid",
+                                    model="deepseek-flash", token="")
+        unconfigured_view = agent.start_view(conn, CASE, "on")
+        _on(conn, FakeModel(_good_reply(conn)), view_id=unconfigured_view, cfg=unconfigured)
+        # An agent-off view.
+        agent.record_view(conn, CASE, "off")
+        # One vote, cast on the cached page - so it is counted in the cached state.
+        app.feedback_page(conn, CASE, str(cached_view), "helped")
+        rows = {row["variant"]: row for row in agent.report(conn)}
+        calls = conn.execute(
+            "SELECT v.served, c.tokens_in + c.tokens_out AS tokens, c.cached FROM agent_call c"
+            " JOIN agent_view v ON v.call_id = c.id").fetchall()
+    finally:
+        conn.close()
+
+    on, states = rows["on"], rows["on"]["states"]
+    assert [states[s]["views"] for s in ("fresh", "cached", "rejected", "failed_unavailable",
+                                         "failed_unconfigured")] == [1, 1, 1, 1, 1]
+    # Tokens belong to the call the view made, so a rejected reply's tokens are visible as cost and
+    # a cached view's are zero.
+    assert states["fresh"]["total_tokens"] == 180
+    assert states["cached"]["total_tokens"] == 0
+    assert states["rejected"]["total_tokens"] == 180
+    assert states["failed_unavailable"]["total_tokens"] == 0
+    assert states["failed_unconfigured"]["calls"] == 0
+    # Value and cost are named as such, and never swapped.
+    assert states["fresh"]["value"] and states["cached"]["value"]
+    assert states["rejected"]["cost"] and not states["rejected"]["value"]
+    assert not states["failed_unconfigured"]["value"]
+    # The vote is the cached page's, not the fresh one's.
+    assert states["cached"]["helped"] == 1 and states["fresh"]["helped"] == 0
+    assert on["helped"] == 1
+    # And the variant total is the sum of the states, call for call and token for token.
+    assert on["explanation_views"] == 2      # fresh + cached, not the five views
+    assert on["views"] == 5
+    assert on["rejected"] == 1 and on["errors"] == 2
+    assert on["total_tokens"] == sum(int(c["tokens"]) for c in calls) == 360
+    assert on["unlinked_calls"] == 0
+    assert rows["off"]["states"]["off"]["views"] == 1
+
+
+def test_the_report_page_breaks_the_numbers_down_by_state(tmp_path):
+    conn = _seed(tmp_path)
+    try:
+        fresh_view = agent.start_view(conn, CASE, "on")
+        _on(conn, FakeModel(_good_reply(conn)), view_id=fresh_view)
+        cached_view = agent.start_view(conn, CASE, "on")
+        _on(conn, FakeModel(_good_reply(conn)), view_id=cached_view)
+        body = app.agent_report(conn)
+    finally:
+        conn.close()
+    text = _text(body)
+    assert "What each view actually was" in text
+    assert "fresh - an explanation written for this view" in text
+    assert "cached - an explanation served from the store" in text
+    # The cached row is present and its tokens are zero: a cached page is not an explanation's value.
+    cached_index = text.index("cached - an explanation served from the store")
+    assert " 0 " in text[cached_index:cached_index + 120]
 
 
 def test_a_variant_nobody_viewed_reports_no_mean_rather_than_zero(tmp_path):
@@ -484,7 +721,7 @@ def test_the_report_page_prints_the_numbers_and_no_price(tmp_path):
     conn = _seed(tmp_path)
     try:
         view_id = agent.start_view(conn, CASE, "on")
-        _on(conn, FakeModel(GOOD_REPLY), view_id=view_id)
+        _on(conn, FakeModel(_good_reply(conn)), view_id=view_id)
         body = app.agent_report(conn)
     finally:
         conn.close()
@@ -528,7 +765,7 @@ def test_an_unconfigured_agent_serves_the_off_page_and_one_sentence(tmp_path):
                                 model="deepseek-flash", token="")
     try:
         off = _off(conn)
-        on = _on(conn, FakeModel(GOOD_REPLY), cfg=unconfigured)
+        on = _on(conn, FakeModel(_good_reply(conn)), cfg=unconfigured)
     finally:
         conn.close()
     assert b"agent-text" not in on
@@ -540,7 +777,7 @@ def test_a_case_with_no_finding_says_there_is_nothing_to_explain(tmp_path):
     conn = _seed(tmp_path, findings=0)
     try:
         off = _off(conn)
-        on = _on(conn, FakeModel(GOOD_REPLY))
+        on = _on(conn, FakeModel(_good_reply(conn)))
     finally:
         conn.close()
     assert _with_note(off, "This case raised no finding, so there was nothing for the model to "
@@ -555,7 +792,7 @@ def test_no_credential_reaches_the_page_or_the_ledger(tmp_path):
     try:
         cfg = agent.Config(project="p", endpoint="https://x.invalid", model="deepseek-flash",
                            token=secret)
-        on = _on(conn, FakeModel(GOOD_REPLY), cfg=cfg)
+        on = _on(conn, FakeModel(_good_reply(conn)), cfg=cfg)
         rows = [dict(row) for row in conn.execute("SELECT * FROM agent_call")]
         views = [dict(row) for row in conn.execute("SELECT * FROM agent_view")]
     finally:

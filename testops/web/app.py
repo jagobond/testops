@@ -2875,7 +2875,7 @@ def case_response(conn, case_id: str, *, variant: str = agent.VARIANT_OFF,
             outcome = agent.explain_case(conn, record, cfg=agent_config or agent.config(),
                                          completer=completer)
         else:
-            outcome = agent.Outcome(state="no_finding", cause="no_finding")
+            outcome = agent.Outcome(state=agent.STATE_NO_FINDING, cause="no_finding")
     if outcome is not None:
         if outcome.served:
             body.extend(_explanation_block(outcome, case_id, view_id))
@@ -3249,6 +3249,31 @@ def agent_report(conn) -> bytes:
                     f'<td>{mean if mean is not None else "&mdash;"}</td>'
                     f'<td>{row["helped"]}</td><td>{row["did_not_help"]}</td></tr>')
     body.append('</table>')
+    body.append('<h2 class="section">What each view actually was</h2>')
+    body.append('<p class="meta">A variant is not one experiment. A page can be a first view that paid '
+                'for an explanation, a later view of the stored one, a reply that was paid for and '
+                'discarded, or a failure - and a cached page is not an explanation\'s value, nor a '
+                'failed render a loss. Every figure below is counted through the view it belongs '
+                'to, so the states add up to the variant above and nothing is moved between '
+                'them.</p>')
+    body.append('<table><tr><th>Variant</th><th>State</th><th>Views</th><th>Calls</th>'
+                '<th>Cache hits</th><th>Tokens</th><th>Helped</th><th>Did not</th></tr>')
+    for row in rows:
+        for state in agent.VIEW_STATES:
+            entry = row["states"][state]
+            if entry["views"] == 0 and entry["calls"] == 0:
+                continue
+            body.append(f'<tr><td>{esc(row["label"])}</td><td>{esc(entry["label"])}</td>'
+                        f'<td>{entry["views"]}</td><td>{entry["calls"]}</td>'
+                        f'<td>{entry["cache_hits"]}</td><td>{entry["total_tokens"]}</td>'
+                        f'<td>{entry["helped"]}</td><td>{entry["did_not_help"]}</td></tr>')
+    body.append('</table>')
+    for row in rows:
+        if row["unlinked_calls"]:
+            body.append(f'<p class="quiet">{esc(row["label"])}: {row["unlinked_calls"]} call(s), '
+                        f'{row["unlinked_tokens"]} tokens, belong to no closed view - a render that '
+                        f'spent a call and never recorded what it carried. They are counted in the '
+                        f'variant total and attributed to no state.</p>')
     for row in rows:
         body.append(f'<p><strong>{esc(row["label"])}</strong>: {esc(_counts_line(row))}'
                     f'{" No explanation has been served under this variant yet." if row["views"] == 0 else ""}</p>')
@@ -3293,7 +3318,8 @@ def feedback_page(conn, case_id: str, view: str, vote: str) -> tuple[bytes, int]
         return page("TestOps \u00b7 vote refused", "".join(body)), 400
     row = conn.execute(
         "SELECT case_id, variant, served FROM agent_view WHERE id = ?", (view_id,)).fetchone()
-    if row is None or row["case_id"] != case_id or row["served"] not in ("explanation", "cached"):
+    if row is None or row["case_id"] != case_id or agent.canonical_state(row["served"]) not in (
+            agent.STATE_FRESH, agent.STATE_CACHED):
         body = ['<h1>That vote was not recorded</h1>',
                 '<p>The page it names did not show an explanation of this case, so there is '
                 'nothing for the vote to be about.</p>', self_back(case_id)]

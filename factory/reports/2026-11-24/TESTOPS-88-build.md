@@ -148,6 +148,113 @@ the token counts, the wall time and the cache hits.
 | `tests/test_agent_case.py` | new, 31 tests. |
 | `tests/fixtures/agent/off-golden.json` | new, 226 case + 49 run page digests, captured from the pre-change build. |
 
+## Amendment, 2026-11-24 - the review's block on AC3, and concern 1
+
+This section supersedes "How a fabricated fact is caught (AC3)" above and the AC3/AC4 rows of the
+criterion table. It answers `factory/reports/2026-11-24/TESTOPS-88-review.md`, section
+**"Fabrication, both ways"** and **concern 1**. Everything else in this report still stands: the
+review confirmed AC1 to the letter, the ledger arithmetic, the cache, the failure sentences and the
+token path, and nothing else was reworked.
+
+The reviewer reproduced four ordinary lies that the old four-regex deny-list let through: a wrong
+verb on a real route (`PATCH /rooms` where the record says `GET /rooms`), a real filename with a
+wrong line number when the digit is followed by a full stop (the old `_COUNT` lookahead refused to
+match `99.`), a count written as a word ("four findings" where the record holds 6), and a confident
+product claim citing nothing. The old check scanned prose for shapes, so a shape it did not
+recognise, or a sentence with no shape at all, was invisible.
+
+### The reply is now structured evidence, not prose to be scanned
+
+The model answers with one JSON object:
+
+```json
+{"explanation": "sentence one. sentence two.",
+ "citations": [{"sentence": 1, "facts": ["claim:12", "route:GET /rooms"]},
+               {"sentence": 2, "facts": ["file:features/panel_api.feature:17"]}]}
+```
+
+The citation vocabulary is derived from the record (`agent.citation_index`) and printed in the
+prompt under `CITATIONS`, one identifier per fact, so the model can only copy what it was given:
+
+| citation | names | agreement the prose must keep |
+|---|---|---|
+| `claim:<claim id>` | a claim row | the claim's own fields |
+| `route:<METHOD> <path>` | a product route as recorded | any HTTP verb in the sentence must equal the route's method |
+| `file:<path>:<line>` | the assertion file and its recorded line | any line number must equal the recorded line |
+| `count:<name>:<value>` | a count the record holds | any count of that noun must equal the value |
+| `reason:<claim id>` | the near-miss reason on a claim | the reason's own text |
+
+### The validation order (`agent.violations`)
+
+1. **Existence.** Every citation must name a fact in the record; an unknown one rejects the reply
+   and the page names the identifier (`the citation route:/api/orders`).
+2. **Coverage.** Every sentence must carry at least one citation. A sentence with none rejects the
+   reply, which is what catches a confident claim that cites nothing.
+3. **Agreement.** What the sentence says must match the row it cites: the verb against the route's
+   recorded method, a line number against the recorded line, a count against the recorded count, a
+   file name against the cited path, a named class or service against the cited row's text.
+4. **Numbers.** Every numeral and every number word in a sentence must be present in the rows that
+   sentence cites. `four` is read as 4 before this test, so a count written as a word is caught in
+   the same place a digit is.
+
+Any violation discards the reply before it is stored (`outcome=rejected`, `agent_explanation` stays
+empty) and the page renders the agent-off body plus one sentence: *"The model-written explanation
+was rejected: the verb PATCH, where the record says GET /rooms. Nothing it wrote was added to this
+page."* A reply that is not the agreed JSON is `malformed`, recorded with its cause, never guessed
+at. `PROMPT_VERSION` is `explain-a-case/2`, so an old explanation cannot be served as this one.
+
+**Pinned by tests** (`tests/test_agent_case.py`): all four of the review's lies, parametrised, each
+with the assertion that the citation it uses (or fails to use) is one the record really offers -
+`test_each_of_the_reviewers_four_lies_is_rejected`; the wrong verb end to end through the page
+(`test_a_wrong_verb_on_a_real_route_reaches_the_page_and_is_rejected`); an unknown citation
+(`test_a_citation_the_record_does_not_offer_is_rejected`); and the honest prose that must survive -
+a re-quoted route, file and line, count and claim served both directly
+(`test_honest_prose_that_requotes_the_record_survives`) and through the page
+(`test_an_honest_reply_that_requotes_the_record_is_served`).
+
+### The A/B no longer compares states with each other (concern 1)
+
+Each view now records which state it was in: `fresh`, `cached`, `rejected`, `failed_unavailable`,
+`failed_unconfigured` - plus `no_finding`, `off` and `pending`, so a page that asked for nothing and
+a render that died are not folded into a failure. Rows written before this vocabulary are read as
+what they meant (`explanation` -> `fresh`, `error` -> `failed_unavailable`, `not_configured` ->
+`failed_unconfigured`) and never rewritten.
+
+`agent.report` returns the variant totals *and* `states`, and every figure in a state is counted
+through the view it belongs to: calls and tokens join on `agent_view.call_id`, votes join on
+`agent_feedback.view_id`. So a cached page's tokens are zero and its vote is counted in the cached
+state, a rejected reply's tokens appear as cost rather than disappearing, and a failed render is not
+a loss. A call no view closed is counted in the variant total as `unlinked_calls` so the breakdown
+and the total still agree. `/agent-report` prints the state table under the variant table, with
+value and cost labelled.
+
+**Pinned by** `test_the_report_separates_every_state_so_value_and_loss_are_not_confused` (one view
+in each of the five states, one off view: views, tokens, cache hits and votes asserted per state,
+and the totals asserted to be the sum of the states) and
+`test_the_report_page_breaks_the_numbers_down_by_state`, plus the existing arithmetic test, extended
+to assert the fresh and cached states.
+
+### Nothing was weakened
+
+- **AC1 still holds over the real corpus**: the golden test compares all **275** pages (226 case +
+  49 run) and reports **0 mismatched**, **2 skipped** for the whole suite as before.
+- Suite: **1332 passed, 2 skipped** (241.0 s) from the project `.venv` with `PYTHONPATH`,
+  `PYTHONHOME`, `VIRTUAL_ENV`, `CONDA_PREFIX` stripped and `PYTHONNOUSERSITE=1`. The 11 new tests
+  are all in `tests/test_agent_case.py` (42 there now).
+- Contracts and analysis suites unchanged and green; the goldens listed in
+  `tests/fixtures/agent/off-golden.json` are untouched.
+- The agent-off page is not touched by any of this: the check, the state vocabulary and the report
+  all sit downstream of it.
+
+### Files changed by this amendment
+
+| file | change |
+|---|---|
+| `testops/judgement/agent.py` | `citation_index`, `Reply`/`parse_reply`, rewritten `violations` (four ordered questions), `parse_reply` in `explain_case`, state vocabulary, `report` per state with `unlinked_calls`. |
+| `testops/web/app.py` | `/agent-report` gains the per-state table and the unlinked-call line; `feedback_page` accepts the canonical states. |
+| `testops/store/schema.sql` | comment only: `agent_view.served` names the new states. No structural change. |
+| `tests/test_agent_case.py` | 42 tests: the four lies, the honest prose, per-state report arithmetic and the page. |
+
 ## What this does not do
 
 - The agent runs only at render time, only when asked. It never runs during analysis.

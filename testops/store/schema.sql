@@ -292,8 +292,11 @@ CREATE TABLE IF NOT EXISTS agent_view (
   case_id TEXT NOT NULL,
   variant TEXT NOT NULL CHECK (variant IN ('on', 'off')),
   at TEXT NOT NULL,
-  -- What the page actually carried. ``explanation`` and ``cached`` are the two successes; every
-  -- other value is a failure mode, named, so a blank block can never be counted as a served one.
+  -- What the page actually carried: ``fresh`` (an explanation written for this view), ``cached``
+  -- (one served from the store), ``rejected`` (a reply that failed the check),
+  -- ``failed_unavailable``, ``failed_unconfigured``, ``no_finding``, ``off`` or ``pending``
+  -- (a render that never closed). Every other value is a failure mode, named, so a blank block can
+  -- never be counted as a served one, and the report breaks its figures down by this column.
   served TEXT NOT NULL,
   detail TEXT NOT NULL DEFAULT '',         -- the cause, or the model name; never a credential
   call_id INTEGER                           -- the agent_call this view used, when it made one

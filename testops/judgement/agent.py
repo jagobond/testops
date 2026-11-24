@@ -6,13 +6,16 @@ asks for it with ``?agent=on`` and never otherwise.
 
 Four rules this module is built around.
 
-**The record is the whole world.** :func:`case_record` assembles exactly what the page reads -
-the verdict, the assertion text, the matched word, the product file and line, the near-miss reason,
-the sources that were consulted and the ones that were not. The prompt says so, and
-:func:`violations` checks the reply against the same record: a route, a file, a count or a
-named entity that the record does not contain makes the reply unusable, and the page falls back to
-its agent-off content plus one sentence saying why. A model that invents a route cannot put it in
-front of a reader.
+**The record is the whole world, and a reply must say which part of it it used.** :func:`case_record`
+assembles exactly what the page reads - the verdict, the assertion text, the matched word, the
+product file and line, the near-miss reason, the sources that were consulted and the ones that were
+not - and gives every one of those facts an identifier the model may cite. The reply is JSON: the
+explanation, and per sentence the identifiers it rests on. :func:`violations` then checks the reply
+against the same record in a fixed order - an unknown citation, an uncited sentence, a fact that
+disagrees with the row it cites, a number no cited row holds - and any one of them makes the reply
+unusable. The page falls back to its agent-off content plus one sentence saying why. A model that
+invents a route, swaps a verb, miscounts or asserts something it cannot cite cannot put it in front
+of a reader.
 
 **Every call is in the ledger.** Case, variant, model, prompt hash, tokens in, tokens out, whether
 the answer came from the cache, and the wall time - one row in ``agent_call``. Every page view is a
@@ -44,9 +47,34 @@ VARIANT_ON = "on"
 VARIANT_OFF = "off"
 VARIANTS = (VARIANT_OFF, VARIANT_ON)
 
+# What a view actually carried, as the ledger's word for it. A view is in exactly one of these
+# states, and the report breaks every figure down by state so that a cached page is never counted as
+# an explanation's value and a failed render is never counted as a loss.
+STATE_FRESH = "fresh"                        # an explanation written for this view
+STATE_CACHED = "cached"                      # an explanation served from the store
+STATE_REJECTED = "rejected"                  # a reply that failed the check
+STATE_UNAVAILABLE = "failed_unavailable"     # the model could not answer, or answered unusably
+STATE_UNCONFIGURED = "failed_unconfigured"   # no token, so nothing was attempted
+STATE_NO_FINDING = "no_finding"              # the case raised no finding to explain
+STATE_OFF = "off"                            # the agent was not asked for
+STATE_PENDING = "pending"                    # the render started and never closed
+
+VIEW_STATES = (STATE_FRESH, STATE_CACHED, STATE_REJECTED, STATE_UNAVAILABLE, STATE_UNCONFIGURED,
+               STATE_NO_FINDING, STATE_OFF, STATE_PENDING)
+
+# Rows written before this vocabulary existed. They are read as the state they meant, never
+# rewritten: a ledger is history, and history is not edited to fit a later table.
+_LEGACY_STATE = {"explanation": STATE_FRESH, "error": STATE_UNAVAILABLE,
+                 "not_configured": STATE_UNCONFIGURED}
+
+
+def canonical_state(served: str) -> str:
+    """The state a stored ``agent_view.served`` value means in this build."""
+    return _LEGACY_STATE.get(served, served)
+
 # Part of the prompt hash. Bump it when the prompt changes: an explanation written under an older
 # instruction is not the same artefact, and a reader comparing two of them is owed the difference.
-PROMPT_VERSION = "explain-a-case/1"
+PROMPT_VERSION = "explain-a-case/2"
 
 # How long a resolved (or failed) token lookup is trusted. Long enough that a page view does not
 # wait three seconds on IMDS every time, short enough that a rotated token is picked up.
@@ -60,19 +88,37 @@ PROMPT_FINDING_LIMIT = 6
 
 SYSTEM_PROMPT = """You explain one finding from a code-analysis tool to the person who has to act on it.
 
-You will be given a record. It is the only thing you know about this case.
+You will be given a record, and with it the identifiers that name each of its facts. It is the only
+thing you know about this case.
+
+You must reply with one JSON object, and nothing else:
+
+  {"explanation": "sentence one. sentence two. ...",
+   "citations": [{"sentence": 1, "facts": ["claim:12", "route:GET /rooms"]},
+                 {"sentence": 2, "facts": ["file:features/panel_api.feature:17"]}]}
+
+The explanation is four to six sentences of plain English, no headings, no bullet lists, no
+markdown. Each sentence carries the identifiers it rests on. The identifiers are the ones printed
+in the record and nothing else: a claim id, a route, a file and its line, a count, a reason. Copy
+them exactly as they are printed.
 
 Rules, all of them absolute:
+- Every sentence must cite at least one identifier from the record. A sentence you cannot cite is a
+  sentence you must not write.
 - Use only the facts in the record. Do not add a fact from your own knowledge, however obvious.
-- Do not name any file, path, route, endpoint, number, class, function, ticket or service that does
-  not appear in the record. Do not round, estimate or invent a count.
+- A route must be quoted exactly as the record records it, with the same method. Do not change GET
+  to PATCH or any other verb.
+- A file must be quoted with the line number the record gives it, exactly.
+- Do not use any number, digit or number word except one a cited fact holds. Do not round, estimate
+  or invent a count.
+- Do not name any class, function, ticket or service that the record does not name.
 - Do not decide anything. The verdict in the record is the finding; you are explaining it, not
   reviewing it, and you may not suggest it is wrong.
-- Four to six sentences of plain English, no headings, no bullet lists, no markdown.
 - Say what was asserted, what the rule found, and what the reader would do about it - in that order,
   using the record's own words for the assertion.
 - If something a reader would want to know is not in the record, say that the record does not
-  contain it. Do not fill the gap."""
+  contain it, and cite the claim whose record you are saying that about. Do not fill the gap."""
+
 
 
 @dataclass(frozen=True)
@@ -100,11 +146,11 @@ class Config:
 class Outcome:
     """What the page should carry, and why. ``state`` is the ledger's word for it."""
 
-    state: str                      # explanation | cached | rejected | error | not_configured
+    state: str                      # fresh | cached | rejected | failed_* | no_finding
     text: str = ""
     model: str = ""
-    cause: str = ""                 # unreachable | http_429 | empty | ... | rejected:<faith>
-    detail: str = ""                # the offending token, or the model name; never a credential
+    cause: str = ""                 # unreachable | http_429 | empty | ... | rejected:
+    detail: str = ""                # the offending fact, or the model name; never a credential
     prompt_hash: str = ""
     tokens_in: int = 0
     tokens_out: int = 0
@@ -113,7 +159,7 @@ class Outcome:
 
     @property
     def served(self) -> bool:
-        return self.state in ("explanation", "cached")
+        return self.state in (STATE_FRESH, STATE_CACHED)
 
     @property
     def sentence(self) -> str:
@@ -195,8 +241,11 @@ def case_record(conn, case_id: str, row: dict | None = None,
 
 
 def _finding_record(finding: dict) -> dict:
-    return {"title": finding.get("title") or "",
-            "claims": [_claim_record(claim) for claim in finding.get("claims") or []]}
+    out = {"title": finding.get("title") or "",
+           "claims": [_claim_record(claim) for claim in finding.get("claims") or []]}
+    if finding.get("id") not in (None, ""):
+        out["id"] = finding["id"]
+    return out
 
 
 def _claim_record(claim: dict) -> dict:
@@ -205,6 +254,7 @@ def _claim_record(claim: dict) -> dict:
     product = detail.get("product") or {}
     provenance = claim.get("provenance") or {}
     out = {
+        "id": claim.get("id"),
         "verdict": claim.get("verdict") or "",
         "statement": claim.get("statement") or "",
         "assertion_text": detail.get("assertion_text") or "",
@@ -230,6 +280,92 @@ def _claim_record(claim: dict) -> dict:
                               "line": counterpart.get("line") or "",
                               "scenario": counterpart.get("scenario") or ""}
     return {key: value for key, value in out.items() if value not in (None, "", [], {})}
+
+
+# ---------------------------------------------------------------- the citation vocabulary
+#
+# Every fact the check will accept a citation for, and nothing else. An identifier is a string the
+# model copies: the row it names is what the prose is then held against. The set is derived from the
+# record, so a citation cannot name a fact the page could not show a reader.
+
+HTTP_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
+
+
+def _route_parts(value: str) -> tuple[str, str]:
+    """``("GET", "/rooms")`` from a recorded route, or ``("", "/rooms")`` when no method is recorded."""
+    text = str(value or "").strip()
+    if not text:
+        return "", ""
+    method, _, rest = text.partition(" ")
+    if method.upper() in HTTP_METHODS and rest.strip():
+        return method.upper(), rest.strip()
+    return "", text
+
+
+def _surface_method(value) -> str:
+    """A method recorded in a product surface (``api:GET /rooms@src/...``), when the route lacks one."""
+    match = re.match(r"\s*[\w.-]*:?\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+@", str(value or ""))
+    return match.group(1) if match else ""
+
+
+def _row_text(values) -> str:
+    """One row's values as the text the check searches. Sorted, so the prompt is stable."""
+    return " \u00b7 ".join(str(v) for v in values if v not in (None, "", [], {}))
+
+
+def citation_index(record: dict) -> dict[str, dict]:
+    """The identifiers the record offers, each with the row it names.
+
+    Five kinds, all drawn from what the record already holds: a claim (``claim:12``), a product route
+    (``route:GET /rooms``), a file and its line (``file:features/panel_api.feature:17``), a count
+    (``count:findings:6``) and a reason (``reason:12``, the near-miss reason recorded on a claim).
+    The model may cite these and nothing else; :func:`violations` looks every citation up here.
+    """
+    index: dict[str, dict] = {}
+    for finding in record.get("findings") or []:
+        for claim in finding.get("claims") or []:
+            claim_id = claim.get("id")
+            product = claim.get("product") or {}
+            copied = claim.get("copied_from") or {}
+            fields = [claim.get("verdict"), claim.get("statement"), claim.get("assertion_text"),
+                      claim.get("path"), claim.get("line"), claim.get("settled_by"),
+                      claim.get("established_by"), claim.get("proposed_action"),
+                      claim.get("cheapest_surface")] + list(claim.get("levels") or []) \
+                + list(claim.get("sources_not_consulted") or []) + list(product.values()) \
+                + list(copied.values())
+            if claim_id not in (None, ""):
+                index[f"claim:{claim_id}"] = {"kind": "claim", "id": str(claim_id),
+                                              "text": _row_text(fields)}
+            route = str(product.get("route") or "")
+            if route:
+                method, path = _route_parts(route)
+                if not method:
+                    method = _surface_method(product.get("surface"))
+                index[f"route:{route}"] = {"kind": "route", "method": method, "path": path,
+                                           "route": route, "text": _row_text([route,
+                                                                              product.get("surface")])}
+            path = str(claim.get("path") or "")
+            if path:
+                line = claim.get("line")
+                suffix = f":{line}" if line not in (None, "") else ""
+                index[f"file:{path}{suffix}"] = {"kind": "file", "path": path, "line": line,
+                                                 "text": _row_text([path, line, copied.get("path"),
+                                                                    copied.get("line")])}
+            if copied.get("path"):
+                suffix = f":{copied.get('line')}" if copied.get("line") not in (None, "") else ""
+                index[f"file:{copied['path']}{suffix}"] = {
+                    "kind": "file", "path": str(copied["path"]), "line": copied.get("line"),
+                    "text": _row_text([copied.get("path"), copied.get("line"),
+                                       copied.get("scenario")])}
+            if claim_id not in (None, ""):
+                reason = product.get("reason") or ("near miss" if product.get("near_miss") else "")
+                if reason:
+                    index[f"reason:{claim_id}"] = {"kind": "reason", "id": str(claim_id),
+                                                   "text": _row_text([reason])}
+    for name, value in (record.get("counts") or {}).items():
+        index[f"count:{name}:{value}"] = {"kind": "count", "name": str(name), "value": int(value),
+                                          "text": f"{name}: {value}"}
+    return index
 
 
 def facts_text(record: dict) -> str:
@@ -286,6 +422,14 @@ def facts_text(record: dict) -> str:
     counts = record.get("counts") or {}
     if counts:
         lines.append("COUNTS " + ", ".join(f"{k}: {v}" for k, v in counts.items()))
+    # The identifiers the reply may cite, printed beside the facts they name. The model is told to
+    # copy them exactly; the check accepts nothing else, so a reader of the prompt can see the same
+    # closed world the check enforces.
+    citations = citation_index(record)
+    if citations:
+        lines.append("CITATIONS - the only identifiers you may cite, one per fact:")
+        for identifier, row in citations.items():
+            lines.append(f"  {identifier} = {row['text']}")
     return "\n".join(lines)
 
 
@@ -308,51 +452,221 @@ def prompt(record: dict, model: str) -> tuple[str, str, str]:
     return SYSTEM_PROMPT, user, digest
 
 
-# ---------------------------------------------------------------- the check on the reply
+# ---------------------------------------------------------------- the reply, and the check on it
+#
+# The reply is structured evidence, not prose to be pattern-matched. The model states the
+# explanation and, for each sentence, the record identifiers that sentence rests on. The check then
+# asks four questions in this order, and any "no" discards the reply:
+#
+#   (a) does every citation name a fact the record holds?
+#   (b) does every sentence carry at least one citation?
+#   (c) does what the sentence says agree with the row it cites - the verb with the route's method,
+#       the line with the recorded line, a count with the recorded count?
+#   (d) is every number in the sentence, digit or word, present in the rows the sentence cites?
+#
+# A deny-list of shapes could always be walked around, because it only knows what a lie looks like.
+# This knows what a citation is, so a sentence that cites nothing, or cites something else, cannot
+# be mistaken for evidence.
 
 _ROUTE = re.compile(r"(?<![\w:/])/[A-Za-z0-9_.{}\-]+(?:/[A-Za-z0-9_.{}\-]+)*")
 _FILE = re.compile(r"\b[A-Za-z0-9_\-]+(?:\.[A-Za-z0-9_\-]+)*\.(?:feature|js|ts|tsx|jsx|py|java|cs|"
                    r"csproj|json|xml|yml|yaml|md|sql|html|css|txt|sh|ps1)\b")
-_COUNT = re.compile(r"(?<![\w.])\d+(?![\w.])")
 _ENTITY = re.compile(r"\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+\b")
+_METHOD = re.compile(r"\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b")
+_DIGITS = re.compile(r"(?<!\w)\d+(?!\w)")
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
+_HAS_WORD = re.compile(r"[A-Za-z]{3,}")
+
+# A count can be written as a word as easily as as a digit, and the reviewer's model wrote "four
+# findings" where the record held six. Words are read as numbers, digits are read as numbers, and
+# both are held against the same rows.
+_NUMBER_WORDS = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18,
+    "nineteen": 19, "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
+    "seventy": 70, "eighty": 80, "ninety": 90, "hundred": 100,
+}
+_NUMBER_WORD = re.compile(r"\b(" + "|".join(_NUMBER_WORDS) + r")\b", re.I)
 
 
-def violations(text: str, record: dict) -> list[str]:
-    """Every route, file, count or named entity in ``text`` that the record does not contain.
+@dataclass(frozen=True)
+class Reply:
+    """A reply that parsed: the prose, and the facts each sentence (1-based) cites."""
 
-    Four kinds of fact are what a plausible-sounding fabrication is made of: an endpoint nobody
-    declared (``/api/orders``), a file that does not exist (``CheckoutController.cs``), a count
-    that flatters the story ("three duplicates"), and a class or component named as if it had been
-    read. Each is checked against the record's own text, so the check is mechanical and the same on
-    every reply.
+    text: str
+    citations: dict[int, tuple[str, ...]]
 
-    A short file name is accepted when it names a path the record holds - a reader writing
-    ``login.feature`` for ``cypress/e2e/.../login.feature`` is abbreviating, not inventing. Anything
-    else is a violation and the reply is discarded.
+
+def split_sentences(text: str) -> list[str]:
+    """The prose as sentences. Whitespace is normalised first, so the page renders one paragraph."""
+    return [part for part in _SENTENCE_BREAK.split(" ".join(str(text).split())) if part]
+
+
+def _as_json_object(raw: str) -> dict | None:
+    """The reply as a JSON object, allowing a model that wraps it in a markdown fence."""
+    candidate = raw.strip()
+    for attempt in (candidate, candidate.strip("`"), candidate[candidate.find("{"):]
+                    if "{" in candidate else candidate):
+        try:
+            value = json.loads(attempt)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(value, dict):
+            return value
+    return client.extract_json(candidate)
+
+
+def parse_reply(raw: str) -> tuple[Reply | None, str]:
+    """The reply as :class:`Reply`, or the cause (``empty`` / ``malformed``) why it is not one."""
+    if not str(raw or "").strip():
+        return None, "empty"
+    payload = _as_json_object(raw)
+    if payload is None:
+        return None, "malformed"
+    explanation, citations = payload.get("explanation"), payload.get("citations")
+    if not isinstance(explanation, str) or not isinstance(citations, list):
+        return None, "malformed"
+    text = " ".join(explanation.split())
+    if len(text) < 40 or not _HAS_WORD.search(text):
+        return None, "malformed"
+    sentences = split_sentences(text)
+    if not sentences:
+        return None, "malformed"
+    cited: dict[int, list[str]] = {}
+    for entry in citations:
+        if not isinstance(entry, dict):
+            return None, "malformed"
+        number, facts = entry.get("sentence"), entry.get("facts")
+        if isinstance(number, bool) or not isinstance(number, int):
+            return None, "malformed"
+        if not 1 <= number <= len(sentences):
+            return None, "malformed"
+        if not isinstance(facts, list):
+            return None, "malformed"
+        if not all(isinstance(fact, str) and fact.strip() for fact in facts):
+            return None, "malformed"
+        cited.setdefault(number, []).extend(fact.strip() for fact in facts)
+    return Reply(text=text, citations={number: tuple(dict.fromkeys(facts))
+                                       for number, facts in cited.items()}), ""
+
+
+def _route_paths(sentence: str) -> list[str]:
+    paths: list[str] = []
+    for match in _ROUTE.finditer(sentence):
+        path = match.group(0).rstrip(".,;:!?)\"'")
+        if path and path not in paths:
+            paths.append(path)
+    return paths
+
+
+def _numbers_in(text: str) -> set[int]:
+    """Every whole number the text holds, read from digits and from words."""
+    found = {int(digits) for digits in _DIGITS.findall(str(text))}
+    for word in _NUMBER_WORD.findall(str(text)):
+        found.add(_NUMBER_WORDS[word.lower()])
+    return found
+
+
+def _numbers_written(sentence: str) -> list[tuple[str, int]]:
+    """Each number as it was written, so the rejection can quote the model's own word."""
+    out: list[tuple[str, int]] = []
+    for digits in _DIGITS.findall(sentence):
+        out.append((digits, int(digits)))
+    for word in _NUMBER_WORD.findall(sentence):
+        out.append((word, _NUMBER_WORDS[word.lower()]))
+    return out
+
+
+def _file_matches(name: str, path: str) -> bool:
+    """A short file name abbreviates a stored path; a different name does not."""
+    low, stored = name.lower(), str(path or "").lower()
+    return bool(low) and (low == stored or stored.endswith("/" + low))
+
+
+def violations(reply, record: dict) -> list[str]:
+    """Everything wrong with a reply, in the order the four questions are asked.
+
+    ``reply`` is a :class:`Reply`; a bare string is accepted as prose that cites nothing, which is
+    how every sentence in it fails question (b). The first violation is what the page names.
     """
-    corpus = json.dumps(record, sort_keys=True, ensure_ascii=False).lower()
-    numbers = set(re.findall(r"\d+", corpus))
+    index = citation_index(record)
+    if isinstance(reply, Reply):
+        text, citations = reply.text, reply.citations
+    else:
+        text, citations = " ".join(str(reply).split()), {}
+    sentences = split_sentences(text)
     found: list[str] = []
 
-    for match in _ROUTE.finditer(text):
-        route = match.group(0).rstrip(".,;:!?)\"'")
-        if route and route.lower() not in corpus:
-            found.append(f"the route {route}")
-    for match in _FILE.finditer(text):
-        name = match.group(0)
-        low = name.lower()
-        if low in corpus or f"/{low}" in corpus:
+    # (a) A citation the record does not offer. Reported as the identifier, because that is what the
+    # model claimed the record said.
+    for facts in citations.values():
+        for fact in facts:
+            if fact not in index:
+                found.append(f"the citation {fact}")
+
+    for number, sentence in enumerate(sentences, start=1):
+        facts = citations.get(number, ())
+        rows = [index[fact] for fact in facts if fact in index]
+        # (b) A sentence with no evidence behind it is not an explanation, however plausible.
+        if not facts:
+            found.append(f"the sentence {number}, which cites nothing")
             continue
-        found.append(f"the file {name}")
-    for match in _COUNT.finditer(text):
-        if match.group(0) not in numbers:
-            found.append(f"the number {match.group(0)}")
-    for match in _ENTITY.finditer(text):
-        name = match.group(0)
-        if name.lower() not in corpus:
-            found.append(f"the name {name}")
-    # One statement per kind: a reply that invents two routes is not five failures.
+
+        paths = _route_paths(sentence)
+        methods = {method.upper() for method in _METHOD.findall(sentence)}
+        reported_numbers: set[int] = set()
+        for path in paths:
+            cited = [row for row in rows if row["kind"] == "route" and row["path"] == path]
+            if not cited:
+                found.append(f"the route {path}, which no cited fact names")
+        if len(paths) == 1:
+            cited_routes = [row for row in rows if row["kind"] == "route"]
+            allowed = {row["method"] for row in cited_routes if row["method"]}
+            for method in sorted(methods):
+                if allowed and method not in allowed:
+                    for row in cited_routes:
+                        if row["method"] and row["path"] == paths[0]:
+                            # (c) The verb the prose used against the verb the row records.
+                            found.append(f"the verb {method}, where the record says {row['route']}")
+
+        for name in _FILE.findall(sentence):
+            if not any(row["kind"] == "file" and _file_matches(name, row["path"]) for row in rows):
+                found.append(f"the file {name}, which no cited fact names")
+
+        # (c) A line number the prose attaches to a file must be the line the cited row records -
+        # whether or not a full stop follows it.
+        cited_lines = {int(str(row["line"])) for row in rows
+                       if row["kind"] == "file" and str(row.get("line") or "").strip().isdigit()}
+        for written in re.findall(r"\bline\s+(\d+)\b", sentence, re.I):
+            value = int(written)
+            if cited_lines and value not in cited_lines:
+                reported_numbers.add(value)
+                found.append(f"the line {value}, where the record says "
+                             f"{sorted(cited_lines)[0]}")
+
+        # (d) Every number, digit or word, must be one the cited rows hold.
+        allowed_numbers: set[int] = set()
+        for row in rows:
+            allowed_numbers |= _numbers_in(row["text"])
+        count_rows = [row for row in rows if row["kind"] == "count"]
+        for written, value in _numbers_written(sentence):
+            if value in allowed_numbers or value in reported_numbers:
+                continue
+            named = [row for row in count_rows if row["name"].lower() in sentence.lower()]
+            if named:
+                # (c) A count against the count the cited row records.
+                found.append(f"the number {written}, where the record says "
+                             f"{named[0]['value']} {named[0]['name']}")
+            else:
+                found.append(f"the number {written}, which no cited fact holds")
+
+        for name in _ENTITY.findall(sentence):
+            if not any(name.lower() in row["text"].lower() for row in rows):
+                found.append(f"the name {name}, which no cited fact holds")
+
     return list(dict.fromkeys(found))
+
 
 
 # ---------------------------------------------------------------- ledger
@@ -456,10 +770,10 @@ REFUSALS = {
 
 
 def rejection_sentence(outcome: Outcome) -> str:
-    """The sentence for a discarded reply: what was invented, and that nothing was added."""
-    invented = outcome.detail or "a fact"
-    return (f"The model-written explanation was rejected because it named {invented}, which is not "
-            f"in this case's record. Nothing it wrote was added to this page.")
+    """The sentence for a discarded reply: what was wrong with it, and that nothing was added."""
+    invented = outcome.detail or "a fact the record does not hold"
+    return (f"The model-written explanation was rejected: {invented}. Nothing it wrote was added "
+            f"to this page.")
 
 
 def explain_case(conn, record: dict, *, cfg: Config, completer=None,
@@ -475,7 +789,7 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
     system, user, prompt_hash = prompt(record, model)
 
     if not cfg.configured:
-        return Outcome(state="not_configured", model=model, cause="not_configured",
+        return Outcome(state=STATE_UNCONFIGURED, model=model, cause="not_configured",
                        detail=cfg.why_not, prompt_hash=prompt_hash)
 
     hit = cached_explanation(conn, case_id, prompt_hash, model)
@@ -483,7 +797,7 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=0, tokens_out=0, cached=True,
                                wall_ms=0, outcome="cached", cause="")
-        return Outcome(state="cached", text=hit["text"], model=model, prompt_hash=prompt_hash,
+        return Outcome(state=STATE_CACHED, text=hit["text"], model=model, prompt_hash=prompt_hash,
                        call_id=call_id)
 
     ask = completer or client.complete
@@ -496,53 +810,52 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=0, tokens_out=0, cached=False,
                                wall_ms=wall, outcome="error", cause=cause)
-        return Outcome(state="error", model=model, cause=cause, detail=cause,
+        return Outcome(state=STATE_UNAVAILABLE, model=model, cause=cause, detail=cause,
                        prompt_hash=prompt_hash, call_id=call_id)
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         wall = int((time.monotonic() - started) * 1000)
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=0, tokens_out=0, cached=False,
                                wall_ms=wall, outcome="error", cause="unreachable")
-        return Outcome(state="error", model=model, cause="unreachable",
+        return Outcome(state=STATE_UNAVAILABLE, model=model, cause="unreachable",
                        detail=type(exc).__name__, prompt_hash=prompt_hash, call_id=call_id)
     except Exception as exc:  # noqa: BLE001 - a transport surprise is not a page crash
         wall = int((time.monotonic() - started) * 1000)
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=0, tokens_out=0, cached=False,
                                wall_ms=wall, outcome="error", cause="unreachable")
-        return Outcome(state="error", model=model, cause="unreachable",
+        return Outcome(state=STATE_UNAVAILABLE, model=model, cause="unreachable",
                        detail=type(exc).__name__, prompt_hash=prompt_hash, call_id=call_id)
     wall = int((time.monotonic() - started) * 1000)
 
-    text = " ".join((completion.text or "").split())
     tokens_in, tokens_out = int(completion.tokens_in or 0), int(completion.tokens_out or 0)
-    cause = ""
-    if not text:
-        cause = "empty"
-    elif len(text) < 40 or not re.search(r"[A-Za-z]{3}", text) or client.extract_json(text):
-        cause = "malformed"
+    # The reply must be structured evidence. Anything that is not a JSON object with an explanation
+    # and per-sentence citations is unusable, and is recorded as such rather than guessed at.
+    reply, cause = parse_reply(completion.text or "")
     if cause:
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=tokens_in,
                                tokens_out=tokens_out, cached=False, wall_ms=wall,
                                outcome="error", cause=cause)
-        return Outcome(state="error", model=model, cause=cause, detail=cause,
+        return Outcome(state=STATE_UNAVAILABLE, model=model, cause=cause, detail=cause,
                        prompt_hash=prompt_hash, tokens_in=tokens_in, tokens_out=tokens_out,
                        call_id=call_id)
+    assert reply is not None
+    text = reply.text
 
-    invented = violations(text, record)
+    invented = violations(reply, record)
     call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                            prompt_hash=prompt_hash, tokens_in=tokens_in, tokens_out=tokens_out,
                            cached=False, wall_ms=wall,
                            outcome="rejected" if invented else "ok",
                            cause=("rejected: " + invented[0]) if invented else "")
     if invented:
-        return Outcome(state="rejected", model=model, cause="rejected", detail=invented[0],
+        return Outcome(state=STATE_REJECTED, model=model, cause="rejected", detail=invented[0],
                        prompt_hash=prompt_hash, tokens_in=tokens_in, tokens_out=tokens_out,
                        call_id=call_id, violations=invented)
 
     _store_explanation(conn, case_id, prompt_hash, model, text, tokens_in, tokens_out, now)
-    return Outcome(state="explanation", text=text, model=model, detail=model,
+    return Outcome(state=STATE_FRESH, text=text, model=model, detail=model,
                    prompt_hash=prompt_hash, tokens_in=tokens_in, tokens_out=tokens_out,
                    call_id=call_id)
 
@@ -553,52 +866,104 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
 # stored evidence, the other shows it with a model-written explanation beside it.
 VARIANT_LABEL = {VARIANT_OFF: "Agent off", VARIANT_ON: "Agent on"}
 
+# How each state is named to a reader, and whether it is value (an explanation a reader saw), cost
+# (a call that was paid for and thrown away) or neither.
+STATE_LABEL = {
+    STATE_FRESH: "fresh - an explanation written for this view",
+    STATE_CACHED: "cached - an explanation served from the store",
+    STATE_REJECTED: "rejected - a reply that failed the check",
+    STATE_UNAVAILABLE: "failed, unavailable - the model could not answer, or answered unusably",
+    STATE_UNCONFIGURED: "failed, unconfigured - no token, so nothing was attempted",
+    STATE_NO_FINDING: "no finding - there was nothing to explain",
+    STATE_OFF: "agent off - no explanation was asked for",
+    STATE_PENDING: "pending - a render that never closed",
+}
+
+# The raw ``agent_view.served`` values that mean each state, legacy spellings included, so the
+# arithmetic reads rows written before this vocabulary existed without rewriting them.
+_STATE_VALUES = {state: tuple([state] + [raw for raw, canon in _LEGACY_STATE.items() if canon == state])
+                 for state in VIEW_STATES}
+
+
+def _state_numbers(conn, variant: str, state: str) -> dict:
+    """One variant in one state: views, calls, tokens, cache hits and votes.
+
+    Calls and their tokens are joined through ``agent_view.call_id``, so a rejected call's tokens are
+    counted in the rejected state - they were paid for, and the reader is owed the distinction
+    between what was shown and what was merely spent. Votes are joined the same way, through the
+    view the reader voted on: a vote cast on a cached page is a vote about the cached page.
+    """
+    values = _STATE_VALUES[state]
+    marks = ",".join("?" for _ in values)
+    views = conn.execute(
+        f"SELECT COUNT(*) FROM agent_view WHERE variant=? AND served IN ({marks})",
+        (variant, *values)).fetchone()[0]
+    calls, cached, written, tokens, wall = conn.execute(
+        f"SELECT COUNT(*), SUM(c.cached),"
+        f" SUM(CASE WHEN c.cached=0 AND c.outcome='ok' THEN 1 ELSE 0 END),"
+        f" SUM(c.tokens_in + c.tokens_out), SUM(c.wall_ms)"
+        f" FROM agent_call c JOIN agent_view v ON v.call_id = c.id"
+        f" WHERE v.variant=? AND v.served IN ({marks})", (variant, *values)).fetchone()
+    helped, unhelpful = conn.execute(
+        f"SELECT SUM(f.verdict='helped'), SUM(f.verdict='did_not_help')"
+        f" FROM agent_feedback f JOIN agent_view v ON v.id = f.view_id"
+        f" WHERE v.variant=? AND v.served IN ({marks})", (variant, *values)).fetchone()
+    calls, cached = int(calls or 0), int(cached or 0)
+    written, tokens = int(written or 0), int(tokens or 0)
+    return {"state": state, "label": STATE_LABEL[state], "views": int(views),
+            "calls": calls, "cache_hits": cached, "explanations_written": written,
+            "total_tokens": tokens, "wall_ms": int(wall or 0),
+            "helped": int(helped or 0), "did_not_help": int(unhelpful or 0),
+            "value": state in (STATE_FRESH, STATE_CACHED),
+            "cost": state in (STATE_REJECTED, STATE_UNAVAILABLE)}
+
 
 def report(conn) -> list[dict]:
-    """Per variant: views, explanations served, cache hits, tokens, feedback. Arithmetic only.
+    """Per variant, and per state within it: views, explanations, cache hits, tokens, votes.
 
     Every number is a count of stored rows or a sum over them, so the page cannot say something the
     ledger does not hold. ``mean_tokens_per_explanation`` is ``None`` - rendered as "no explanation
     has been served" - rather than ``0``, which would read as a measured zero.
+
+    The variant totals are kept for the reader who wants one number, but they are no longer the only
+    view: ``states`` breaks every figure down by what the view actually was, so a cached page is
+    never counted as an explanation's value and a failed render is never counted as a loss.
     """
     rows: list[dict] = []
     for variant in VARIANTS:
-        views = conn.execute("SELECT COUNT(*) FROM agent_view WHERE variant=?",
-                             (variant,)).fetchone()[0]
-        served = conn.execute(
-            "SELECT COUNT(*) FROM agent_view WHERE variant=? AND served IN ('explanation','cached')",
-            (variant,)).fetchone()[0]
-        rejected = conn.execute(
-            "SELECT COUNT(*) FROM agent_view WHERE variant=? AND served='rejected'",
-            (variant,)).fetchone()[0]
-        errors = conn.execute(
-            "SELECT COUNT(*) FROM agent_view WHERE variant=? AND served IN "
-            "('error','not_configured','pending')", (variant,)).fetchone()[0]
-        calls, cached, fresh, tokens = conn.execute(
-            "SELECT COUNT(*), SUM(cached), SUM(CASE WHEN cached=0 AND outcome='ok' THEN 1 ELSE 0 END),"
-            " SUM(tokens_in + tokens_out) FROM agent_call WHERE variant=?", (variant,)).fetchone()
-        calls, cached = int(calls or 0), int(cached or 0)
-        fresh, tokens = int(fresh or 0), int(tokens or 0)
-        wall = conn.execute("SELECT SUM(wall_ms) FROM agent_call WHERE variant=?",
-                            (variant,)).fetchone()[0]
-        helped, unhelpful = conn.execute(
-            "SELECT SUM(verdict='helped'), SUM(verdict='did_not_help')"
-            " FROM agent_feedback WHERE variant=?", (variant,)).fetchone()
+        states = {state: _state_numbers(conn, variant, state) for state in VIEW_STATES}
+        served = states[STATE_FRESH]["views"] + states[STATE_CACHED]["views"]
+        calls = sum(entry["calls"] for entry in states.values())
+        cached_hits = sum(entry["cache_hits"] for entry in states.values())
+        fresh = sum(entry["explanations_written"] for entry in states.values())
+        tokens = sum(entry["total_tokens"] for entry in states.values())
+        # A call that no view closed cannot be attributed to a state. It is counted here as itself,
+        # so the variant total is the whole ledger and the states are a breakdown of it, not a
+        # quieter number that happens to leave a call out.
+        unlinked_calls, unlinked_tokens = conn.execute(
+            "SELECT COUNT(*), SUM(tokens_in + tokens_out) FROM agent_call c WHERE variant=?"
+            " AND NOT EXISTS (SELECT 1 FROM agent_view v WHERE v.call_id = c.id)",
+            (variant,)).fetchone()
+        unlinked_calls, unlinked_tokens = int(unlinked_calls or 0), int(unlinked_tokens or 0)
         rows.append({
             "variant": variant,
             "label": VARIANT_LABEL[variant],
-            "views": int(views),
-            "explanation_views": int(served),
-            "rejected": int(rejected),
-            "errors": int(errors),
-            "calls": calls,
-            "cache_hits": cached,
+            "views": sum(entry["views"] for entry in states.values()),
+            "explanation_views": served,
+            "rejected": states[STATE_REJECTED]["views"],
+            "errors": states[STATE_UNAVAILABLE]["views"] + states[STATE_UNCONFIGURED]["views"],
+            "calls": calls + unlinked_calls,
+            "cache_hits": cached_hits,
             "explanations_written": fresh,
-            "total_tokens": tokens,
-            "mean_tokens_per_explanation": (round(tokens / fresh, 1) if fresh else None),
-            "wall_ms": int(wall or 0),
-            "helped": int(helped or 0),
-            "did_not_help": int(unhelpful or 0),
+            "total_tokens": tokens + unlinked_tokens,
+            "unlinked_calls": unlinked_calls,
+            "unlinked_tokens": unlinked_tokens,
+            "mean_tokens_per_explanation": (round((tokens + unlinked_tokens) / fresh, 1)
+                                            if fresh else None),
+            "wall_ms": sum(entry["wall_ms"] for entry in states.values()),
+            "helped": sum(entry["helped"] for entry in states.values()),
+            "did_not_help": sum(entry["did_not_help"] for entry in states.values()),
+            "states": states,
         })
     return rows
 
