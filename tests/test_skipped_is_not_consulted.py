@@ -306,6 +306,11 @@ def test_a_registry_record_written_before_this_change_reads_exactly_as_it_did():
 
 # --------------------------------------------------------------------------- AC4/AC5 on the store
 
+# The run this probe describes. Pinned, not "the latest": TESTOPS-70 made the Java reader part of the
+# surface reader, so the run after this one reads `.java` and the sentence below is history. A probe
+# that silently follows the newest run stops describing the snapshot it was written for.
+PINNED_RESTFULBOOKER_RUN = "restfulbooker-levels-20261123T132456"
+
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
 def test_the_cotw_run_still_says_ninety_five_items():
     conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
@@ -324,14 +329,10 @@ def test_the_restfulbooker_run_names_the_java_it_could_not_read():
     conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        row = conn.execute(
-            "SELECT id FROM run WHERE project = 'restfulbooker' AND analyser = 'level_fitness'"
-            " ORDER BY started_at DESC LIMIT 1").fetchone()
-        if row is None:
-            pytest.skip("no restfulbooker levels run in this store")
-        run = queries.run_read(conn, row["id"])
+        run = queries.run_read(conn, PINNED_RESTFULBOOKER_RUN)
     finally:
         conn.close()
+    assert run is not None, f"the pinned run {PINNED_RESTFULBOOKER_RUN} is not in the store"
     sentence = run["assessment"]["sentence"]
     assert "code was not read" in sentence, sentence
     assert "142 .java files" in sentence, sentence
