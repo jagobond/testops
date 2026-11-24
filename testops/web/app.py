@@ -942,18 +942,39 @@ def _mark_matched_word(text: str, word: str) -> str:
 
 
 def _product_snippet_caption(snip: dict) -> str:
-    """The file, the declaration line and the commit the product line was read from."""
+    """The file, the declaration line, the commit - and what, if anything, was not shown.
+
+    Three states, three different sentences. A complete declaration says so; a declaration cut by
+    the 8-line cap says the cap cut it and names the count; a declaration whose body could not be
+    closed says its end could not be established and that the block is only the beginning. The
+    count is never used to make an undelimitable declaration look complete, and the cap is never
+    blamed for a body this page does not print by design.
+    """
     where = f'{esc(snip["path"])}:{snip["line"]}'
     commit = (f' at commit <span class="code">{esc((snip.get("commit") or "")[:8])}</span>'
               if snip.get("commit") else "")
     link = (f' \u2014 <a href="{esc(snip["link"])}">view in repository</a>'
             if snip.get("link") else "")
     trimmed = ""
-    if snip.get("omitted"):
-        last = snip["start"] + len(snip["lines"]) - 1
-        trimmed = (f' At most {snip.get("max")} lines are shown: lines {snip["start"]}\u2013{last} '
-                   f'of a {snip["total"]}-line declaration, so {snip["omitted"]} '
-                   f'line{"s" if snip["omitted"] != 1 else ""} are not shown.')
+    shown = len(snip.get("lines") or [])
+    if not snip.get("delimited", True):
+        why = (snip.get("why") or "its end could not be established from the stored file").rstrip(".")
+        trimmed = (f' The rest of this declaration could not be delimited: {esc(why)}, so this page '
+                   f'shows only its beginning and cannot say how many lines follow.')
+    elif snip.get("omitted"):
+        last = snip["start"] + shown - 1
+        omitted = snip["omitted"]
+        lines = "line" if omitted == 1 else "lines"
+        if snip.get("cut") == "cap":
+            trimmed = (f' The {snip.get("max")}-line cap shows {shown} of {snip["total"]} lines of '
+                       f'this declaration (lines {snip["start"]}\u2013{last}); the other {omitted} '
+                       f'{lines} are not shown, including the rest of the signature.')
+        else:
+            trimmed = (f' The signature is {shown} of {snip["total"]} lines of this declaration '
+                       f'(lines {snip["start"]}\u2013{last}); the other {omitted} {lines} are the '
+                       f'body, which this page does not print.')
+    else:
+        trimmed = ' The whole declaration is shown.'
     return (f'The product\u2019s own declaration, with the word that decided the match marked: '
             f'<span class="code">{where}</span>{commit}{link}.{trimmed}')
 
@@ -1005,7 +1026,13 @@ def product_line_block(snip: dict) -> list[str]:
     for line in snip["lines"]:
         rendered.append(f'<span class="sline"><span class="ln">{line["n"]}</span>'
                         f'{_mark_matched_word(line["text"], word)}</span>')
-    if snip.get("omitted"):
+    if not snip.get("delimited", True):
+        # No count can be stated: the walk never found where the declaration ended. The row says
+        # what it cannot say, rather than borrowing the omission count of a declaration it has.
+        label = "the rest of this declaration could not be delimited"
+        rendered.append(f'<span class="sline omission" role="note" aria-label="{label}" '
+                        f'tabindex="0">\u2026</span>')
+    elif snip.get("omitted"):
         label = (f'{snip["omitted"]} line{"s" if snip["omitted"] != 1 else ""} of the '
                  f'declaration not shown')
         rendered.append(f'<span class="sline omission" role="note" aria-label="{esc(label)}" '

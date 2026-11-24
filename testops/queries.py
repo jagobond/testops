@@ -1705,14 +1705,23 @@ def _locate_java_declaration(lines: list[str], method: str) -> dict | None:
     else:
         return None
     # The declaration's extent: the method body, so the count of lines not shown is the handler's
-    # own length and not the file's.
+    # own length and not the file's. When the walk cannot close the body - the file does not lex
+    # cleanly, or the body has no closing brace - the extent is unknown and says so. The page must
+    # never present a declaration it could not delimit as if the signature were the whole of it:
+    # the stored file continues, and a two-line block with no ellipsis is a silent cut.
     decl_end = signature_end
+    delimited = False
+    brace_seen = False
     index = found
     while index < len(tokens):
         token = tokens[index]
         if token.kind == "symbol" and token.value in ("{", ";"):
             if token.value == ";":
+                # An abstract or interface declaration ends at its semicolon, on its own line.
+                decl_end = _line_at(starts, token.start)
+                delimited = True
                 break
+            brace_seen = True
             level = 0
             for following in range(index, len(tokens)):
                 if tokens[following].kind != "symbol":
@@ -1723,6 +1732,7 @@ def _locate_java_declaration(lines: list[str], method: str) -> dict | None:
                     level -= 1
                     if level == 0:
                         decl_end = _line_at(starts, tokens[following].start)
+                        delimited = True
                         break
             break
         index += 1
@@ -1745,7 +1755,8 @@ def _locate_java_declaration(lines: list[str], method: str) -> dict | None:
             continue
         break
     return {"start": start, "decl_line": decl_line,
-            "signature_end": signature_end, "end": decl_end}
+            "signature_end": signature_end, "end": decl_end,
+            "delimited": delimited, "unclosed_brace": brace_seen and not delimited}
 
 
 def _locate_python_declarations(lines: list[str], route: str):
@@ -1754,12 +1765,16 @@ def _locate_python_declarations(lines: list[str], route: str):
     The declaration includes its decorators: a route may be named by ``@app.route("/booking")`` or
     by a literal inside the body, and the surface reader counts a function as a route handler when
     the route appears in its source.
+
+    Returns ``(functions, parsed)``. ``parsed`` is ``False`` when the stored bytes are not Python
+    the reader can parse: the declaration's end cannot be established from the AST then, and a page
+    that showed the signature alone would be cutting the file without saying so.
     """
     source = "\n".join(lines)
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return []
+        return [], False
     pattern = re.compile("[\"']" + re.escape(route) + "[\"']")
     out = []
     for node in ast.walk(tree):
@@ -1769,7 +1784,40 @@ def _locate_python_declarations(lines: list[str], route: str):
         end = node.end_lineno or node.lineno
         if pattern.search("\n".join(lines[start - 1:end])):
             out.append(node)
-    return out
+    return out, True
+
+
+def _python_undeclared_start(lines: list[str], route: str) -> int | None:
+    """The line where a route-naming ``def`` appears to begin, in a file that cannot be parsed.
+
+    Nothing here is a declaration: it is the best evidence the bytes hold - the literal that named
+    the route, the ``def`` it decorates (or one just above it) - so the page can show the beginning
+    of the code it cannot delimit instead of showing nothing. ``None`` when the literal is not found
+    next to a ``def``, which is not a declaration this file can even point at.
+    """
+    pattern = re.compile("[\"']" + re.escape(route) + "[\"']")
+    literal_line = None
+    for number, text in enumerate(lines, start=1):
+        if pattern.search(text):
+            literal_line = number
+            break
+    if literal_line is None:
+        return None
+    def_line = None
+    # The literal usually sits in the decorator directly above the ``def``.
+    for number in range(literal_line, min(len(lines), literal_line + 10) + 1):
+        stripped = lines[number - 1].strip()
+        if stripped.startswith(("def ", "async def ")):
+            def_line = number
+            break
+        if stripped and not stripped.startswith(("@", ")", "]", "}", ",", "#")):
+            break
+    if def_line is None:
+        return None
+    start = def_line
+    while start > 1 and lines[start - 2].strip().startswith("@"):
+        start -= 1
+    return start
 
 
 def _python_signature_end(lines: list[str], first_line: int) -> int:
@@ -1825,28 +1873,51 @@ def _product_artefact(conn, claim: dict, path: str):
 
 
 def _declaration_lines(lines: list[str], start: int, signature_end: int, total_end: int,
-                       ceiling: int) -> tuple[list[dict], int]:
-    """The annotation and signature lines shown, and how many declaration lines are not.
+                       ceiling: int) -> tuple[list[dict], int, str]:
+    """The annotation and signature lines shown, how many declaration lines are not, and what cut.
 
     The declaration's *body* is not shown: the line a verdict rests on is the annotation and the
     signature, not the handler's implementation. The count of lines not shown still describes the
     whole declaration, so a 400-line handler says so rather than appearing to be two lines.
+
+    ``cut`` is what actually shortened the block: ``"cap"`` when the 8-line ceiling stopped before
+    the signature ended, ``"body"`` when the signature was shown in full and only the body is
+    absent. A caption that blamed the cap for an absent body would be arithmetically true and
+    would still explain the wrong constraint.
     """
     shown_end = min(signature_end, start + ceiling - 1)
     shown = [{"n": number, "text": lines[number - 1], "asserted": False}
              for number in range(start, shown_end + 1)]
-    return shown, max(0, total_end - shown_end)
+    return shown, max(0, total_end - shown_end), ("cap" if shown_end < signature_end else "body")
 
 
-def _product_record(record: dict, shown: list[dict], omitted: int, end: int) -> dict:
-    """Fill a product-snippet record once the declaration has been located."""
+# Why a declaration could not be delimited, as the page states it. These are the reader's words,
+# not the reader's inference: each names the evidence the walk failed on.
+UNDELIMITABLE_UNCLOSED_BRACE = "its opening brace was found and its closing brace was not"
+UNDELIMITABLE_NO_BODY = "the stored file ends before its body begins"
+UNDELIMITABLE_UNPARSEABLE = "the stored file could not be parsed"
+
+
+def _product_record(record: dict, shown: list[dict], omitted: int, end: int,
+                    delimited: bool = True, cut: str = "body",
+                    why: str | None = None) -> dict:
+    """Fill a product-snippet record once the declaration has been located.
+
+    ``delimited`` is the load-bearing field for the page: a declaration whose end was established
+    has a ``total`` and a counted remainder; one whose end was not established has neither and
+    says why. An undelimitable declaration never gets the numbers of a complete one.
+    """
     text = "\n".join(line["text"] for line in shown)
     reason = services.credential_reason(text)
     if reason is not None:
         record.update({"state": PRODUCT_LINE_BLIND, "reason": reason})
         return record
     record.update({"state": PRODUCT_LINE_OK, "lines": shown, "omitted": omitted,
-                   "total": end - record["start"] + 1, "max": PRODUCT_SNIPPET_MAX})
+                   "delimited": delimited, "cut": cut,
+                   "max": PRODUCT_SNIPPET_MAX,
+                   "total": end - record["start"] + 1 if delimited else None})
+    if not delimited:
+        record["why"] = why or UNDELIMITABLE_NO_BODY
     return record
 
 
@@ -1869,13 +1940,15 @@ def _java_product_line(conn, claim: dict, record: dict, path: str, method: str) 
         record["total"] = len(lines)
         return record
     start, end = located["start"], located["end"]
-    shown, omitted = _declaration_lines(lines, start, located["signature_end"], end,
-                                        PRODUCT_SNIPPET_MAX)
+    shown, omitted, cut = _declaration_lines(lines, start, located["signature_end"], end,
+                                             PRODUCT_SNIPPET_MAX)
     record.update({"start": start, "line": start,
                    "signature_line": located["signature_end"], "end": end,
                    "link": blob_permalink(f"{match['owner']}/{match['repo']}", match["sha"],
                                           path, start)})
-    return _product_record(record, shown, omitted, end)
+    why = (UNDELIMITABLE_UNCLOSED_BRACE if located["unclosed_brace"]
+           else UNDELIMITABLE_NO_BODY)
+    return _product_record(record, shown, omitted, end, located["delimited"], cut, why)
 
 
 def _python_product_line(conn, claim: dict, record: dict, surface_id: str) -> dict:
@@ -1885,6 +1958,11 @@ def _python_product_line(conn, claim: dict, record: dict, surface_id: str) -> di
     the stored product files by the surface reader's own rule: a function whose source holds the
     route as a string literal. One match is evidence; none, or more than one, is said rather than
     guessed at.
+
+    The declaration's real unit is the decorators plus the ``def``, ending at the dedent the parser
+    reports. A file the parser cannot read is *not* a file with no declaration: the route's literal
+    and the ``def`` it decorates are still in the stored bytes, so the page shows their beginning
+    and says the end could not be established.
     """
     target = _ROUTE_SURFACE.match(surface_id or "")
     if target is None:
@@ -1892,6 +1970,7 @@ def _python_product_line(conn, claim: dict, record: dict, surface_id: str) -> di
     route = target["route"]
     snapshot = _claim_snapshot(conn, claim)
     candidates = []
+    unparseable = []
     for row in conn.execute("SELECT uri, blob_sha FROM artefact WHERE snapshot_id = ?",
                             (snapshot,)):
         match = GITHUB.match(row["uri"] or "")
@@ -1900,22 +1979,46 @@ def _python_product_line(conn, claim: dict, record: dict, surface_id: str) -> di
         lines = _blob_lines(row["blob_sha"])
         if lines is None:
             continue
-        for node in _locate_python_declarations(lines, route):
+        nodes, parsed = _locate_python_declarations(lines, route)
+        if not parsed:
+            start = _python_undeclared_start(lines, route)
+            if start is not None:
+                unparseable.append((row, match, lines, start))
+            continue
+        for node in nodes:
             candidates.append((row, match, lines, node))
     record.update({"route": route, "state": PRODUCT_LINE_NOT_FOUND})
-    if not candidates:
+    if not candidates and not unparseable:
         record["reason"] = "the stored product holds no function that declares this route"
         return record
-    if len(candidates) > 1:
+    if len(candidates) + len(unparseable) > 1:
         record["state"] = PRODUCT_LINE_AMBIGUOUS
-        record["reason"] = (f"the stored product holds {len(candidates)} functions that declare "
-                            f"this route, so the page cannot say which one the verdict rests on")
+        record["reason"] = (f"the stored product holds {len(candidates) + len(unparseable)} "
+                            f"functions that declare this route, so the page cannot say which one "
+                            f"the verdict rests on")
         return record
+    if not candidates:
+        row, match, lines, start = unparseable[0]
+        # ``start`` is the first decorator; the signature walk must begin at the ``def`` itself.
+        def_line = start
+        while def_line <= len(lines) and lines[def_line - 1].strip().startswith("@"):
+            def_line += 1
+        signature_end = _python_signature_end(lines, def_line)
+        shown, omitted, cut = _declaration_lines(lines, start, signature_end, signature_end,
+                                                 PRODUCT_SNIPPET_MAX)
+        record.update({"path": match["path"], "method": None, "line": start,
+                       "signature_line": signature_end, "start": start, "end": signature_end,
+                       "commit": match["sha"],
+                       "link": blob_permalink(f"{match['owner']}/{match['repo']}", match["sha"],
+                                              match["path"], start)})
+        return _product_record(record, shown, omitted, signature_end, False, cut,
+                               UNDELIMITABLE_UNPARSEABLE)
     row, match, lines, node = candidates[0]
     start = min([node.lineno] + [decorator.lineno for decorator in node.decorator_list])
     signature_end = _python_signature_end(lines, node.lineno)
     end = node.end_lineno or signature_end
-    shown, omitted = _declaration_lines(lines, start, signature_end, end, PRODUCT_SNIPPET_MAX)
+    shown, omitted, cut = _declaration_lines(lines, start, signature_end, end,
+                                             PRODUCT_SNIPPET_MAX)
     record.update({"path": match["path"], "method": node.name, "line": start,
                    "signature_line": signature_end, "start": start, "end": end,
                    "commit": match["sha"],

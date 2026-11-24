@@ -6,7 +6,11 @@ leave the page to check it. These tests pin the missing half of the argument:
   * the annotation and the method signature are read from the stored blob at the claim's own commit,
     shown as the file's own lines (whitespace untouched) with file, line and commit;
   * the word that decided the match is marked with an accessible name, not colour alone;
-  * a long handler states how many of its lines were not shown;
+  * a located declaration is in exactly one of three states, each said in words: complete (the
+    whole declaration is shown), trimmed (a count, an ellipsis and what the remainder is), and
+    undelimitable (the walk could not close the body, so the block is only its beginning);
+  * a long handler states how many of its lines were not shown, and never blames the 8-line cap
+    for a body the page does not print;
   * every absence (no coordinates, no artefact, no blob, no declaration, several declarations, a
     credential shape) has its own sentence - never a guessed line and never an empty box.
 """
@@ -223,12 +227,127 @@ def test_a_long_handler_says_how_many_of_its_lines_are_not_shown(tmp_path):
     # The annotation and signature only, never the body.
     assert [number for number, _text_line in _shown_lines(figure)] == [5, 6]
     # The declaration runs from the annotation to the method's closing brace: 404 lines, of which
-    # two are shown. The maximum, the true count and the omitted count are all stated.
-    assert ("At most 8 lines are shown: lines 5–6 of a 404-line declaration, so 402 lines are not "
-            "shown.") in _text(page)
+    # two are shown. The sentence names what was shown, out of what, and what the rest is - the
+    # body this page does not print - so the reader cannot read the 8-line cap as the cause.
+    assert ("The signature is 2 of 404 lines of this declaration (lines 5–6); the other 402 lines "
+            "are the body, which this page does not print.") in _text(page)
+    assert "At most 8 lines are shown" not in _text(page)
     assert '<span class="sline omission"' in figure
     assert "\u2026" in figure
     assert 'aria-label="402 lines of the declaration not shown"' in figure
+
+
+def test_a_cap_that_cuts_the_signature_says_the_cap_did_it(tmp_path):
+    # A signature with more parameters than the cap: the cap, not the body, is what is missing.
+    parameters = ",\n".join(f"        @RequestParam(name = \"p{number}\") String p{number}"
+                            for number in range(8))
+    text = ("package example;\n\npublic class RoomController {\n"
+            "    @RequestMapping(value = \"/\", method = RequestMethod.POST)\n"
+            "    public ResponseEntity<Room> createRoom(\n"
+            f"{parameters}) {{\n"
+            "        return null;\n    }\n}\n")
+    conn = _seed(tmp_path, product_text=text)
+    try:
+        page = _html(conn)
+    finally:
+        conn.close()
+    figure = _product_figure(page)
+    assert figure is not None
+    shown = [number for number, _text_line in _shown_lines(figure)]
+    assert shown == [4, 5, 6, 7, 8, 9, 10, 11]
+    assert ("The 8-line cap shows 8 of 12 lines of this declaration (lines 4–11); the other 4 "
+            "lines are not shown, including the rest of the signature.") in _text(page)
+
+
+# --------------------------------------------------------------------------- AC1/AC3, by state
+
+TRUNCATED_CONTROLLER_TEXT = """\
+package example;
+
+public class RoomController {
+
+    @RequestMapping(value = "/", method = RequestMethod.POST)
+    public ResponseEntity<Room> createRoom(@RequestBody Room room) {
+        return new ResponseEntity<>(new Room(), HttpStatus.CREATED);
+"""
+
+
+def test_a_method_body_with_no_closing_brace_is_never_rendered_as_complete(tmp_path):
+    # The stored file ends inside the body: the signature's ``{`` is found and never closed.
+    conn = _seed(tmp_path, product_text=TRUNCATED_CONTROLLER_TEXT)
+    try:
+        page = _html(conn)
+    finally:
+        conn.close()
+    figure = _product_figure(page)
+    assert figure is not None, _text(page)
+    shown = _text(page)
+    # The inability is stated in words, with the exact sentence, and the block is marked as cut.
+    assert ("The rest of this declaration could not be delimited: its opening brace was found and "
+            "its closing brace was not, so this page shows only its beginning and cannot say how "
+            "many lines follow.") in shown
+    assert '<span class="sline omission"' in figure
+    assert 'aria-label="the rest of this declaration could not be delimited"' in figure
+    assert "\u2026" in figure
+    # And it is not dressed as a complete declaration: no cap sentence, no count.
+    assert "lines of this declaration" not in shown
+    assert "The whole declaration is shown" not in shown
+
+
+def test_a_complete_small_declaration_says_so_and_shows_no_ellipsis(tmp_path):
+    # A declaration whose whole extent is its annotation and signature: a body on the same line.
+    text = CONTROLLER_TEXT.replace(
+        "    public ResponseEntity<Room> createRoom(@RequestBody Room room) {\n"
+        "        return new ResponseEntity<>(new Room(), HttpStatus.CREATED);\n    }",
+        "    public ResponseEntity<Room> createRoom(@RequestBody Room room) "
+        "{ return null; }")
+    conn = _seed(tmp_path, product_text=text)
+    try:
+        page = _html(conn)
+    finally:
+        conn.close()
+    figure = _product_figure(page)
+    assert figure is not None
+    assert "The whole declaration is shown." in _text(page)
+    assert '<span class="sline omission"' not in figure
+    assert "of this declaration" not in _text(page)
+    assert "could not be delimited" not in _text(page)
+
+
+def test_the_three_states_are_three_different_sentences(tmp_path):
+    """The same page furniture, three truths: nothing cut, a cut that is counted, an unknown end."""
+    complete = CONTROLLER_TEXT.replace(
+        "    public ResponseEntity<Room> createRoom(@RequestBody Room room) {\n"
+        "        return new ResponseEntity<>(new Room(), HttpStatus.CREATED);\n    }",
+        "    public ResponseEntity<Room> createRoom(@RequestBody Room room) "
+        "{ return null; }")
+    cases = {
+        "complete": (complete, "The whole declaration is shown."),
+        "trimmed": (CONTROLLER_TEXT.replace(
+            "        return new ResponseEntity<>(new Room(), HttpStatus.CREATED);",
+            "\n".join("        int value%d = %d;" % (n, n) for n in range(60)) + "\n"
+            "        return new ResponseEntity<>(new Room(), HttpStatus.CREATED);"),
+                    "The signature is 2 of 64 lines of this declaration (lines 6–7); the other 62 "
+                    "lines are the body, which this page does not print."),
+        "undelimitable": (TRUNCATED_CONTROLLER_TEXT,
+                          "The rest of this declaration could not be delimited: its opening brace "
+                          "was found and its closing brace was not, so this page shows only its "
+                          "beginning and cannot say how many lines follow."),
+    }
+    for state, (text, sentence) in cases.items():
+        directory = tmp_path / state
+        directory.mkdir()
+        conn = _seed(directory, product_text=text)
+        try:
+            page = _html(conn)
+        finally:
+            conn.close()
+        figure = _product_figure(page)
+        assert figure is not None, state
+        assert sentence in _text(page), state
+        # Each sentence is a different claim about what the block is.
+        others = [other for name, (_t, other) in cases.items() if name != state]
+        assert all(other not in _text(page) for other in others), state
 
 
 # --------------------------------------------------------------------------- the absences
@@ -360,6 +479,85 @@ def get_booking(booking_id: int):
     assert "service/booking.py:6" in figure
 
 
+def test_a_python_complete_declaration_is_decorator_and_def_and_ends_at_the_dedent(tmp_path):
+    source = """\
+from flask import Flask
+
+app = Flask(__name__)
+
+
+@app.route("/booking")
+def get_booking(booking_id: int): return load(booking_id)
+"""
+    conn = _seed(tmp_path, product_surface="api:GET /booking", product_word="booking",
+                 extra_artefacts=[
+                     (f"github:{PRODUCT_REPO}@{PRODUCT_COMMIT}:service/short.py", "code", source)])
+    try:
+        page = _html(conn)
+    finally:
+        conn.close()
+    figure = _product_figure(page)
+    assert figure is not None, _text(page)
+    shown = _shown_lines(figure)
+    # The unit is the decorator plus the def, and the whole of it fits: no count, no ellipsis.
+    assert [n for n, _t in shown] == [6, 7]
+    assert "The whole declaration is shown." in _text(page)
+    assert '<span class="sline omission"' not in figure
+    assert "could not be delimited" not in _text(page)
+
+
+def test_a_docstring_heavy_python_handler_is_trimmed_not_undelimitable(tmp_path):
+    docstring = "\n".join('    """' if n == 0 else f"    line {n} of what this handler promises"
+                          for n in range(30)) + '\n    """'
+    source = ("from flask import Flask\n\napp = Flask(__name__)\n\n\n"
+              "@app.route(\"/booking\")\ndef get_booking(booking_id: int):\n"
+              f"{docstring}\n    booking = load(booking_id)\n    return booking\n")
+    conn = _seed(tmp_path, product_surface="api:GET /booking", product_word="booking",
+                 extra_artefacts=[
+                     (f"github:{PRODUCT_REPO}@{PRODUCT_COMMIT}:service/long.py", "code", source)])
+    try:
+        page = _html(conn)
+    finally:
+        conn.close()
+    figure = _product_figure(page)
+    assert figure is not None, _text(page)
+    assert [n for n, _t in _shown_lines(figure)] == [6, 7]
+    # A body the parser delimited: the count is stated, and the unknown is not claimed.
+    assert ("The signature is 2 of 35 lines of this declaration (lines 6–7); the other 33 lines "
+            "are the body, which this page does not print.") in _text(page)
+    assert "could not be delimited" not in _text(page)
+    assert 'aria-label="33 lines of the declaration not shown"' in figure
+
+
+def test_an_unparseable_python_file_says_the_end_could_not_be_established(tmp_path):
+    source = """\
+from flask import Flask
+
+app = Flask(__name__)
+
+
+@app.route("/booking")
+def get_booking(booking_id: int):
+    booking = load(booking_id
+    return booking
+"""
+    conn = _seed(tmp_path, product_surface="api:GET /booking", product_word="booking",
+                 extra_artefacts=[
+                     (f"github:{PRODUCT_REPO}@{PRODUCT_COMMIT}:service/broken.py", "code", source)])
+    try:
+        page = _html(conn)
+    finally:
+        conn.close()
+    figure = _product_figure(page)
+    assert figure is not None, _text(page)
+    assert [n for n, _t in _shown_lines(figure)] == [6, 7]
+    assert ("The rest of this declaration could not be delimited: the stored file could not be "
+            "parsed, so this page shows only its beginning and cannot say how many lines follow.") \
+        in _text(page)
+    assert 'aria-label="the rest of this declaration could not be delimited"' in figure
+    assert "lines of this declaration" not in _text(page)
+
+
 # --------------------------------------------------------------------------- nothing to show
 
 def test_a_claim_the_product_is_not_evidence_about_renders_no_product_block(tmp_path):
@@ -391,4 +589,55 @@ def test_the_not_located_page_is_pinned_byte_for_byte_by_a_golden(tmp_path, monk
         rendered = app.case_page(conn, CASE)
     finally:
         conn.close()
-    assert rendered == GOLDEN.read_bytes()
+    assert rendered == _golden_bytes(GOLDEN), (
+        "the golden page changed; regenerating it is a deliberate act (see the docstring)")
+
+
+# The golden files are checked out with the platform's line endings under core.autocrlf; the page
+# is rendered with LF. A CRLF checkout is not a changed page, so compare on normalised bytes.
+def _golden_bytes(path: Path) -> bytes:
+    return path.read_bytes().replace(bytes([13, 10]), bytes([10]))
+
+
+# The three states of a located declaration, each pinned as a checked-in page. Regenerate with
+# ``fixtures/product_line/README.md``'s recipe; a changed sentence must fail here first.
+STATE_GOLDENS = {
+    "complete": Path(__file__).parent / "fixtures" / "product_line" /
+                "case-product-line-complete.html",
+    "trimmed": Path(__file__).parent / "fixtures" / "product_line" /
+               "case-product-line-trimmed.html",
+    "undelimitable": Path(__file__).parent / "fixtures" / "product_line" /
+                     "case-product-line-undelimitable.html",
+}
+
+
+def test_the_three_states_are_pinned_byte_for_byte_by_golden_pages(tmp_path, monkeypatch):
+    """Every located declaration is in exactly one of three states, and each has a page.
+
+    complete: the whole declaration is shown, no ellipsis, no count.
+    trimmed: the signature is shown and the rest of the declaration is counted, with an ellipsis.
+    undelimitable: the end could not be established, said in words, with an ellipsis and no count.
+    """
+    monkeypatch.setattr(app, "age", lambda iso: "a fixed time ago")
+    texts = {
+        "complete": CONTROLLER_TEXT.replace(
+            "    public ResponseEntity<Room> createRoom(@RequestBody Room room) {\n"
+            "        return new ResponseEntity<>(new Room(), HttpStatus.CREATED);\n    }",
+            "    public ResponseEntity<Room> createRoom(@RequestBody Room room) "
+            "{ return null; }"),
+        "trimmed": CONTROLLER_TEXT.replace(
+            "        return new ResponseEntity<>(new Room(), HttpStatus.CREATED);",
+            "\n".join("        int value%d = %d;" % (n, n) for n in range(60)) + "\n"
+            "        return new ResponseEntity<>(new Room(), HttpStatus.CREATED);"),
+        "undelimitable": TRUNCATED_CONTROLLER_TEXT,
+    }
+    for state, text in texts.items():
+        directory = tmp_path / state
+        directory.mkdir()
+        conn = _seed(directory, product_text=text)
+        try:
+            rendered = app.case_page(conn, CASE)
+        finally:
+            conn.close()
+        assert rendered == _golden_bytes(STATE_GOLDENS[state]), (
+            f"the {state} golden page is stale")
