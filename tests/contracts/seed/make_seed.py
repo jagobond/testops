@@ -5,12 +5,13 @@
 The store is opened with ``mode=ro`` and nothing is written back. The seed is a *slice* of the
 evidence the contract suite needs, not a copy of a deployment:
 
-  * two restfulbooker runs - the newest (which raised four cases and carries the evidence P6/P15..
-    P19 walk) and an earlier one that raised nothing (P1's no-findings run);
+  * three restfulbooker runs - the newest (which raised five cases whose pages show the product
+    line each verdict rests on, the evidence P6/P15..P19 walk), the run before the Java surface
+    reader landed (four cases whose product arm was not assessable), and an earlier one that raised
+    nothing (P1's no-findings run);
   * the reqoverflow duplication run, whose cases are settled ("Checked, but this repeats another
-    test"). P4 needs a settled case to compare an uncertain one against, and the restfulbooker
-    cases in this store are all "Cannot assess". reqoverflow is a public sample project
-    (reqnroll/Sample-ReqOverflow), so its rows are safe to pin;
+    test"). P4 needs a settled case to compare an uncertain one against; reqoverflow is a public
+    sample project (reqnroll/Sample-ReqOverflow), so its rows are safe to pin;
   * the projects, services, snapshots, artefacts, observations and blob files those runs need.
 
 reqoverflow's artefacts and blobs are deliberately not included: P4 only needs the case page's
@@ -28,6 +29,7 @@ import sqlite3
 import sys
 
 RUNS = (
+    "restfulbooker-levels-20261124T123451",
     "restfulbooker-levels-20261123T132456",
     "restfulbooker-levels-20261122T204917",
     "reqoverflow-dup-20261122T205100",
@@ -79,8 +81,11 @@ def main(source: str) -> int:
     suppressions = rows("SELECT * FROM suppression WHERE fingerprint IN (SELECT fingerprint FROM "
                         "finding WHERE case_id IN (%s))" % case_marks,
                         [case["id"] for case in cases])
-    # Inferences are the judge's own reasoning, rendered on no page the suite asserts against.
-    inferences: list[dict] = []
+    # The analyzers' own records travel with the claims: since TESTOPS-83 the case page renders the
+    # product surface's file, line and declaration from `detail["product"]`, and a seed without the
+    # inference row would show a page no run could have produced.
+    inferences = rows("SELECT * FROM inference WHERE claim_id IN (SELECT id FROM claim WHERE run_id "
+                      "IN (%s))" % marks, RUNS)
 
     blobs = sorted({artefact["blob_sha"] for artefact in artefacts if artefact["blob_sha"]})
     # Keys are the schema's table names, so the builder in harness.py can insert row-for-row.

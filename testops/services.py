@@ -878,6 +878,17 @@ def validate_settings(settings: dict) -> dict:
     return dict(settings)
 
 
+def credential_reason(value: str) -> str | None:
+    """Why a value reads as a credential, or ``None`` when it does not (TESTOPS-83 AC4).
+
+    The screen a page uses before printing stored source. It is the same rules
+    :func:`validate_settings` and :func:`refuse_credential_in` apply at the store boundary, exposed
+    as a question rather than a refusal because a page does not reject anything: it withholds the
+    line and says which shape it saw. The reason never contains the value.
+    """
+    return _looks_like_secret(value)
+
+
 def refuse_credential_in(value: str, what: str) -> None:
     """The one screen for a human-entered name, applied at the store boundary (TESTOPS-51 AC1).
 
