@@ -223,7 +223,7 @@ def test_a_run_that_skips_five_hundred_sql_files_says_so_though_its_code_read_fi
     # The code read fine, so the sentence is the plain aggregate (AC2's other rule).
     assert run["assessment"]["state"] == sources.FOUND
     assert run["assessment"]["sentence"] == ("Assessed: code and test code were consulted and "
-                                             "returned 3 items.")
+                                             "returned 3 files.")
     # AC5: the page prints that sentence, not one of its own.
     assert run["assessment"]["sentence"] in text
     # AC3: the skips are on the page anyway, with kind, count and reason, and the names reachable.
@@ -265,7 +265,7 @@ def test_a_lost_file_makes_the_sentence_partial_and_the_page_still_lists_it(monk
         conn.close()
 
     assert run["assessment"]["sentence"] == ("Assessed: code and test code were consulted and "
-                                             "returned 3 items (1 .py file unreadable).")
+                                             "returned 3 files (1 .py file unreadable).")
     page = body.decode("utf-8")
     assert "1 .py" in page and "size cap" in page
     assert "src/huge.py" in page

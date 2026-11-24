@@ -1541,6 +1541,33 @@ def could_not_read_lines(run: dict | None) -> list[str]:
         out.append('<h2 class="section">What the surface reader could not read</h2>')
         out.append(f'<p>{esc(reason)}. No surface was found and none was ruled out.</p>')
 
+    # TESTOPS-74 AC3. A mapping the reader saw but could not place is a fact this section has to
+    # carry: a count of surfaces that silently excludes it reads as a complete reading. Grouped by
+    # reason, then named, so "2 mappings unread: path is a constant" is checkable against the list.
+    unread = [entry for entry in ((surfaces.get("unread") if isinstance(surfaces, dict) else None)
+                                  or ()) if isinstance(entry, dict)]
+    if unread:
+        grouped: dict[str, int] = {}
+        for entry in unread:
+            reason = entry.get("reason") or "the reader could not place it"
+            grouped[reason] = grouped.get(reason, 0) + 1
+        summary = "; ".join(f"{_count(count, 'mapping')} unread: {esc(reason)}"
+                            for reason, count in grouped.items())
+        if not (isinstance(surfaces, dict) and surfaces.get("state") == "not_assessable"):
+            out.append('<h2 class="section">What the surface reader could not read</h2>')
+        out.append(f'<p>{summary}. None of them is counted as a surface, because a route the '
+                   f'reader invented would look like one that exists.</p>')
+        out.append('<ul class="mappings">')
+        for entry in unread:
+            method = entry.get("method") or "a mapping"
+            reason = entry.get("reason") or "the reader could not place it"
+            detail = entry.get("detail") or ""
+            source = entry.get("source") or ""
+            note = f" ({esc(detail)})" if detail else ""
+            out.append(f'<li><span class="code">{esc(source)}</span> {esc(method)}: '
+                       f'{esc(reason)}{note}.</li>')
+        out.append('</ul>')
+
     reads = run.get("reads")
     if not isinstance(reads, dict) or not reads:
         return out

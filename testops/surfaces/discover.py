@@ -16,6 +16,12 @@ TESTOPS-70. A Java product is no longer one of those absent languages. ``.java``
 routes were read is ``found``, one whose Java declares no route is ``zero``, and ``not_assessable``
 is now reserved for a repository holding nothing these readers can parse.
 
+TESTOPS-74. A mapping the reader cannot place is no longer a surface with a guessed route. A
+class-level prefix inherited from a superclass is read from that superclass in the same repository,
+one level, and the resolution is recorded; a superclass this repository does not hold, or a path
+that is not a string literal, makes the mapping ``unread`` with a reason - and ``unread`` is carried
+on the run, not dropped, so the page can say how many mappings it could not read and why.
+
 The languages this reader can parse are :data:`LANGUAGES`, which is data. Adding one widens the
 reader; it does not make a repository it cannot parse look empty.
 """
@@ -55,18 +61,28 @@ class Discovery:
     ``state`` is ``found`` (there are surfaces), ``zero`` (this reader read the files and found
     none) or ``not_assessable`` (there was nothing here it could read, with the language and the
     file count in ``reason``). A caller must not print the second and the third the same way.
+
+    ``unread`` is the mappings the reader saw but could not turn into a route: a constant path, or a
+    class prefix it could not resolve. They are here so the run can report them; a mapping in this
+    list has no surface, because a route the reader invented is worse than a route it did not read.
+    ``inherited`` records every prefix it recovered from a superclass, so the resolution is a fact a
+    reader can check rather than an assumption.
     """
     surfaces: tuple[Surface, ...]
     state: str
     reason: str = ""
     languages: tuple[tuple[str, int], ...] = ()
     parsed: int = 0        # files this reader could parse
+    unread: tuple[java.Unread, ...] = ()
+    inherited: tuple[dict, ...] = ()
 
     def record(self) -> dict:
         return {"state": self.state, "surfaces": len(self.surfaces), "parsed": self.parsed,
                 "reason": self.reason,
                 "languages": [{"suffix": suffix, "count": count}
-                              for suffix, count in self.languages]}
+                              for suffix, count in self.languages],
+                "unread": [entry.record() for entry in self.unread],
+                "inherited_prefixes": [dict(entry) for entry in self.inherited]}
 
 
 def _first_sentence(text: str) -> str:
@@ -150,12 +166,61 @@ def discover(files: dict[str, str]) -> Discovery:
     # Spring MVC: a route is what a mapping annotation says, prefixed by its class's @RequestMapping.
     # Two methods that map the same route are two surfaces - the duplicate is a fact worth showing -
     # so the id carries the source and the method, and never collapses two declarations into one.
-    for path in sorted(java_files):
-        read = java.routes(files[path], path)
-        if read is None:
+    readings: dict[str, java.Reading] = {}
+    for path in java_files:
+        reading = java.read(files[path], path)
+        if reading is None:
             continue                       # not lexed as Java; not counted as a file this read
         parsed += 1
-        for declared in read:
+        readings[path] = reading
+
+    # TESTOPS-74 AC1. A class-level prefix can live on a superclass. Read that superclass when it is
+    # in this repository - one level, no more - and record where the prefix came from. When it is
+    # not, every mapping under the subclass is unread and names the class it could not read: the
+    # alternative is emitting ``GET /{id}`` for a route that is really ``GET /booking/{id}``.
+    declared_types: dict[str, list[str]] = {}
+    for path in sorted(readings):
+        name = readings[path].type_name
+        if name:
+            declared_types.setdefault(name, []).append(path)
+    inherited: list[dict] = []
+    for path in sorted(readings):
+        reading = readings[path]
+        if not (reading.superclass and reading.own_prefix is None
+                and reading.class_problem is None):
+            continue
+        superclass = reading.superclass
+        candidates = [candidate for candidate in declared_types.get(superclass.rsplit(".", 1)[-1], [])
+                      if candidate != path]
+        if len(candidates) == 1:
+            parent = readings[candidates[0]]
+            if parent.own_prefix is not None:
+                readings[path] = java.read(files[path], path, inherited=parent.own_prefix) or reading
+                inherited.append({"source": path, "type": reading.type_name,
+                                  "superclass": superclass, "read_from": candidates[0],
+                                  "prefix": list(parent.own_prefix)})
+                continue
+            if parent.superclass:
+                detail = (f"{superclass}, whose own prefix is inherited from {parent.superclass} "
+                          f"(this reader reads one level)")
+            else:
+                detail = ""
+            if detail:
+                readings[path] = java.read(files[path], path, unresolved=(
+                    java.REASON_PREFIX_NOT_READ, detail)) or reading
+                continue
+            # The superclass is here and declares no prefix of its own: there is none to drop.
+            continue
+        why = "which this repository does not hold" if not candidates else \
+            "which this repository holds more than once"
+        readings[path] = java.read(files[path], path, unresolved=(
+            java.REASON_PREFIX_NOT_READ, f"{superclass}, {why}")) or reading
+
+    unread: list[java.Unread] = []
+    for path in sorted(readings):
+        declared_routes = readings[path]
+        unread.extend(declared_routes.unread)
+        for declared in declared_routes.routes:
             target = f"{declared.verb} {declared.path}"
             sid = f"api:{target}@{path}:{declared.method}"
             if sid in routes:
@@ -179,7 +244,8 @@ def discover(files: dict[str, str]) -> Discovery:
             reason = (f"the surface reader parses {reader} only, and the product repository holds no "
                       f"file it can read: {held}" + (", ..." if len(languages) > 4 else ""))
         return Discovery((), NOT_ASSESSABLE, reason, languages, 0)
-    if not surfaces:
+    if not surfaces and not unread:
         return Discovery((), ZERO, "", languages, parsed)
-    return Discovery(surfaces, FOUND, "", languages, parsed)
+    return Discovery(surfaces, FOUND, "", languages, parsed, tuple(unread),
+                     tuple(inherited))
 

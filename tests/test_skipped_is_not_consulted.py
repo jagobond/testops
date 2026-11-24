@@ -266,7 +266,7 @@ def test_a_kotlin_product_run_says_which_files_it_skipped_and_whose_code_it_did_
     assert run["assessment"]["state"] == sources.NOT_ASSESSABLE
     assert "142 .kt files" in sentence
     assert "no product code file was fetched" in sentence
-    assert "test code was consulted and returned 2 items" in sentence
+    assert "test code was consulted and returned 2 files" in sentence
 
     # The skipped files are named in the record, not just counted.
     code = next(entry for entry in meta["sources"]["github"]["readings"]
