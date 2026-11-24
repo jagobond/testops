@@ -2,7 +2,7 @@
 id: TESTOPS-93
 title: The narrator runs as a Foundry agent, and the page can say which route served it
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-92
 ---
