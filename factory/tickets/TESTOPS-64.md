@@ -2,7 +2,7 @@
 id: TESTOPS-64
 title: The isolation tripwire cannot tell a commit from a write
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-60
 ---

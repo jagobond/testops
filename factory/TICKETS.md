@@ -81,6 +81,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-63 | `key` missing from the credential vocabulary | F1 | ready | From the T62 review: `the-api-key-is-xyz`, `my-private-key` bypass every branch because only `apikeys?` and `_keys?` are matched. Qualify the word, protect the honest `key` names |
 | TESTOPS-64 | The isolation tripwire cannot tell a commit from a write | F1 | ready | It failed on `main` because a ticket file was committed mid-run; a tripwire that fires on its own repository gets ignored |
 | TESTOPS-65 | The vocabulary is a closed list, and the split decides the answer | F1 | ready | From the T63 review: 18 credential words still unscreened; `apikey` and `api_key` get opposite verdicts; `key = hunter2` accepted |
+| TESTOPS-66 | A committed write launders, the index is dead, and git failure blames the suite | F1 | ready | From the T64 review: the excuse checks the path, not the bytes; the index is recorded and never read; a git failure is reported as a suite write |
 
 |----|-------|---------|--------|------|
 
