@@ -2,7 +2,7 @@
 id: TESTOPS-66
 title: A committed write launders, the index is dead, and git failure blames the suite
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-64
 ---
