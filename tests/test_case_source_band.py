@@ -12,10 +12,18 @@ AC2  test repository links to the file at the claim's commit; product repository
 AC3  a needed source that could not be consulted is a dimmed "not consulted" tag with its reason
 AC4  a case resting on test code alone says so in words, not as an empty space or a warning
 AC5  tags are keyboard-reachable and their accessible names carry the kind
+TESTOPS-80  the product-routes tag is answered by the snapshot's surface discovery state
+     (found / zero / not_assessable), never by the test-ecosystem detector; its count is the one
+     that reader read; a repeats-product verdict and a "not consulted" routes tag cannot coexist.
+
+One page here is a checked-in golden: ``fixtures/source_band/case-surfaces-band.html``. It is the
+only golden whose snapshot carries a ``surfaces`` record, so it is the only one that pins the
+routes-tag sentence byte for byte (TESTOPS-80 review, note 3).
 """
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from testops.store import db
 from testops.web import app
@@ -30,10 +38,12 @@ PRODUCT_REPO = "owner/product"
 COMMIT = "a" * 40
 PRODUCT_COMMIT = "b" * 40
 PATH = "features/panel.feature"
+GOLDEN = Path(__file__).parent / "fixtures" / "source_band" / "case-surfaces-band.html"
 LINE = 12
 
 
-def _meta(*, product: bool = True, needs=("code", "test_code"), links: bool = False) -> dict:
+def _meta(*, product: bool = True, needs=("code", "test_code"), links: bool = False,
+          surfaces: dict | None = None) -> dict:
     """A snapshot that records its arms the way the pipeline writes them."""
     meta = {
         "arms": ({"test": TEST_REPO} | ({"product": PRODUCT_REPO} if product else {})),
@@ -41,6 +51,8 @@ def _meta(*, product: bool = True, needs=("code", "test_code"), links: bool = Fa
         "analysers": {"level_fitness": {"needs": list(needs),
                                         "consults": ["requirements"]}},
     }
+    if surfaces is not None:
+        meta["surfaces"] = surfaces
     if not product and needs:
         # What the pipeline records when the product service is configured but not readable.
         meta["service_states"] = [
@@ -52,25 +64,35 @@ def _meta(*, product: bool = True, needs=("code", "test_code"), links: bool = Fa
     return meta
 
 
-def _case(tmp_path, *, meta: dict, links: list | None = None, analyser: str = "level_fitness"):
-    conn = db.connect(tmp_path / "band.db")
+def _case(tmp_path, *, meta: dict, links: list | None = None, analyser: str = "level_fitness",
+          verdict: str = "distinct", product: dict | None = None, store: str = "band.db",
+          claims: int = 1):
+    conn = db.connect(tmp_path / store)
     db.upsert_snapshot(conn, SNAP, PROJECT, TS, {TEST_REPO: COMMIT},
                        schema_version=2, meta=meta)
     db.start_run(conn, RUN, PROJECT, SNAP, analyser, TS)
-    claim_id = db.add_claim(
-        conn, RUN, analyser, "0.8.0", f"scenario:{PATH}#the panel is served",
-        "The test asserts the step.", "distinct", 0.5, [], schema_version=2,
-        assertion_text="the panel is served", assertion_path=PATH, assertion_line=LINE,
-        assertion_commit=COMMIT, interaction_label="needs a browser", interaction_code="I4",
-        span=["ui"], sources_assessed=True, sources_missing=[], proposed_action="No change.")
-    if links:
-        db.add_inference(conn, claim_id, "none", "none", "hash", [], {"links": links})
+    # ``claims`` exists so a test can hold the shapes the store really permits: a case with more
+    # than one claim, and a case with none (TESTOPS-80 review). Every other test takes the default.
+    claim_ids = []
+    for index in range(claims):
+        suffix = "" if index == 0 else f" ({index})"
+        claim_ids.append(db.add_claim(
+            conn, RUN, analyser, "0.8.0", f"scenario:{PATH}#the panel is served{suffix}",
+            "The test asserts the step.", verdict, 0.5, [], schema_version=2,
+            assertion_text="the panel is served", assertion_path=PATH, assertion_line=LINE + index,
+            assertion_commit=COMMIT, interaction_label="needs a browser", interaction_code="I4",
+            span=["ui"], sources_assessed=True, sources_missing=[], proposed_action="No change."))
+    detail: dict = {"links": links or []}
+    if product is not None:
+        detail["product"] = product
+    if claim_ids and (links or product is not None):
+        db.add_inference(conn, claim_ids[0], "none", "none", "hash", [], detail)
     conn.execute("INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at,"
                  " summary) VALUES (?,?,?,?,?,?,?)",
                  (CASE, RUN, PROJECT, analyser, SNAP, TS, "{}"))
     conn.execute("INSERT INTO finding (case_id, title, severity, fingerprint, claim_ids)"
                  " VALUES (?,?,?,?,?)",
-                 (CASE, "The panel is served", "high", "f" * 32, db.j([claim_id])))
+                 (CASE, "The panel is served", "high", "f" * 32, db.j(claim_ids)))
     conn.commit()
     page = app.case_page(conn, CASE).decode("utf-8")
     conn.close()
@@ -156,19 +178,6 @@ def test_a_source_the_analysis_did_not_need_is_not_named_as_a_blind_spot(tmp_pat
     assert "Assessed against test code only" in band
 
 
-def test_a_product_the_readers_cannot_parse_is_a_dimmed_blind_spot_beside_the_evidence(tmp_path):
-    """The repository was read, but its routes were not: the band says which, and why."""
-    meta = _meta()
-    meta["ecosystems"] = {"product": {
-        "repository": PRODUCT_REPO, "ecosystem": "unknown", "evidence": [],
-        "reason": "none of the 3 ecosystems this build knows was recognised in the 27 files read",
-    }}
-    band = _band(_case(tmp_path, meta=meta))
-    assert "Product routes" in band, band
-    assert "not consulted" in band
-    assert "none of the 3 ecosystems this build knows was recognised" in band
-
-
 # --------------------------------------------------------------------------- AC4
 
 def test_a_case_that_rests_on_test_code_alone_says_so_in_words(tmp_path):
@@ -182,6 +191,164 @@ def test_a_case_that_rests_on_test_code_alone_says_so_in_words(tmp_path):
 def test_a_case_with_a_product_does_not_claim_to_rest_on_test_code_alone(tmp_path):
     band = _band(_case(tmp_path, meta=_meta()))
     assert "test code only" not in band
+
+
+# --------------------------------------------------------------------------- TESTOPS-80 AC1-AC3
+# The routes tag answers "were the product's routes read" with the surface discovery state the
+# snapshot recorded - never with the test-ecosystem detector, which answers whether a *test*
+# suite could be parsed. The count is the one that reader read, not the snapshot's artefact total.
+
+def _found() -> dict:
+    """What the surface reader recorded for restfulbooker: 142 .java parsed, 25 surfaces.
+
+    ``surfaces`` is the routes the reader resolved *plus* the engine modules it found
+    (``discover.py:301``), so the tag says the count is surfaces, never routes.
+    """
+    return {"state": "found", "parsed": 142, "surfaces": 25, "reason": "",
+            "languages": [{"suffix": ".java", "count": 142},
+                          {"suffix": ".ts", "count": 23},
+                          {"suffix": ".js", "count": 4}],
+            "unread": [], "inherited_prefixes": []}
+
+
+def _zero() -> dict:
+    return {"state": "zero", "parsed": 142, "surfaces": 0, "reason": "",
+            "languages": [{"suffix": ".java", "count": 142}],
+            "unread": [], "inherited_prefixes": []}
+
+
+def _not_assessable() -> dict:
+    return {"state": "not_assessable", "parsed": 0, "surfaces": 0,
+            "reason": ("the surface reader parses Java (.java) and Python (.py) only, and the "
+                       "product repository holds no file it can read: 23 .ts, 4 .js"),
+            "languages": [{"suffix": ".ts", "count": 23}, {"suffix": ".js", "count": 4}],
+            "unread": [], "inherited_prefixes": []}
+
+
+def _routes_item(band: str) -> str:
+    """The one list item whose kind is Product routes, from the rendered band.
+
+    Bounded by the list item the tag sits in, not by the band: a case with no claim has no Test
+    repository item before it, and a wider match would compare two different neighbours.
+    """
+    index = band.find("Product routes")
+    assert index != -1, band
+    start = band.rindex('<span role="listitem">', 0, index)
+    end = band.index("</span></span>", index) + len("</span></span>")
+    return band[start:end]
+
+
+def test_the_routes_tag_reads_the_surface_reader_and_says_what_it_parsed(tmp_path):
+    meta = _meta(surfaces=_found())
+    # The test-ecosystem record still says no ecosystem was recognised in 169 files. It answers a
+    # different question and must not reach the routes tag (AC1, AC4).
+    meta["ecosystems"] = {"product": {
+        "repository": PRODUCT_REPO, "ecosystem": "unknown", "evidence": [],
+        "reason": ("none of the 3 ecosystems this build knows was recognised in the 169 files "
+                   "read (reqnroll, python-bdd, cucumber-js)")}}
+    band = _band(_case(tmp_path, meta=meta))
+    item = _routes_item(band)
+    assert "142 .java parsed, 25 surfaces (routes and engine modules)" in item, band
+    assert "consulted" in item
+    assert "not consulted" not in item
+    # AC3: the reader's count, not the snapshot's artefact total.
+    assert "169" not in band
+    assert "reqnroll" not in band
+
+
+def test_a_reader_that_read_the_files_and_found_no_route_says_so(tmp_path):
+    band = _band(_case(tmp_path, meta=_meta(surfaces=_zero())))
+    item = _routes_item(band)
+    assert "142 .java parsed, no routes found" in item, band
+    assert "consulted" in item
+    assert "not consulted" not in item
+
+
+def test_a_product_the_surface_reader_could_not_read_keeps_the_readers_reason(tmp_path):
+    band = _band(_case(tmp_path, meta=_meta(surfaces=_not_assessable())))
+    item = _routes_item(band)
+    assert 'class="tag unconsulted"' in item, band
+    assert "not consulted" in item
+    assert "the product repository holds no file it can read: 23 .ts, 4 .js" in item, band
+    # Not the ecosystem detector's sentence: it never watched the product's files.
+    assert "ecosystems this build knows" not in band
+    assert "169" not in band
+
+
+def test_a_snapshot_with_no_surface_record_invents_no_routes_tag(tmp_path):
+    """Not recorded is not "not consulted": the same rule the band applies to every source."""
+    band = _band(_case(tmp_path, meta=_meta()))
+    assert "Product routes" not in band, band
+
+
+def _route_tags(band: str) -> int:
+    """How many Product routes tags the rendered band carries.
+
+    Counted on the tag's accessible name, which the renderer writes exactly once per tag, so a
+    duplicated tag is visible as a count of two rather than hidden by a substring match.
+    """
+    return band.count('aria-label="Product routes:')
+
+
+def test_the_routes_tag_is_emitted_once_per_case_whatever_the_claim_count(tmp_path):
+    """Zero, one and two claims render the same single tag, saying the same true thing.
+
+    The tag answers a question about the snapshot's record and the analyser's needs, not about any
+    one claim, so when its append sat inside the claim loop a case with two claims rendered it
+    twice and a case with none - whose verdict may still quote routes - rendered it never
+    (TESTOPS-80 review, concern 1). No stored case and no other test has claims != 1.
+    """
+    items = {}
+    for count in (0, 1, 2):
+        page = _case(tmp_path, meta=_meta(surfaces=_found()), claims=count,
+                     store=f"claims-{count}.db")
+        band = _band(page)
+        assert _route_tags(band) == 1, (count, band)
+        # Exactly once in words too: one tag, not a label repeating the kind.
+        assert band.count('class="tag-kind">Product routes<') == 1, (count, band)
+        item = _routes_item(band)
+        assert "142 .java parsed, 25 surfaces (routes and engine modules)" in item, (count, band)
+        assert "consulted" in item and "not consulted" not in item
+        items[count] = item
+    assert items[0] == items[1] == items[2]
+
+
+# --------------------------------------------------------------------------- TESTOPS-80 golden
+
+def test_the_routes_tag_sentence_is_pinned_byte_for_byte_by_a_golden_page(tmp_path, monkeypatch):
+    """The sentence this ticket changed, pinned as bytes as well as by page tests (note 3).
+
+    Every other checked-in golden renders a snapshot written before the ``surfaces`` record
+    existed, so the band there shows no routes tag at all: a rendering regression in this
+    sentence would be caught only by a page test. This fixture carries the record, and writes
+    no golden of its own - the page is compared with the bytes committed beside this test.
+    """
+    monkeypatch.setattr(app, "age", lambda iso: "a fixed time ago")
+    page = _case(tmp_path, meta=_meta(surfaces=_found()), store="golden.db")
+    assert page.encode("utf-8") == GOLDEN.read_bytes()
+
+
+# --------------------------------------------------------------------------- TESTOPS-80 AC2
+
+def _repeats_product_page(tmp_path, surfaces: dict, *, store: str) -> str:
+    product = {"state": "found", "route": "POST /", "word": "booking", "surfaces": 25}
+    return _case(tmp_path, meta=_meta(surfaces=surfaces), store=store,
+                 verdict="repeats_product", product=product)
+
+
+def test_a_repeats_product_verdict_cannot_sit_beside_a_not_consulted_routes_tag(tmp_path):
+    page = _repeats_product_page(tmp_path, _found(), store="a.db")
+    item = _routes_item(_band(page))
+    assert "already declares POST /" in page
+    assert "not consulted" not in item, page
+    assert "142 .java parsed, 25 surfaces (routes and engine modules)" in item, page
+
+    # Conversely: where the routes were not consulted, the page says no claim repeats them.
+    page = _case(tmp_path, meta=_meta(surfaces=_not_assessable()), store="b.db",
+                 verdict="review")
+    assert "not consulted" in _routes_item(_band(page))
+    assert "already declares" not in page
+    assert "already exposes this" not in page
 
 
 # --------------------------------------------------------------------------- AC5

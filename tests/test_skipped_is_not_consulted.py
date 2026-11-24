@@ -306,6 +306,11 @@ def test_a_registry_record_written_before_this_change_reads_exactly_as_it_did():
 
 # --------------------------------------------------------------------------- AC4/AC5 on the store
 
+# The run this probe describes. Pinned, not "the latest": TESTOPS-70 made the Java reader part of the
+# surface reader, so the run after this one reads `.java` and the sentence below is history. A probe
+# that silently follows the newest run stops describing the snapshot it was written for.
+PINNED_RESTFULBOOKER_RUN = "restfulbooker-levels-20261123T132456"
+
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
 def test_the_cotw_run_still_says_ninety_five_items():
     conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
@@ -323,7 +328,7 @@ def test_the_cotw_run_still_says_ninety_five_items():
 # build store now also holds a later run whose product arm was read (the Java reader landed after
 # this run), and that run is the honest subject of a different criterion. Pinning keeps this test
 # about the fact it exists to prove: a run whose `.java` was skipped says so in words.
-PINNED_RB_RUN = "restfulbooker-levels-20261123T132456"
+PINNED_RB_RUN = PINNED_RESTFULBOOKER_RUN   # the older name, kept for the tests that still use it
 
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
@@ -331,11 +336,10 @@ def test_the_restfulbooker_run_names_the_java_it_could_not_read():
     conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        run = queries.run_read(conn, PINNED_RB_RUN)
+        run = queries.run_read(conn, PINNED_RESTFULBOOKER_RUN)
     finally:
         conn.close()
-    if run is None:
-        pytest.skip(f"the pinned run {PINNED_RB_RUN} is not in this store")
+    assert run is not None, f"the pinned run {PINNED_RESTFULBOOKER_RUN} is not in the store"
     sentence = run["assessment"]["sentence"]
     assert "code was not read" in sentence, sentence
     assert "142 .java files" in sentence, sentence

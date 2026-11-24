@@ -9,3 +9,6 @@ factory/tickets/*.md merge=board
 # rather than the render: with core.autocrlf=true the fixture came back CRLF and the test failed
 # against a page the build renders with LF.
 tests/fixtures/projects_services/*.html -text
+# The same rule for the source band's golden (TESTOPS-80 review, note 3): a byte comparison of a
+# page the build renders with LF must not measure the checkout.
+tests/fixtures/source_band/*.html -text

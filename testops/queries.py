@@ -15,6 +15,7 @@ from . import blobs, cases, config, sources
 from .analysers import is_registered
 from .extract import csproj, gherkin, stepbindings
 from .links import GITHUB, blob_permalink, permalink, short_location
+from .surfaces import discover as surface_discovery
 
 
 def _json(s, default=None):
@@ -623,6 +624,61 @@ def _repo_from_service(meta: dict, role: str) -> str:
     return name[:-len(suffix)] if name.endswith(suffix) else name
 
 
+def _parsed_languages(record: dict) -> str:
+    """The files the surface reader parsed, said as ``142 .java`` (TESTOPS-80 AC3).
+
+    ``parsed`` is the count this reader read, so it cannot become the snapshot's total artefact
+    count; the suffixes are narrowed to the languages the reader parses, so a repository's
+    TypeScript files cannot be counted as routes read.
+    """
+    parsed = record.get("parsed")
+    entries = [entry for entry in (record.get("languages") or ())
+               if isinstance(entry, dict)
+               and entry.get("suffix") in surface_discovery.LANGUAGES
+               and isinstance(entry.get("count"), int)]
+    if not entries:
+        return f"{parsed} files" if isinstance(parsed, int) else "the product's files"
+    if len(entries) == 1:
+        count = parsed if isinstance(parsed, int) else entries[0]["count"]
+        return f"{count} {entries[0]['suffix']}"
+    held = ", ".join(f"{entry['count']} {entry['suffix']}" for entry in entries)
+    return f"{parsed} files ({held})" if isinstance(parsed, int) else f"files ({held})"
+
+
+def product_routes_tag(meta: dict, product_repo: str) -> dict | None:
+    """Whether the product's routes were read, answered by the snapshot's surface state (AC1).
+
+    One place computes this, from the record the surface reader wrote, so the band cannot say
+    "not consulted" about routes the verdict is quoting. The test-ecosystem detector answers a
+    different question - whether a test suite's steps could be parsed - and is not consulted here
+    (AC4). ``None`` means this snapshot predates the record: no tag, because "not recorded" is not
+    "not consulted".
+    """
+    record = meta.get("surfaces")
+    if not isinstance(record, dict):
+        return None
+    tag = {"kind": "Product routes", "name": product_repo or "the product's routes", "href": ""}
+    state = record.get("state")
+    if state == surface_discovery.FOUND:
+        count = record.get("surfaces")
+        # The record's ``surfaces`` is the routes the reader resolved *plus* the engine modules
+        # it found (discover.py:301), so a count of them is not a count of routes: say what the
+        # number counts (TESTOPS-80 review, concern 2).
+        found = ("1 surface" if count == 1 else f"{count} surfaces"
+                 if isinstance(count, int) else "surfaces")
+        return {**tag, "state": CONSULTED, "reason": "",
+                "detail": (f"{_parsed_languages(record)} parsed, {found} "
+                           f"(routes and engine modules)")}
+    if state == surface_discovery.ZERO:
+        return {**tag, "state": CONSULTED, "reason": "",
+                "detail": f"{_parsed_languages(record)} parsed, no routes found"}
+    if state == surface_discovery.NOT_ASSESSABLE:
+        reason = (record.get("reason") or "").strip().rstrip(".")
+        return {**tag, "state": NOT_CONSULTED, "detail": "", "reason": reason
+                or "the surface reader could not look at this product"}
+    return None
+
+
 def source_band(conn, row: dict, claims: list[dict]) -> dict:
     """What the case examined, and what it needed and could not consult (TESTOPS-73).
 
@@ -695,6 +751,19 @@ def source_band(conn, row: dict, claims: list[dict]) -> dict:
                          or "the product repository", "href": "", "state": NOT_CONSULTED,
                          "detail": "", "reason": reason})
 
+    # ---- the product's routes: answered by the surface discovery state this snapshot recorded,
+    # never by the test-ecosystem detector. The detector asks whether a *test* suite could be
+    # parsed; the surface reader asks what the product exposes, and only its answer can say
+    # whether the routes the verdict rests on were read (TESTOPS-80 AC1). A snapshot written
+    # before the record existed renders no routes tag - "not recorded" is not "not consulted".
+    # One tag per case, not per claim: this reads only the snapshot's record and the analyser's
+    # needs, so appending it inside the claim loop below rendered it twice for a case with two
+    # claims and never for a case with none (TESTOPS-80 review, concern 1).
+    if examined and "code" in needs:
+        routes_tag = product_routes_tag(meta, product_repo)
+        if routes_tag is not None:
+            tags.append(routes_tag)
+
     # ---- kinds a claim links explicitly: an issue, a work item, a pipeline run, a document.
     for claim in claims:
         detail = claim.get("detail") or {}
@@ -709,16 +778,6 @@ def source_band(conn, row: dict, claims: list[dict]) -> dict:
                 continue
             tags.append({"kind": title, "name": entry.get("name") or url, "href": url,
                          "state": CONSULTED, "detail": "", "reason": ""})
-
-    # ---- the blind spot the band cannot draw: the product's routes, when the product is there
-    # but its ecosystem is one this build cannot read. It sits beside the evidence, dimmed.
-    ecosystems = meta.get("ecosystems")
-    product_eco = (ecosystems or {}).get("product") if isinstance(ecosystems, dict) else None
-    if examined and "code" in needs and isinstance(product_eco, dict) \
-            and product_eco.get("reason") and not product_eco.get("evidence"):
-        tags.append({"kind": "Product routes", "name": product_repo or "the product's routes",
-                     "href": "", "state": NOT_CONSULTED, "detail": "",
-                     "reason": product_eco["reason"]})
 
     sentence = None
     if not examined:

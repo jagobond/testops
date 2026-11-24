@@ -2,7 +2,7 @@
 id: TESTOPS-80
 title: The source band says the product's routes were not consulted while the verdict is resting on them
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-73, TESTOPS-72
 ---
