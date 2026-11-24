@@ -1,0 +1,174 @@
+{
+ "summary": {
+  "cases": 10,
+  "accepted": 2,
+  "accept_rate": 0.2,
+  "repaired_to_acceptance": 0,
+  "mean_tokens_in": 619.0,
+  "mean_tokens_out": 96.5,
+  "total_tokens_in": 6190,
+  "total_tokens_out": 965,
+  "total_wall_ms": 9225,
+  "model": "deepseek-flash"
+ },
+ "rows": [
+  {
+   "case": "case-restfulbooker-levels-20261124T123451-01",
+   "state": "fresh",
+   "accepted": true,
+   "repairs": 0,
+   "tokens_in": 1537,
+   "tokens_out": 307,
+   "wall_ms": 1983,
+   "call_wall_ms": 1968,
+   "violations": [],
+   "text": "The claim asserts that the user is redirected to Rooms Management Page, and the record says this is settled by the page the server sends. The rule found that the words name the page as served, so the assertion is about the page as served rather than about anything the browser decides. Because the run drives a browser, it pays for a browser that decides nothing extra, and the cheapest surface is the api while the levels the test reaches are ui. The proposed action is to rewrite the step \"user is redirected to Rooms Management Page\" to call the HTTP client instead of the browser. The product declares GET / and shares the word \"rooms\", but the assertion names no act this rule recognises, so a shared noun alone is not counted as a repeat. The record does not contain the act the assertion checks, so the reader would name that act or check this one by hand.",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is redirected to Rooms Management Page, and the record says this is settled by the page the server sends. The rule found that the words name the page as served, so the assertion is about the page as served rather than about anything the browser decides. Because the run drives a browser, it pays for a browser that decides nothing extra, and the cheapest surface is the api while the levels the test reaches are ui. The proposed action is to rewrite the step \\\"user is redirected to Rooms Management Page\\\" to call the HTTP client instead of the browser. The product declares GET / and shares the word \\\"rooms\\\", but the assertion names no act this rule recognises, so a shared noun alone is not counted as a repeat. The record does not contain the act the assertion checks, so the reader would name that act or check this one by hand.\", \"citations\": [{\"sentence\": 1, \"facts\": [\"claim:2398\"]}, {\"sentence\": 2, \"facts\": [\"claim:2398\"]}, {\"sentence\": 3, \"facts\": [\"claim:2398\"]}, {\"sentence\": 4, \"facts\": [\"claim:2398\"]}, {\"sentence\": 5, \"facts\": [\"claim:2398\", \"route:GET /\", \"reason:2398\"]}, {\"sentence\": 6, \"facts\": [\"claim:2398\", \"reason:2398\"]}]}"
+   ],
+   "detail": "deepseek-flash",
+   "cause": ""
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T123451-02",
+   "state": "failed_unavailable",
+   "accepted": false,
+   "repairs": 0,
+   "tokens_in": 1551,
+   "tokens_out": 199,
+   "wall_ms": 1764,
+   "call_wall_ms": 1750,
+   "violations": [],
+   "text": "",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is still on the Booking Management login page, and the record says this is settled by the page the server sends. The rule found that the words name the page as served, so the assertion is about the page as served, yet the run drives a browser and pays for a browser that decides nothing extra. The product declares the route POST /login, and it shares the word \\\"login\\\", but the assertion names no act this rule recognises, so a shared noun alone is not evidence that the product already does this and it is not counted as a repeat. The proposed action is to rewrite the step \\\"user is still on Booking Management login page\\\" to call the HTTP client instead of the browser. The record does not contain what the browser run actually observed, and the claim whose record this is does not say. The reader would act on the proposed rewrite, or name the act the assertion checks, or check this one by hand.\"}"
+   ],
+   "detail": "malformed",
+   "cause": "malformed"
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T123451-03",
+   "state": "failed_unavailable",
+   "accepted": false,
+   "repairs": 0,
+   "tokens_in": 1551,
+   "tokens_out": 146,
+   "wall_ms": 1515,
+   "call_wall_ms": 1500,
+   "violations": [],
+   "text": "",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is still on the Booking Management login page. The rule found that this assertion is settled by the page the server sends, because the words name the page as served. The test currently reaches the ui level, but the cheapest surface for this assertion is api. The product declares the route POST /login, and it shares the word \\\"login\\\", but the assertion names no act this rule recognises, so a shared noun alone is not counted as a repeat. The proposed action is to rewrite the step to call the HTTP client instead of the browser. The record does not contain the act the assertion checks, so the reader should name that act or check this one by hand.\"}"
+   ],
+   "detail": "malformed",
+   "cause": "malformed"
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T123451-04",
+   "state": "fresh",
+   "accepted": true,
+   "repairs": 0,
+   "tokens_in": 1551,
+   "tokens_out": 313,
+   "wall_ms": 2687,
+   "call_wall_ms": 2672,
+   "violations": [],
+   "text": "The claim asserts that the user is still on Booking Management login page, and the record says this is settled by the page the server sends. The rule found that the words name the page as served, so the assertion is about the page as served, yet the run drives a browser and pays for a browser that decides nothing extra. The claim's verdict is review, and the proposed action is to rewrite the step to call the HTTP client instead of the browser. The cheapest surface is api, while the levels the test reaches are ui. The product declares POST /login, and it shares the word \"login\", but the assertion names no act this rule recognises, so a shared noun alone is not evidence that the product already does this and it is not counted as a repeat. The record does not contain the act the assertion checks, so the reader would name that act or check this one by hand.",
+   "raw_replies": [
+    "{\"explanation\": \"The claim asserts that the user is still on Booking Management login page, and the record says this is settled by the page the server sends. The rule found that the words name the page as served, so the assertion is about the page as served, yet the run drives a browser and pays for a browser that decides nothing extra. The claim's verdict is review, and the proposed action is to rewrite the step to call the HTTP client instead of the browser. The cheapest surface is api, while the levels the test reaches are ui. The product declares POST /login, and it shares the word \\\"login\\\", but the assertion names no act this rule recognises, so a shared noun alone is not evidence that the product already does this and it is not counted as a repeat. The record does not contain the act the assertion checks, so the reader would name that act or check this one by hand.\", \"citations\": [{\"sentence\": 1, \"facts\": [\"claim:2403\"]}, {\"sentence\": 2, \"facts\": [\"claim:2403\"]}, {\"sentence\": 3, \"facts\": [\"claim:2403\"]}, {\"sentence\": 4, \"facts\": [\"claim:2403\"]}, {\"sentence\": 5, \"facts\": [\"claim:2403\", \"route:POST /login\", \"reason:2403\"]}, {\"sentence\": 6, \"facts\": [\"claim:2403\", \"reason:2403\"]}]}"
+   ],
+   "detail": "deepseek-flash",
+   "cause": ""
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T123451-05",
+   "state": "failed_unavailable",
+   "accepted": false,
+   "repairs": 0,
+   "tokens_in": 0,
+   "tokens_out": 0,
+   "wall_ms": 202,
+   "call_wall_ms": 186,
+   "violations": [],
+   "text": "",
+   "raw_replies": [],
+   "detail": "http_429",
+   "cause": "http_429"
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T114627-01",
+   "state": "failed_unavailable",
+   "accepted": false,
+   "repairs": 0,
+   "tokens_in": 0,
+   "tokens_out": 0,
+   "wall_ms": 202,
+   "call_wall_ms": 187,
+   "violations": [],
+   "text": "",
+   "raw_replies": [],
+   "detail": "http_429",
+   "cause": "http_429"
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T114627-02",
+   "state": "failed_unavailable",
+   "accepted": false,
+   "repairs": 0,
+   "tokens_in": 0,
+   "tokens_out": 0,
+   "wall_ms": 187,
+   "call_wall_ms": 187,
+   "violations": [],
+   "text": "",
+   "raw_replies": [],
+   "detail": "http_429",
+   "cause": "http_429"
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T114627-03",
+   "state": "failed_unavailable",
+   "accepted": false,
+   "repairs": 0,
+   "tokens_in": 0,
+   "tokens_out": 0,
+   "wall_ms": 186,
+   "call_wall_ms": 186,
+   "violations": [],
+   "text": "",
+   "raw_replies": [],
+   "detail": "http_429",
+   "cause": "http_429"
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T114627-04",
+   "state": "failed_unavailable",
+   "accepted": false,
+   "repairs": 0,
+   "tokens_in": 0,
+   "tokens_out": 0,
+   "wall_ms": 202,
+   "call_wall_ms": 186,
+   "violations": [],
+   "text": "",
+   "raw_replies": [],
+   "detail": "http_429",
+   "cause": "http_429"
+  },
+  {
+   "case": "case-restfulbooker-levels-20261124T114627-05",
+   "state": "failed_unavailable",
+   "accepted": false,
+   "repairs": 0,
+   "tokens_in": 0,
+   "tokens_out": 0,
+   "wall_ms": 297,
+   "call_wall_ms": 297,
+   "violations": [],
+   "text": "",
+   "raw_replies": [],
+   "detail": "http_429",
+   "cause": "http_429"
+  }
+ ]
+}
