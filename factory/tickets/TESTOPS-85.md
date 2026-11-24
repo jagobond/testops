@@ -2,7 +2,7 @@
 id: TESTOPS-85
 title: Three refusals in the quoted-copy rule that should have been findings
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-82
 ---
