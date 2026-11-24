@@ -89,6 +89,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-71 | The guard goes quiet when git is down, and the URL rule cannot read a placeholder | F1 | ready | From the T69 review: unreadable git falls back to name-based pruning; `git readable` can lie; `?token=${TOKEN}` refused while `YOUR_KEY_HERE` counts as a secret |
 | TESTOPS-72 | The product is evidence: is this test repeating the developer's work? | F1 | ready | Surfaces are discovered and never used. Match a browser claim to a product route by a meaningful word, record the evidence, publish `repeats product` - with a flip test proving the product alone changes the verdict |
 | TESTOPS-73 | The case page names what it examined: sources as linked tags | F1 | ready | Put examined sources (test repo at commit, product repo, Jira/ADO item, pipeline run) up front as linked tags; show unconsulted sources and the test-only case explicitly |
+| TESTOPS-74 | The Java reader drops an inherited prefix and invents a route from a constant | F1 | ready | From the T70 review: parent `@RequestMapping` prefix lost, `@GetMapping(Paths.BOOKING)` becomes `GET /`; also "items" undefined in the assessment sentence |
 
 |----|-------|---------|--------|------|
 

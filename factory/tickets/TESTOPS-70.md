@@ -2,7 +2,7 @@
 id: TESTOPS-70
 title: A Java product reader - Spring routes and what each one claims
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-41
 ---
