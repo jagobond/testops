@@ -69,7 +69,7 @@ def _repo():
 
 def test_the_collector_records_every_file_it_refused_with_the_reason_and_kind(monkeypatch):
     _fake_github(monkeypatch, [
-        _blob("src/App.java"),
+        _blob("src/App.kt"),
         _blob("steps/Steps.cs"),
         _blob("features/one.feature"),
         _blob("node_modules/pkg/index.js"),
@@ -83,7 +83,7 @@ def test_the_collector_records_every_file_it_refused_with_the_reason_and_kind(mo
     refused = {(entry.reason, entry.kind): entry.files for entry in collected.skipped}
 
     # Every way out of the tree but "fetched" is recorded, with its own reason.
-    assert refused[(github.UNSUPPORTED, ".java")] == ("src/App.java",)
+    assert refused[(github.UNSUPPORTED, ".kt")] == ("src/App.kt",)
     assert refused[(github.SIZE_CAP, ".cs")] == ("huge/big.cs",)
     assert refused[(github.IGNORE, "/node_modules/")] == ("node_modules/pkg/index.js",)
     assert refused[(github.IGNORE, "/bin/")] == ("bin/run.cs",)
@@ -91,36 +91,37 @@ def test_the_collector_records_every_file_it_refused_with_the_reason_and_kind(mo
     assert refused[(github.UNSUPPORTED, "(no suffix)")] == ("README",)
 
     # And a file it did not read is not a file it counted.
-    assert "src/App.java" not in collected.files
+    assert "src/App.kt" not in collected.files
     assert sum(collected.counts.values()) == len(collected.files) == 2
     assert collected.counts == {sources.TEST_CODE: 2}
 
     record = collected.record()
-    assert {entry["kind"] for entry in record["skipped"]} >= {".java", ".cs"}
-    assert next(entry for entry in record["skipped"] if entry["kind"] == ".java")["count"] == 1
+    assert {entry["kind"] for entry in record["skipped"]} >= {".kt", ".cs"}
+    assert next(entry for entry in record["skipped"] if entry["kind"] == ".kt")["count"] == 1
 
 
 # --------------------------------------------------------------------------- AC6: the list is data
 
 def test_the_kind_list_is_configuration_and_whatever_it_holds_the_rest_is_reported(monkeypatch):
-    entries = [_blob("src/App.java"), _blob("src/App.kt"), _blob("steps/Steps.cs")]
+    entries = [_blob("src/App.kt"), _blob("src/App.scala"), _blob("steps/Steps.cs")]
     monkeypatch.setattr(github, "config", config)
     _fake_github(monkeypatch, entries)
 
     before = github.collect(_repo(), "token", commit="c" * 40, role="product")
-    assert "src/App.java" not in before.files
+    assert "src/App.kt" not in before.files
     assert {entry.kind for entry in before.skipped if entry.reason == github.UNSUPPORTED} == \
-        {".java", ".kt"}
+        {".kt", ".scala"}
 
     # Widening the list is a change to data. No collector code moves.
-    widened = config.FILE_KINDS + (config.FileKind(".java", "source"),)
+    widened = config.FILE_KINDS + (config.FileKind(".kt", "source"),)
     monkeypatch.setattr(config, "FILE_KINDS", widened)
     after = github.collect(_repo(), "token", commit="c" * 40, role="product")
 
-    assert "src/App.java" in after.files
-    # The product arm's `.java` is now product code; nothing about `.kt` stopped being reported.
+    assert "src/App.kt" in after.files
+    # The product arm's `.kt` is now product code; nothing about `.scala` stopped being reported.
     assert after.counts[sources.CODE] == 1
-    assert [entry.files for entry in after.skipped if entry.kind == ".kt"] == [("src/App.kt",)]
+    assert [entry.files for entry in after.skipped if entry.kind == ".scala"] == \
+        [("src/App.scala",)]
 
 
 # --------------------------------------------------------------------------- AC2: three states
@@ -182,18 +183,19 @@ def test_a_capability_that_could_not_be_read_never_carries_a_count():
 
 def test_a_boundary_in_a_language_the_reader_cannot_parse_is_not_assessable():
     discovery = surface_discovery.discover({
-        "auth/src/main/java/AuthController.java": "class A {}",
-        "booking/src/main/java/BookingController.java": "class B {}",
+        "auth/src/main/kotlin/AuthController.kt": "class A",
+        "booking/src/main/kotlin/BookingController.kt": "class B",
         "assets/src/app/page.tsx": "export default 1",
     })
 
     assert discovery.state == surface_discovery.NOT_ASSESSABLE
     assert discovery.surfaces == ()
     assert "Python" in discovery.reason and ".py" in discovery.reason
-    assert "2 .java" in discovery.reason, discovery.reason
+    assert "Java" in discovery.reason and ".java" in discovery.reason
+    assert "2 .kt" in discovery.reason, discovery.reason
     record = discovery.record()
     assert record["state"] == "not_assessable" and record["surfaces"] == 0
-    assert {"suffix": ".java", "count": 2} in record["languages"]
+    assert {"suffix": ".kt", "count": 2} in record["languages"]
 
 
 def test_python_the_reader_did_read_and_that_holds_no_surface_is_a_real_zero():
@@ -246,10 +248,10 @@ def _levels_run(monkeypatch, tmp_path, *, product_files, product_skipped):
     return result, real_connect(path)
 
 
-def test_a_java_product_run_says_which_files_it_skipped_and_whose_code_it_did_not_read(
+def test_a_kotlin_product_run_says_which_files_it_skipped_and_whose_code_it_did_not_read(
         monkeypatch, tmp_path):
-    skipped = (github.Skipped(github.UNSUPPORTED, ".java",
-                              tuple(f"auth/src/main/java/C{number}.java" for number in range(142))),)
+    skipped = (github.Skipped(github.UNSUPPORTED, ".kt",
+                              tuple(f"auth/src/main/kotlin/C{number}.kt" for number in range(142))),)
     result, conn = _levels_run(monkeypatch, tmp_path, product_files={}, product_skipped=skipped)
     try:
         run = queries.run_read(conn, result.run_id)
@@ -262,16 +264,16 @@ def test_a_java_product_run_says_which_files_it_skipped_and_whose_code_it_did_no
 
     sentence = run["assessment"]["sentence"]
     assert run["assessment"]["state"] == sources.NOT_ASSESSABLE
-    assert "142 .java files" in sentence
+    assert "142 .kt files" in sentence
     assert "no product code file was fetched" in sentence
     assert "test code was consulted and returned 2 items" in sentence
 
     # The skipped files are named in the record, not just counted.
     code = next(entry for entry in meta["sources"]["github"]["readings"]
                 if entry["capability"] == "code")
-    java = next(entry for entry in code["skipped"] if entry["kind"] == ".java")
-    assert java["count"] == 142
-    assert java["files"][0] == "auth/src/main/java/C0.java"
+    kotlin = next(entry for entry in code["skipped"] if entry["kind"] == ".kt")
+    assert kotlin["count"] == 142
+    assert kotlin["files"][0] == "auth/src/main/kotlin/C0.kt"
 
     # AC3's stats: zero surfaces, and the reason it is zero.
     assert result.stats["surfaces"] == 0

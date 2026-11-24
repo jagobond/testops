@@ -101,11 +101,14 @@ FILE_KINDS: tuple[FileKind, ...] = (
              note="MSBuild project file: read for its exclusion patterns, an artefact of its arm"),
     FileKind(".feature", "feature", sources.TEST_CODE),
     FileKind(".py", "source",
-             note="the only source kind declared: product code in the product arm, test code in "
-                  "the test arm"),
+             note="a source kind: product code in the product arm, test code in the test arm"),
     FileKind(".cs", "stepdef", sources.TEST_CODE),
     FileKind(".ts", "stepdef", sources.TEST_CODE),
     FileKind(".js", "stepdef", sources.TEST_CODE),
+    # TESTOPS-70: a kind is fetched because a reader reads it. The surface reader now parses Java
+    # (Spring mappings), so `.java` is no longer a file this collector drops from a product.
+    FileKind(".java", "source",
+             note="product code in the product arm, test code in the test arm, like `.py`"),
 )
 
 # Paths the collector refuses on purpose. Not the same as "a kind it does not read": these are

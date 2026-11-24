@@ -20,6 +20,10 @@ reason and the kind:
 The kind list is configuration. A longer list is not the fix: the fix is that this module reports
 what fell outside whatever list it was given, so a repository the tool cannot read says so instead of
 returning a small number that looks like a reading.
+
+TESTOPS-70 added ``.java`` to that list, because a reader now parses it. The paragraph above is
+still the rule: the list is wider by one entry, and every file outside it - ``.kt``, ``.scala``,
+``.sql`` - is still reported with its reason and its count.
 """
 from __future__ import annotations
 
