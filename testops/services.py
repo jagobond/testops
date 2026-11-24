@@ -81,8 +81,11 @@ _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 #
 #   * **shape-only** - no vocabulary is read at all: the PEM block, the JWT, the known issued-token
 #     prefixes (with their real bodies and truncations), the base64/entropy floor, and the inline
-#     password in a URL (`scheme://user:secret@host`, TESTOPS-68 AC3). These fire on a name nobody
-#     has listed, which is why they are the floor this screen stands on;
+#     password in a URL (`scheme://user:secret@host`, TESTOPS-68 AC3, including its percent-encoded
+#     and whitespace-split spellings - TESTOPS-69 residual 2). These fire on a name nobody has
+#     listed, which is why they are the floor this screen stands on. A password in a URL's *query*
+#     string (`?password=x`) is the one member of the floor that reads a parameter *name*: it is
+#     caught beside a shape rule, never instead of one, and it says so here;
 #   * **vocabulary-dependent** - a credential word has to be known first: the `name=value` pair whose
 #     name is a strong or context word, the instance rule for a determiner-marked name, the
 #     qualification rule for `key`, and the bare `key` pair. They catch what the words name, and
@@ -136,12 +139,28 @@ _CONTEXT_PAIR = re.compile(rf"(?i)(?<![A-Za-z0-9])({_CONTEXT_WORDS})[ \t]*[:=][ 
 #
 # TESTOPS-68 AC1 states the distinguishing rule exactly: a bare key pair is refused where it *begins
 # a line* of configuration - at the start of the value, after a newline (with optional indentation),
-# or after a separator such as `;` or `,` - and accepted where it stands inside a sentence. The
-# lookbehind therefore excludes horizontal whitespace only (space and tab), so a preceding newline is
-# a line boundary while "the key: it is in the vault" is prose; `[ \t]*` after the boundary lets an
-# indented settings line be read as a line. It is a line-boundary rule, not a wider whitespace class:
-# allowing any whitespace in the lookbehind is what accepted `auth = none\nkey = hunter2`.
-_BARE_KEY_PAIR = re.compile(r"(?im)(?:^|(?<=[^A-Za-z0-9_ \t]))[ \t]*keys?[ \t]*[:=][ \t]*"
+# or after a separator such as `;`, `,` or a tab - and accepted where it stands inside a sentence. A
+# space is the only horizontal character that occurs inside English prose, so a space is the one that
+# does not license the boundary; the lookbehind therefore excludes space and the word characters and
+# nothing else, so a newline and a tab are both boundaries while "the key: it is in the vault" is
+# prose. `[ \t]*` after the boundary lets an indented settings line be read as a line. It is a
+# line-boundary rule, not a wider whitespace class: allowing any whitespace in the lookbehind is what
+# accepted `auth = none\nkey = hunter2`.
+#
+# TESTOPS-69 AC2 decides the tab on purpose: a tab IS a line boundary. A tab-separated line is a
+# configuration row in every tab-separated format this product is configured from, and a tab between
+# two words is a table cell separator rather than the space that joins a sentence - so `x\tkey =
+# hunter2` is a settings line with a row label in front of it, not prose. Before this ticket the tab
+# sat in the lookbehind's exclusion class by accident (it was listed with the space) and licensed
+# nothing; the accident is now a stated rule, pinned in both directions.
+#
+# A stated limit, named rather than silently absorbed (TESTOPS-69 residual 6): because the rule is
+# positional, a *wrapped* prose sentence whose next line begins `Key:` - "the password is in the
+# vault\nKey: it is in the vault" - is read as configuration. Nothing in the string distinguishes a
+# wrapped continuation from a second settings line: the line break is the only evidence there is, and
+# the rule reads it the loud way on purpose (a settings line nobody meant is refused, never the other
+# way round). A reader who meets a refusal for a sentence they wrapped knows why from this paragraph.
+_BARE_KEY_PAIR = re.compile(r"(?im)(?:^|(?<=[^A-Za-z0-9_ ]))[ \t]*keys?[ \t]*[:=][ \t]*"
                             r"(?P<value>[^\s,;]+)")
 # The key family as a *name*: the spellings AC3 normalises to one reading.
 _KEY_FAMILY = re.compile(r"(?i)^(?:keys?|apikeys?|api[ _-]?keys?|apikey|accesskeys?|sshkeys?)$")
@@ -161,7 +180,33 @@ _REFERENCE_VALUE = re.compile(
 # `dsn=postgres://db.example/qa` and `cert=/etc/ssl/ca.pem` are references. TESTOPS-68 AC3: this is a
 # **floor**, not a gate - it is checked anywhere in a value, beside a credential word or without one,
 # because a password in a URL is a shape that needs nobody to have thought of the word `dsn`.
-_INLINE_PASSWORD = re.compile(r"(?i)://[^/@\s]*:[^/@\s]*@")
+#
+# TESTOPS-69 residual 2: the shape is not one line. Three spellings are read, all of them the same
+# statement - "a secret is written into this address":
+#
+#   * `scheme://user:secret@host`, the plain form;
+#   * `scheme://user%3Asecret@host`, the same userinfo with the ':' percent-encoded (a checklist that
+#     percent-encodes reserved characters writes the password this way, and `%3A` is the colon);
+#   * `scheme://user : secret @host`, the same userinfo split by whitespace (a copied settings table
+#     wraps at the spaces, and the colons and '@' are still the userinfo's own);
+#
+# and the query string beside them: `postgres://app@db/qa?password=x` puts the secret in the query,
+# under a name that says what it is. That one is vocabulary-dependent only in the narrow sense that
+# the *name* is read; the rule names its own parameter list and never needs the word `dsn`.
+# What is not claimed, and was not before: a bare `user@host` with nothing after a colon is a user
+# name, not a password; a percent-encoded *whole* URL is not decoded by this screen; and a space
+# inside the password itself is not read, because a space there means the value is no longer one
+# address - the whitespace form below is whitespace *around* the ':' and '@', which is what a wrapped
+# settings table produces.
+_INLINE_PASSWORD = re.compile(
+    r"(?i)[a-z][a-z0-9+.\-]*://\s*"
+    r"(?:[^\s/@]*%3[aA][^\s/@]*@|[^\s/:@]+\s*:\s*[^\s/@]*\s*@)")
+# A credential carried in a URL's query string. `?password=x` and `&token=abc123` are the secret in
+# the address, in the shape a database URL or a copied callback URL really uses; the value must be a
+# literal - `?token=${TOKEN}` names the environment and stays configuration.
+_URL_QUERY_PASSWORD = re.compile(
+    r"(?i)[?&](?:passwords?|passwd|pwd|secrets?|tokens?|api[_-]?keys?|access[_-]?keys?|"
+    r"client[_-]?secrets?|authorization)=\s*(?P<value>[^&\s#]+)")
 
 
 def _is_reference(value: str) -> bool:
@@ -630,6 +675,14 @@ def _looks_like_secret(value: str) -> str | None:
     if _INLINE_PASSWORD.search(plain):
         return ("it embeds a password in a URL: the 'scheme://user:password@host' form carries the "
                 "credential inside the address")
+    # TESTOPS-69 residual 2: the query string is the other half of the same floor -
+    # `postgres://app@db/qa?password=x` writes the secret into the address under a name that says
+    # what it is. The reason names the shape, never the value.
+    for query in _URL_QUERY_PASSWORD.finditer(plain):
+        if _is_reference(query.group("value")):
+            continue
+        return ("it embeds a password in a URL: a query parameter under a credential name "
+                "carries the credential inside the address")
     # 1. A pasted `name=value` (or `name: value`) pair: the shape a credential arrives in. The reason
     #    names the field, never the value. TESTOPS-65 AC4: a key-family name whose value is a slot
     #    reference (`${API_KEY}`, `from-env`, `os.environ[...]`) names where the credential lives and

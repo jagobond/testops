@@ -40,6 +40,16 @@ Policy-ignored paths (TESTOPS-67 AC1):
   in the ordinary classes therefore never means "0 files where the guard does not look": the ignored
   count is printed beside it.
 
+The ignore policy is about *churn*, not about *names* (TESTOPS-69 residuals 4 and 5). A path the
+checkout **tracks** - one the index records or a commit's tree holds - is repository content whatever
+it is called, so it is never pruned and never ignored: a committed ``build/gen.txt``, a tracked
+``*.pyc`` and a tracked file under ``.venv/`` are walked into the ordinary snapshot and attributed
+exactly like any other file. A commit made during the run that adds one is reported as added by that
+commit; a tracked artefact whose bytes changed with no commit accounting for it fails. Only an
+**untracked** path is covered by the ignore policy, because only an untracked path is what a build or
+a cache can create. And a path that becomes tracked mid-run leaves the ignored channel: its recorded
+change is attributed in the ordinary class, not counted twice and not reported as ignore-policy churn.
+
 Digest alphabets (TESTOPS-67 AC3): a snapshot uses exactly one alphabet - git's blob sha, or a raw
 sha256 when git cannot be run. The two are never compared. If the baseline used blob digests and the
 comparison cannot, the report is unreadable, says the two snapshots are not comparable, and
@@ -122,22 +132,56 @@ def _blob_digests(root: Path, paths: list[str]) -> dict[str, str] | None:
     return dict(zip(paths, lines))
 
 
-def _walk(root: Path) -> tuple[list[str], list[str]]:
+def tracked_paths(root: Path = ROOT) -> frozenset[str]:
+    """Every path this checkout tracks now: the index, plus ``HEAD``'s tree (TESTOPS-69 AC4).
+
+    A tracked path is repository content by definition, so the walk below must not prune it by name.
+    When git cannot be read the set is what the index could offer (or empty), and the unreadable
+    class in the report says what was not attributed; an empty set is therefore a *smaller* promise,
+    never a licence to prune nothing.
+    """
+    repository = GitRepository(root)
+    state = repository.state()
+    paths = set(state.index)
+    tree = repository.commit_blobs(state.head)
+    if tree:
+        paths |= set(tree)
+    return frozenset(paths)
+
+
+def _walk(root: Path, tracked: frozenset[str] = frozenset()) -> tuple[list[str], list[str]]:
     """Normal paths and policy-ignored paths, relative to ``root``, both sorted and deterministic.
 
-    ``.git`` and ``.venv`` are pruned entirely. A policy-ignored directory is walked (so its
-    contents are visible and counted) and every path under it is classified as ignored; a ``.pyc``
-    file is ignored wherever it sits.
+    ``.git`` is always pruned and ``.venv`` is pruned unless a tracked path lives inside it. A
+    policy-ignored directory is walked (so its contents are visible and counted) and every *untracked*
+    path under it is classified as ignored; an untracked ``.pyc`` file is ignored wherever it sits. A
+    **tracked** path is never pruned and never ignored, whatever it is called (TESTOPS-69 AC4): it
+    belongs to the ordinary snapshot, so the guard attributes it like any other file.
     """
     normal: list[str] = []
     ignored: list[str] = []
+
+    def tracked_under(directory: Path) -> bool:
+        stem = directory.as_posix()
+        return any(path == stem or path.startswith(stem + "/") for path in tracked)
+
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in _EXCLUDED_DIRS)
         directory = Path(dirpath).relative_to(root)
+        kept: list[str] = []
+        for name in sorted(dirnames):
+            if name == ".git":
+                continue
+            child = (directory / name) if directory.parts else Path(name)
+            if name in _EXCLUDED_DIRS and not tracked_under(child):
+                continue
+            kept.append(name)
+        dirnames[:] = kept
         under_ignored_dir = any(part in _POLICY_IGNORED_DIRS for part in directory.parts)
         for name in sorted(filenames):
             relative = (directory / name).as_posix() if directory.parts else name
-            if under_ignored_dir or name.endswith(_POLICY_IGNORED_SUFFIXES):
+            if relative in tracked:
+                normal.append(relative)
+            elif under_ignored_dir or name.endswith(_POLICY_IGNORED_SUFFIXES):
                 ignored.append(relative)
             else:
                 normal.append(relative)
@@ -162,21 +206,32 @@ def _digest_paths(root: Path, paths: list[str]) -> Snapshot:
     return Snapshot(out, alphabet=BLOB_ALPHABET if use_blobs else RAW_ALPHABET)
 
 
-def repository_snapshot(root: Path = ROOT) -> Snapshot:
+def repository_snapshot(root: Path = ROOT, tracked: frozenset[str] | None = None) -> Snapshot:
     """Digest every file in the repo that the guard attributes: everything outside the ignored set.
 
     The digest is git's blob sha, so it can be compared directly with the blob an excusing commit
     holds for the path. A raw sha256 fallback is used only when git cannot be run, and the snapshot
     records which alphabet it used so a comparison can refuse an incomparable pair (TESTOPS-67 AC3).
     Comparing two snapshots detects an added, removed or modified file anywhere in the working tree,
-    which is what AC10 needs: a test may only write under pytest's ``tmp_path``.
+    which is what AC10 needs: a test may only write under pytest's ``tmp_path``. ``tracked`` is the
+    set of paths the checkout tracks; such a path is never pruned or ignored by name (TESTOPS-69 AC4),
+    and it is read from git when the caller does not already have it.
     """
-    return _digest_paths(root, _walk(root)[0])
+    if tracked is None:
+        tracked = tracked_paths(root)
+    return _digest_paths(root, _walk(root, tracked)[0])
 
 
-def repository_ignored_snapshot(root: Path = ROOT) -> Snapshot:
-    """Digest the policy-ignored paths the summary reports but does not attribute (TESTOPS-67 AC1)."""
-    return _digest_paths(root, _walk(root)[1])
+def repository_ignored_snapshot(root: Path = ROOT,
+                                tracked: frozenset[str] | None = None) -> Snapshot:
+    """Digest the *untracked* policy-ignored paths the summary reports but does not attribute.
+
+    TESTOPS-67 AC1 for the policy, TESTOPS-69 AC4 for its limit: a tracked path is never ignored, so
+    a committed ``build/gen.txt`` or ``*.pyc`` never appears here.
+    """
+    if tracked is None:
+        tracked = tracked_paths(root)
+    return _digest_paths(root, _walk(root, tracked)[1])
 
 
 def snapshot_difference(before: Mapping[str, tuple[int, str]],
@@ -227,6 +282,12 @@ class AttributionReport:
     working tree disagrees with the blob it holds. ``ignored_changed`` is policy-ignored paths that
     changed; they are reported and counted but never attributed or failed. ``not_comparable`` means
     the two snapshots used different digest alphabets, so no digest was compared.
+
+    ``git_readable`` is whether the guard could read what it needed from git - both ends of the run,
+    and (when ``HEAD`` moved) the two commit trees. It is carried in the summary of **every** run, on
+    a pass as well as a failure (TESTOPS-69 AC3), because the unreadable *count* is difference-driven:
+    a run in which git was never readable and nothing differed has no unreadable files to count, and
+    "0 unreadable files" would otherwise be the only thing said about a guard that proved nothing.
     """
 
     changed_by_commit: tuple[str, ...] = ()
@@ -242,6 +303,7 @@ class AttributionReport:
     not_comparable: bool = False
     head_before: str | None = None
     head_after: str | None = None
+    git_readable: bool = True
 
     @property
     def failures(self) -> tuple[str, ...]:
@@ -256,10 +318,13 @@ class AttributionReport:
 
         The policy-ignored count is always printed, including its "report-only: not attributed"
         wording, so a zero in the attributed classes cannot be read as "nothing changed anywhere we
-        did not look" (TESTOPS-67 AC1).
+        did not look" (TESTOPS-67 AC1). ``git readable: yes/no`` is printed in every run, pass or
+        failure, because a zero unreadable count cannot distinguish "nothing was unreadable" from
+        "nothing was read" (TESTOPS-69 AC3).
         """
         lines = [
             "write guard: "
+            f"git readable: {'yes' if self.git_readable else 'no'}; "
             f"{_count(self.explained_count, 'file')} changed by a commit during the run, "
             f"{_count(len(self.deleted_by_commit), 'file')} deleted by a commit during the run, "
             f"{_count(len(self.staged), 'staged but uncommitted change')}, "
@@ -341,7 +406,9 @@ def attribute_differences(before: Mapping[str, tuple[int, str]],
     explained, which is the loud direction. If the two snapshots used different digest alphabets,
     nothing is compared: the report is unreadable and says they are not comparable. ``before_ignored``
     and ``after_ignored`` are the policy-ignored snapshots; their differences are reported in
-    ``ignored_changed`` and are never attributed or failed.
+    ``ignored_changed`` and are never attributed or failed - except that a path the index or a commit
+    tree now tracks is not ignore-policy churn at all and is dropped from that channel, because it is
+    attributed in the ordinary classes (TESTOPS-69 residual 4).
     """
     difference = snapshot_difference(dict(before), dict(after))
     all_paths = sorted(set(difference["added"]) | set(difference["removed"])
@@ -361,7 +428,8 @@ def attribute_differences(before: Mapping[str, tuple[int, str]],
                     f"{baseline_alpha} digests and the comparison used {comparison_alpha} digests, "
                     "so no digest was compared and nothing was attributed to a commit"),
                 head_before=before_state.head,
-                head_after=after_state.head)
+                head_after=after_state.head,
+                git_readable=before_state.readable and after_state.readable)
     ignored_difference = snapshot_difference(dict(before_ignored or {}), dict(after_ignored or {}))
     ignored_changed = tuple(sorted(set(ignored_difference["added"])
                                    | set(ignored_difference["removed"])
@@ -370,7 +438,8 @@ def attribute_differences(before: Mapping[str, tuple[int, str]],
         return AttributionReport(unreadable=tuple(all_paths),
                                  ignored_changed=ignored_changed,
                                  head_before=before_state.head,
-                                 head_after=after_state.head)
+                                 head_after=after_state.head,
+                                 git_readable=False)
 
     moved = bool(before_state.head and after_state.head and before_state.head != after_state.head)
     before_tree: Mapping[str, str] | None = commit_blobs(before_state.head) if moved else {}
@@ -385,7 +454,16 @@ def attribute_differences(before: Mapping[str, tuple[int, str]],
                 f"{_short(failed)} (ls-tree failed), so the difference is unreadable, not staged, "
                 "and no difference is attributed to a commit"),
             head_before=before_state.head,
-            head_after=after_state.head)
+            head_after=after_state.head,
+            git_readable=False)
+
+    # TESTOPS-69 residual 4: a path a commit or the index now tracks is repository content, so it
+    # belongs to the ordinary classes above and not to the ignore policy's report-only channel. The
+    # walk already declines to ignore it; this drops the last way it could still be *counted* as
+    # ignore-policy churn - a path that was untracked at the baseline and tracked by the comparison.
+    tracked_now = (set(before_state.index) | set(after_state.index)
+                   | set(before_tree or {}) | set(after_tree or {}))
+    ignored_changed = tuple(path for path in ignored_changed if path not in tracked_now)
 
     def digest_of(path: str) -> str:
         return after[path][1]

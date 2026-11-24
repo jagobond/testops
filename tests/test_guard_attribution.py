@@ -190,11 +190,12 @@ def test_an_empty_report_has_nothing_to_say():
     """The summary line is printed even when nothing changed, so a pass is legible as a pass."""
     report = AttributionReport()
     assert report.failures == ()
+    # TESTOPS-69 AC3: "git readable: yes/no" is in every summary, a pass included.
     assert report.summary() == [
-        "write guard: 0 files changed by a commit during the run, 0 files deleted by a commit "
-        "during the run, 0 staged but uncommitted changes, 0 files unexplained, 0 untracked "
-        "additions no commit accounts for, 0 unreadable files, 0 paths under policy-ignored "
-        "directories changed (report-only: not attributed)"
+        "write guard: git readable: yes; 0 files changed by a commit during the run, 0 files "
+        "deleted by a commit during the run, 0 staged but uncommitted changes, 0 files unexplained, "
+        "0 untracked additions no commit accounts for, 0 unreadable files, 0 paths under "
+        "policy-ignored directories changed (report-only: not attributed)"
     ]
 
 
