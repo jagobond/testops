@@ -98,6 +98,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-80 | The source band says the product's routes were not consulted while the verdict rests on them | F1 | ready | The band answers "were its routes read" with the test-ecosystem detector: it reports 0 of 3 ecosystems and 169 files while 142 .java files gave 25 routes |
 | TESTOPS-81 | A bare POST / is not a route a reader can act on - name the service | F1 | ready | Three services each declare POST /; a reader told to "call POST /" cannot, and two routes from different modules render identically |
 | TESTOPS-82 | A quoted entity is not display copy - copy needs a second mark | F1 | ready | From the T79 review: four quoted-entity assertions are refused and one is accused on the incidental word `list`; quoting is not a signal of copy |
+| TESTOPS-83 | The case page quotes its evidence but never shows the code | F1 | ready | No snippet of the test assertion or the product handler it is compared with; a reader must leave the page to check the tool's own claim |
 
 |----|-------|---------|--------|------|
 
