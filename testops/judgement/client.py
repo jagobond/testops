@@ -47,6 +47,12 @@ IMDS_RETRIES = 1
 DEFAULT_PROJECT = "testops-resource"
 DEFAULT_MODEL = "deepseek-flash"
 
+# TESTOPS-93. The hosted agent's own defaults: its name in the Foundry project, and how long the
+# page is willing to wait for it. Twenty seconds is the ticket's limit, and a page that has waited
+# that long says so rather than substituting the model route for it.
+DEFAULT_AGENT_NAME = "testops-narrator"
+DEFAULT_AGENT_TIMEOUT = 20.0
+
 
 def endpoint(environ: Mapping[str, str] | None = None, project: str | None = None) -> str:
     """The chat-completions URL for a Foundry project, or the deployment's own endpoint verbatim.
@@ -432,3 +438,220 @@ def extract_json(text: str) -> dict | None:
                 except json.JSONDecodeError:
                     start = None
     return None
+
+
+# ---------------------------------------------------------------- the hosted-agent route (TESTOPS-93)
+#
+# A second route to an explanation, and it is the agent itself rather than a model call this build
+# makes. ``testops-narrator`` is a hosted agent in the Foundry project, and it speaks OpenAI's
+# Responses shape at its own endpoint:
+#
+#   POST {project}/agents/{name}/endpoint/protocols/openai/responses?api-version=v1
+#   header: api-key: <the Cognitive Services key, from TESTOPS_AGENT_TOKEN only>
+#   body:   {"input": "<a JSON string holding {system, user}>"}
+#
+# The reply is ``output[].content[].text`` for the entries whose type is ``output_text``, and its
+# text is the agent's message followed by a final line ``USAGE {"prompt_tokens": n, ...}``. Those
+# token counts are the agent's own, which is the whole reason the ledger can price this route
+# honestly instead of estimating it.
+#
+# Nothing here decides whether the prose may be shown: this module returns text and its counts,
+# exactly as :func:`complete` does, and ``testops/judgement/agent.py`` holds both against the same
+# citation guard. The model route above is untouched.
+
+
+def agent_name(environ: Mapping[str, str] | None = None) -> str:
+    """The hosted agent's name, configuration rather than a constant (``TESTOPS_AGENT_NAME``)."""
+    env = os.environ if environ is None else environ
+    return (env.get("TESTOPS_AGENT_NAME") or "").strip() or DEFAULT_AGENT_NAME
+
+
+def agent_endpoint(environ: Mapping[str, str] | None = None,
+                   project: str | None = None) -> str:
+    """The hosted agent's responses URL, or a deployment's own verbatim.
+
+    ``TESTOPS_AGENT_ROUTE_ENDPOINT`` names a complete URL and wins, because a gateway may stand in
+    front of the project. It is deliberately a *different* variable from
+    :data:`ENDPOINT_VARIABLES`: those already name the model route's chat-completions address, and
+    giving one variable two meanings would let a deployment point both routes at one address and
+    believe it had configured two. The derived form is the project's own hosted-agent surface, which
+    the ticket verified live.
+    """
+    env = os.environ if environ is None else environ
+    explicit = (env.get(AGENT_ROUTE_VARIABLE) or "").strip()
+    if explicit:
+        return explicit
+    project = project or (env.get("TESTOPS_AGENT_PROJECT") or "").strip() or DEFAULT_PROJECT
+    return (f"https://{project}.services.ai.azure.com/api/projects/{project}"
+            f"/agents/{agent_name(env)}/endpoint/protocols/openai/responses?api-version=v1")
+
+
+# The agent endpoint's own override. Named in :func:`agent_endpoint`'s docstring; see the note there
+# on why it is not ``TESTOPS_AGENT_ENDPOINT``.
+AGENT_ROUTE_VARIABLE = "TESTOPS_AGENT_ROUTE_ENDPOINT"
+
+
+def agent_token(environ: Mapping[str, str] | None = None) -> str:
+    """The api-key for the hosted agent: ``TESTOPS_AGENT_TOKEN`` and nothing else (AC6).
+
+    The model route may also use a managed identity or the ``az`` CLI, because it takes an AAD
+    bearer token. A hosted agent's endpoint takes an ``api-key`` header, and the ticket's rule is
+    that this credential comes from the environment only - so this lookup does not fall back to
+    IMDS or to ``az``, and an unset variable means the route is unconfigured rather than that some
+    other identity was quietly tried.
+    """
+    env = os.environ if environ is None else environ
+    return (env.get("TESTOPS_AGENT_TOKEN") or "").strip()
+
+
+def agent_timeout(environ: Mapping[str, str] | None = None) -> float:
+    """How long the agent route waits, in seconds: 20 by default (``TESTOPS_AGENT_TIMEOUT``).
+
+    Configuration rather than a literal so a test can pin the timeout branch in a fraction of a
+    second instead of spending twenty, and so a deployment behind a slow gateway can say what it
+    is willing to wait.
+    """
+    env = os.environ if environ is None else environ
+    raw = (env.get("TESTOPS_AGENT_TIMEOUT") or "").strip()
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_AGENT_TIMEOUT
+    return value if value > 0 else DEFAULT_AGENT_TIMEOUT
+
+
+class AgentReplyError(Exception):
+    """A reply that arrived and could not be read: the kind names why, and detail is one line."""
+
+    def __init__(self, kind: str, detail: str = ""):
+        super().__init__(f"{kind}: {detail}".strip(": "))
+        self.kind = kind
+        self.detail = detail
+
+
+@dataclass(frozen=True)
+class AgentUsage:
+    """The agent's own accounting, from the ``USAGE`` line it ends its reply with.
+
+    ``present`` is a fact about the reply, not a default: an agent that answered without a USAGE
+    line still gave an explanation, and its tokens are unknown - zero here, never an estimate.
+    """
+
+    present: bool = False
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    model: str = ""
+    served_by: str = ""
+
+    @property
+    def tokens_in(self) -> int:
+        return int(self.prompt_tokens or 0)
+
+    @property
+    def tokens_out(self) -> int:
+        return int(self.completion_tokens or 0)
+
+
+def split_usage(text: str) -> tuple[str, AgentUsage]:
+    """``(message text, usage)``: the reply with its final ``USAGE {...}`` line taken off.
+
+    The line is read only where it is the *last* line, because that is where the agent puts it. A
+    reply whose USAGE line is unreadable is still an answer: the text survives, the counts are
+    honestly absent, and the ledger shows zero rather than a number nobody measured.
+    """
+    lines = str(text or "").splitlines()
+    for index in range(len(lines) - 1, -1, -1):
+        line = lines[index].strip()
+        if not line:
+            continue
+        if not line.startswith("USAGE"):
+            break
+        payload = line[len("USAGE"):].strip()
+        try:
+            value = json.loads(payload)
+        except (ValueError, TypeError):
+            break
+        if not isinstance(value, dict):
+            break
+        try:
+            usage = AgentUsage(
+                present=True,
+                prompt_tokens=int(value.get("prompt_tokens") or 0),
+                completion_tokens=int(value.get("completion_tokens") or 0),
+                model=str(value.get("model") or ""),
+                served_by=str(value.get("served_by") or ""))
+        except (TypeError, ValueError):
+            break
+        return "\n".join(lines[:index]).rstrip(), usage
+    return str(text or "").strip(), AgentUsage()
+
+
+def read_agent_reply(payload) -> tuple[str, AgentUsage]:
+    """``(message text, usage)`` from an OpenAI-shaped responses body, or raise ``AgentReplyError``.
+
+    The text is every ``output[].content[]`` entry whose type is ``output_text``, in order. A body
+    with no such entry is ``missing_text``: the request was answered and the answer holds no
+    explanation, which is a fact the page has to carry rather than an empty block.
+    """
+    if not isinstance(payload, dict):
+        raise AgentReplyError("malformed_reply", "the body is not a JSON object")
+    texts: list[str] = []
+    for item in payload.get("output") or []:
+        if not isinstance(item, dict):
+            continue
+        for entry in item.get("content") or []:
+            if isinstance(entry, dict) and entry.get("type") == "output_text":
+                value = entry.get("text")
+                if isinstance(value, str) and value.strip():
+                    texts.append(value)
+    if not texts:
+        raise AgentReplyError("missing_text",
+                              "the reply held no output_text entry, so it has no explanation")
+    return split_usage("\n".join(texts))
+
+
+def agent_responses_url(endpoint_url: str, agent: str = "") -> str:
+    """The URL one agent request is sent to, from a configured endpoint.
+
+    ``TESTOPS_AGENT_ROUTE_ENDPOINT`` may name either the agent's own responses URL or the origin a
+    gateway stands in front of. A URL that carries a path is used verbatim - the deployment said
+    which surface it means - and an endpoint with no path (an origin such as a local stub, or a
+    project root) has the agent's own surface appended, which is the shape the ticket verified
+    live: ``/agents/{name}/endpoint/protocols/openai/responses?api-version=v1``.
+    """
+    split = urllib.parse.urlsplit(str(endpoint_url or ""))
+    if split.path not in ("", "/"):
+        return str(endpoint_url)
+    base = urllib.parse.urlunsplit((split.scheme, split.netloc, "", "", ""))
+    return (f"{base}/agents/{agent or DEFAULT_AGENT_NAME}"
+            f"/endpoint/protocols/openai/responses?api-version=v1")
+
+
+def complete_agent(system: str, user: str, *, endpoint_url: str, api_key: str,
+                   agent: str = "", timeout: float = DEFAULT_AGENT_TIMEOUT) -> Completion:
+    """One call to the hosted agent. Raises ``urllib`` errors and ``AgentReplyError``.
+
+    ``prompt_hash`` is computed the same way :func:`complete` computes it, so a ledger row can be
+    matched to the prompt that produced it whichever route wrote it. The api-key is placed in one
+    request header and is never part of a return value or an exception: the errors this function
+    raises carry a status or a kind, never the request.
+    """
+    chosen = agent or DEFAULT_AGENT_NAME
+    prompt = f"{system}\n\n{user}"
+    prompt_hash = hashlib.sha256(f"{prompt}\n--\n{chosen}".encode()).hexdigest()[:16]
+    body = json.dumps({"input": json.dumps({"system": system, "user": user})}).encode()
+    request = urllib.request.Request(
+        agent_responses_url(endpoint_url, chosen), data=body,
+        headers={"api-key": api_key, "Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        raw = response.read()
+    try:
+        payload = json.loads(raw)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise AgentReplyError("malformed_reply",
+                              f"the reply was not JSON ({type(exc).__name__})") from None
+    text, usage = read_agent_reply(payload)
+    if not text:
+        raise AgentReplyError("missing_text", "the reply's output_text was blank")
+    return Completion(text=text, model=usage.model or chosen, prompt_hash=prompt_hash,
+                      tokens_in=usage.tokens_in, tokens_out=usage.tokens_out)

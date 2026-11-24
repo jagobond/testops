@@ -50,7 +50,31 @@ from . import client
 
 VARIANT_ON = "on"
 VARIANT_OFF = "off"
-VARIANTS = (VARIANT_OFF, VARIANT_ON)
+# TESTOPS-93. A third page: the explanation is written by the hosted Foundry agent rather than by
+# this build's own model call. It is a variant of its own because the route is the experiment - a
+# reader asking for it gets the same block, labelled with the route that served it, and the ledger
+# keeps the two routes apart so cost and votes can be put side by side.
+VARIANT_FOUNDRY = "foundry"
+VARIANTS = (VARIANT_OFF, VARIANT_ON, VARIANT_FOUNDRY)
+
+# The two routes to an explanation. A row in the ledger always names one of these, never neither.
+ROUTE_MODEL = "model"
+ROUTE_FOUNDRY = "foundry"
+ROUTES = (ROUTE_MODEL, ROUTE_FOUNDRY)
+
+# How a route is named on the page. AC1: the two explanations must not pretend to be the same one.
+SERVED_BY = {ROUTE_MODEL: "model-route", ROUTE_FOUNDRY: "foundry-hosted-agent"}
+
+# AC4. A fallback from the agent route to this build's own model call happens only when a deployment
+# asks for it by setting this variable to ``model``. Anything else - unset, empty, a typo - means the
+# honest failure sentence, because a silent substitution would make the A/B a lie.
+FALLBACK_VARIABLE = "TESTOPS_AGENT_FALLBACK"
+FALLBACK_MODEL = "model"
+
+# The causes a fallback is offered for: the agent could not be reached, or did not answer in time.
+# A rejected reply is not a transport failure and is never re-asked of another route - that would be
+# buying a second opinion about the same record, which this feature does not claim to do.
+FALLBACK_CAUSES = ("unreachable", "timeout")
 
 # What a view actually carried, as the ledger's word for it. A view is in exactly one of these
 # states, and the report breaks every figure down by state so that a cached page is never counted as
@@ -131,16 +155,31 @@ Rules, all of them absolute:
 
 @dataclass(frozen=True)
 class Config:
-    """Where the agent talks, as what, with what credential. Never a credential value in a log."""
+    """Where the agent talks, as what, with what credential. Never a credential value in a log.
+
+    TESTOPS-93 adds the second route's coordinates beside the first. ``agent_token`` is the hosted
+    agent's api-key and is read from ``TESTOPS_AGENT_TOKEN`` only; ``token`` remains the model
+    route's bearer token and keeps its managed-identity fallback. They are separate fields because
+    they are separate credentials for separate endpoints, and one must not stand in for the other.
+    """
 
     project: str
     endpoint: str
     model: str
     token: str = ""
+    agent_name: str = client.DEFAULT_AGENT_NAME
+    agent_endpoint: str = ""
+    agent_token: str = ""
+    agent_timeout: float = client.DEFAULT_AGENT_TIMEOUT
+    fallback: str = ""
 
     @property
     def configured(self) -> bool:
         return bool(self.token)
+
+    @property
+    def foundry_configured(self) -> bool:
+        return bool(self.agent_token and self.agent_endpoint)
 
     @property
     def why_not(self) -> str:
@@ -148,6 +187,21 @@ class Config:
             return ""
         return ("The model-written explanation is not available: this deployment has no token from "
                 "TESTOPS_AGENT_TOKEN, a managed identity or the az CLI.")
+
+    @property
+    def foundry_why_not(self) -> str:
+        if not self.agent_token:
+            return ("The Foundry-hosted explanation is not available: this deployment has no "
+                    "credential in TESTOPS_AGENT_TOKEN.")
+        if not self.agent_endpoint:
+            return ("The Foundry-hosted explanation is not available: this deployment has no agent "
+                    "endpoint.")
+        return ""
+
+    @property
+    def fallback_to_model(self) -> bool:
+        """Whether a failed agent route may be answered by this build's own model call (AC4)."""
+        return self.fallback == FALLBACK_MODEL and self.configured
 
 
 @dataclass
@@ -165,16 +219,36 @@ class Outcome:
     call_id: int | None = None
     violations: list[str] = field(default_factory=list)
     repairs: int = 0                # how many repair rounds this view paid for
+    # TESTOPS-93. Which route produced this, and - when a fallback was explicitly allowed - which
+    # route's failure the reader is being told about. Neither defaults to a guess: the model route
+    # is the default because every caller before this ticket was that route.
+    route: str = ROUTE_MODEL
+    fallback_from: str = ""         # the route that failed, when the model route was substituted
+    fallback_cause: str = ""        # why it failed, in the ledger's word (unreachable, timeout)
+    agent_name: str = ""            # the hosted agent's name, when the agent route produced this
 
     @property
     def served(self) -> bool:
         return self.state in (STATE_FRESH, STATE_FRESH_REPAIRED, STATE_CACHED)
 
     @property
+    def served_by(self) -> str:
+        """How the route that produced this outcome is named on the page (AC1)."""
+        return SERVED_BY.get(self.route, self.route)
+
+    @property
     def sentence(self) -> str:
         """The one sentence the page shows instead of an explanation. Empty when one was served."""
         if self.served:
             return ""
+        if self.route == ROUTE_FOUNDRY:
+            if self.cause == "not_configured" and self.detail:
+                # The configuration's own explanation, which names which setting is absent: the
+                # credential and the endpoint fail the same way to a reader and differently to an
+                # operator, so the sentence has to be the specific one.
+                return self.detail
+            route_sentences = REFUSALS_FOUNDRY if not self.fallback_from else REFUSALS
+            return route_sentences.get(self.cause) or REFUSALS["unexpected"]
         return REFUSALS.get(self.cause) or REFUSALS["unexpected"]
 
 
@@ -225,7 +299,12 @@ def config(environ: Mapping[str, str] | None = None, now: float | None = None) -
     clock = time.monotonic() if now is None else now
     token, _source = _resolve(env, clock)
     return Config(project=project, endpoint=client.endpoint(env, project),
-                  model=client.model_name(env), token=token)
+                  model=client.model_name(env), token=token,
+                  agent_name=client.agent_name(env),
+                  agent_endpoint=client.agent_endpoint(env, project),
+                  agent_token=client.agent_token(env),
+                  agent_timeout=client.agent_timeout(env),
+                  fallback=(env.get(FALLBACK_VARIABLE) or "").strip().lower())
 
 
 # How each source of a token is named to a reader.
@@ -256,6 +335,15 @@ def diagnosis(environ: Mapping[str, str] | None = None, now: float | None = None
         "token_source": source,
         "imds": imds,
         "az": az,
+        # TESTOPS-93: the hosted agent's coordinates, and whether a credential was supplied for it.
+        # ``agent_token`` is a yes/no like ``environment_token``: the value never enters this dict.
+        "agent_name": client.agent_name(env),
+        "agent_endpoint": client.agent_endpoint(env, project),
+        "agent_route_variable": (client.AGENT_ROUTE_VARIABLE
+                                 if (env.get(client.AGENT_ROUTE_VARIABLE) or "").strip() else ""),
+        "agent_token": bool(client.agent_token(env)),
+        "agent_timeout": client.agent_timeout(env),
+        "agent_fallback": (env.get(FALLBACK_VARIABLE) or "").strip().lower(),
     }
 
 
@@ -1027,11 +1115,11 @@ def flag_values(conn) -> list[dict]:
 
 
 def _record_call(conn, *, case_id, variant, model, prompt_hash, tokens_in, tokens_out,
-                 cached, wall_ms, outcome, cause) -> int:
+                 cached, wall_ms, outcome, cause, route=ROUTE_MODEL) -> int:
     cur = conn.execute(
-        "INSERT INTO agent_call (case_id, variant, model, prompt_hash, tokens_in, tokens_out,"
-        " cached, wall_ms, outcome, cause) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (case_id, variant, model, prompt_hash, int(tokens_in), int(tokens_out),
+        "INSERT INTO agent_call (case_id, variant, route, model, prompt_hash, tokens_in, tokens_out,"
+        " cached, wall_ms, outcome, cause) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (case_id, variant, route, model, prompt_hash, int(tokens_in), int(tokens_out),
          1 if cached else 0, int(wall_ms), outcome, cause[:200]))
     conn.commit()
     return int(cur.lastrowid)
@@ -1081,6 +1169,23 @@ REFUSALS = {
     "unexpected": "The explanation could not be produced, so nothing was added.",
 }
 
+# TESTOPS-93 AC3. The agent route fails in its own kinds, and each is a sentence a reader can act on.
+# The *state names* are the same ones the model route uses - failed_unavailable, failed_unconfigured,
+# rejected - so the ledger and the report read one vocabulary, while the sentence says which route
+# did not answer. A missing credential is the model route's own sentence, because the reason is
+# identical: nothing was attempted.
+REFUSALS_FOUNDRY = {
+    "unreachable": ("The hosted Foundry agent could not be reached, so no explanation was added."),
+    "timeout": ("The hosted Foundry agent did not answer in time, so no explanation was added."),
+    "non_200": ("The hosted Foundry agent answered with an error, so no explanation was added."),
+    "missing_text": ("The hosted Foundry agent's reply held no explanation, so none was added."),
+    "malformed_reply": ("The hosted Foundry agent's reply could not be read, so no explanation "
+                        "was added."),
+    "rejected": "",           # filled in by the page, which names the offending fact
+    "no_finding": "This case raised no finding, so there was nothing for the agent to explain.",
+    "unexpected": "The explanation could not be produced, so nothing was added.",
+}
+
 
 def _record_unconfigured(conn) -> None:
     """Put today's cause in the ledger when a page finds it has no token (AC1).
@@ -1104,56 +1209,178 @@ def rejection_sentence(outcome: Outcome) -> str:
             f"to this page.")
 
 
-def explain_case(conn, record: dict, *, cfg: Config, completer=None,
-                 now: str | None = None, variant: str = VARIANT_ON) -> Outcome:
-    """Ask the model for one explanation of ``record``, or say in one cause why there is none.
+def cache_label(cfg: Config, route: str) -> str:
+    """The name an explanation is cached and ledgered under, per route.
 
-    The order matters: the cache is consulted first, so a repeat view costs nothing; the reply is
-    checked before it is stored, so a fabricated fact is never written down as an answer; and every
-    branch writes a ledger row, so ``/agent-report`` can weigh what was shown against what it cost.
+    The model route keeps the model's own name; the agent route is labelled by the route and the
+    agent that wrote it. The label is part of the prompt hash, so the two routes can never serve each
+    other's text: an explanation written by ``testops-narrator`` is not the same artefact as one
+    written by this build's own model call, even when both answer from the same record.
     """
+    if route == ROUTE_FOUNDRY:
+        return f"{ROUTE_FOUNDRY}/{cfg.agent_name}"
+    return cfg.model
+
+
+def describe_agent(environ: Mapping[str, str] | None = None,
+                   now: float | None = None) -> dict:
+    """The agent route's configuration as plain values, for ``/agent-check`` (AC6).
+
+    The credential is a yes/no: the value itself is never in this dictionary, so a page built from it
+    cannot print one.
+    """
+    env = os.environ if environ is None else environ
+    project = (env.get("TESTOPS_AGENT_PROJECT") or "").strip() or client.DEFAULT_PROJECT
+    return {"agent_name": client.agent_name(env),
+            "agent_endpoint": client.agent_endpoint(env, project),
+            "agent_route_variable": (client.AGENT_ROUTE_VARIABLE
+                                     if (env.get(client.AGENT_ROUTE_VARIABLE) or "").strip() else ""),
+            "agent_token": bool(client.agent_token(env)),
+            "agent_timeout": client.agent_timeout(env),
+            "agent_fallback": (env.get(FALLBACK_VARIABLE) or "").strip().lower()}
+
+
+def foundry_sentence(diag: dict) -> str:
+    """One sentence: whether the hosted agent would be asked right now, and if not, why."""
+    if diag.get("agent_token") and diag.get("agent_endpoint"):
+        return ("The Foundry-hosted agent would be asked right now: this process holds a credential "
+                "in TESTOPS_AGENT_TOKEN.")
+    if not diag.get("agent_token"):
+        return ("No explanation would be served by the Foundry-hosted agent: this deployment has no "
+                "credential in TESTOPS_AGENT_TOKEN.")
+    return ("No explanation would be served by the Foundry-hosted agent: this deployment has no "
+            "agent endpoint.")
+
+
+def failure_cause(route: str, exc: BaseException) -> str:
+    """The ledger's word for a transport failure, per route (AC3).
+
+    The two routes fail differently, so they are counted differently. The model route's causes are
+    the ones TESTOPS-88 recorded; the agent route reports ``unreachable``, ``timeout``, ``non_200`` or
+    a reply that could not be read, because those are the four things a hosted endpoint does.
+    """
+    if route != ROUTE_FOUNDRY:
+        if isinstance(exc, urllib.error.HTTPError):
+            return "http_429" if exc.code == 429 else f"http_{int(exc.code)}"
+        return "unreachable"
+    if isinstance(exc, urllib.error.HTTPError):
+        return "non_200"
+    if isinstance(exc, client.AgentReplyError):
+        return exc.kind
+    # A URLError means the request never got an answer: the connect was refused, the host was not
+    # found, or the connect itself timed out (Windows reports a refused loopback connect as a
+    # connect timeout when the deadline is short). Either way the endpoint was unreachable, which is
+    # a different fact from a request that reached the endpoint and waited too long - that one
+    # raises a bare TimeoutError while the response is being read.
+    if isinstance(exc, urllib.error.URLError):
+        return "unreachable"
+    reason = getattr(exc, "reason", None)
+    if isinstance(exc, TimeoutError) or isinstance(reason, TimeoutError):
+        return "timeout"
+    if "timed out" in str(exc).lower():
+        return "timeout"
+    return "unreachable"
+
+
+def _foundry_completer(cfg: Config):
+    """The ask callable the rest of this module speaks, backed by the hosted agent (AC1)."""
+
+    def ask(system, user, model, **kwargs):
+        return client.complete_agent(system, user, endpoint_url=cfg.agent_endpoint,
+                                     api_key=cfg.agent_token, agent=cfg.agent_name,
+                                     timeout=cfg.agent_timeout)
+
+    return ask
+
+
+def explain_case(conn, record: dict, *, cfg: Config, completer=None,
+                 now: str | None = None, variant: str = VARIANT_ON,
+                 route: str = ROUTE_MODEL) -> Outcome:
+    """Ask one route for one explanation of ``record``, or say in one cause why there is none.
+
+    TESTOPS-93: ``route`` selects the transport and nothing else. Both routes produce text and their
+    own token counts, and the same parser, the same citation guard, the same repair round and the
+    same ledger sit above them - so the agent's prose is held to exactly the standard the model
+    route's prose is held to (AC2). The route is stamped on the outcome once, in one place, so a
+    future early return cannot quietly claim to be the other route.
+    """
+    outcome = _explain_case(conn, record, cfg=cfg, completer=completer, now=now,
+                            variant=variant, route=route)
+    outcome.route = route
+    if route == ROUTE_FOUNDRY:
+        outcome.agent_name = cfg.agent_name
+    return outcome
+
+
+def _explain_case(conn, record: dict, *, cfg: Config, completer,
+                  now: str | None, variant: str, route: str) -> Outcome:
     case_id = str((record.get("case") or {}).get("id") or "")
-    model = cfg.model
+    model = cache_label(cfg, route)
     system, user, prompt_hash = prompt(record, model)
 
-    if not cfg.configured:
+    if route == ROUTE_FOUNDRY:
+        if not cfg.foundry_configured:
+            return Outcome(state=STATE_UNCONFIGURED, model=model, cause="not_configured",
+                           detail=cfg.foundry_why_not, prompt_hash=prompt_hash)
+    elif not cfg.configured:
         _record_unconfigured(conn)
         return Outcome(state=STATE_UNCONFIGURED, model=model, cause="not_configured",
                        detail=cfg.why_not, prompt_hash=prompt_hash)
 
-    hit = cached_explanation(conn, case_id, prompt_hash, model)
+    # The stored explanation is the model route's cache. The agent route always asks the agent: the
+    # ledger exists to price what the hosted agent actually cost, per call, and a cached page would
+    # report a route whose calls - and whose own USAGE counts - were never made.
+    hit = cached_explanation(conn, case_id, prompt_hash, model) if route != ROUTE_FOUNDRY else None
     if hit is not None:
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=0, tokens_out=0, cached=True,
-                               wall_ms=0, outcome="cached", cause="")
+                               wall_ms=0, outcome="cached", cause="", route=route)
         return Outcome(state=STATE_CACHED, text=hit["text"], model=model, prompt_hash=prompt_hash,
                        call_id=call_id)
 
-    ask = completer or client.complete
+    if completer is not None:
+        ask = completer
+    elif route == ROUTE_FOUNDRY:
+        ask = _foundry_completer(cfg)
+    else:
+        ask = client.complete
     started = time.monotonic()
     try:
         completion = ask(system, user, model, endpoint_url=cfg.endpoint, access_token=cfg.token)
     except urllib.error.HTTPError as exc:
         wall = int((time.monotonic() - started) * 1000)
-        cause = "http_429" if exc.code == 429 else f"http_{int(exc.code)}"
+        cause = failure_cause(route, exc)
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=0, tokens_out=0, cached=False,
-                               wall_ms=wall, outcome="error", cause=cause)
+                               wall_ms=wall, outcome="error", cause=cause, route=route)
         return Outcome(state=STATE_UNAVAILABLE, model=model, cause=cause, detail=cause,
                        prompt_hash=prompt_hash, call_id=call_id)
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         wall = int((time.monotonic() - started) * 1000)
+        cause_kind = failure_cause(route, exc)
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=0, tokens_out=0, cached=False,
-                               wall_ms=wall, outcome="error", cause="unreachable")
-        return Outcome(state=STATE_UNAVAILABLE, model=model, cause="unreachable",
+                               wall_ms=wall, outcome="error", cause=cause_kind, route=route)
+        return Outcome(state=STATE_UNAVAILABLE, model=model, cause=cause_kind,
                        detail=type(exc).__name__, prompt_hash=prompt_hash, call_id=call_id)
+    except client.AgentReplyError as exc:
+        # The hosted agent answered, and its answer held no explanation this build can read: a
+        # reply with no ``output_text``, or a body that was not JSON. That is a fact about the reply,
+        # not a transport failure, so it has its own cause and costs a ledger row like any other.
+        wall = int((time.monotonic() - started) * 1000)
+        cause_kind = exc.kind
+        call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
+                               prompt_hash=prompt_hash, tokens_in=0, tokens_out=0, cached=False,
+                               wall_ms=wall, outcome="error", cause=cause_kind, route=route)
+        return Outcome(state=STATE_UNAVAILABLE, model=model, cause=cause_kind,
+                       detail=exc.detail or cause_kind, prompt_hash=prompt_hash, call_id=call_id)
     except Exception as exc:  # noqa: BLE001 - a transport surprise is not a page crash
         wall = int((time.monotonic() - started) * 1000)
+        cause_kind = "unreachable"
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=0, tokens_out=0, cached=False,
-                               wall_ms=wall, outcome="error", cause="unreachable")
-        return Outcome(state=STATE_UNAVAILABLE, model=model, cause="unreachable",
+                               wall_ms=wall, outcome="error", cause=cause_kind, route=route)
+        return Outcome(state=STATE_UNAVAILABLE, model=model, cause=cause_kind,
                        detail=type(exc).__name__, prompt_hash=prompt_hash, call_id=call_id)
     wall = int((time.monotonic() - started) * 1000)
 
@@ -1169,28 +1396,31 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
         repairs = 1
         _record_call(conn, case_id=case_id, variant=variant, model=model,
                      prompt_hash=prompt_hash, tokens_in=tokens_in, tokens_out=tokens_out,
-                     cached=False, wall_ms=wall, outcome="error", cause=REPAIRABLE)
+                     cached=False, wall_ms=wall, outcome="error", cause=REPAIRABLE, route=route)
         repair_system, repair_user, repair_hash = citations_repair_prompt(
             record, model, reading.text, reading.fault)
         started = time.monotonic()
         try:
             completion = ask(repair_system, repair_user, model,
                              endpoint_url=cfg.endpoint, access_token=cfg.token)
-        except (urllib.error.HTTPError, urllib.error.URLError, OSError, TimeoutError):
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError, TimeoutError,
+                client.AgentReplyError) as exc:
             wall = int((time.monotonic() - started) * 1000)
+            cause_kind = failure_cause(route, exc)
             call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                    prompt_hash=repair_hash, tokens_in=0, tokens_out=0,
-                                   cached=False, wall_ms=wall, outcome="error", cause="unreachable")
-            return Outcome(state=STATE_UNAVAILABLE, model=model, cause="unreachable",
+                                   cached=False, wall_ms=wall, outcome="error", cause=cause_kind, route=route)
+            return Outcome(state=STATE_UNAVAILABLE, model=model, cause=cause_kind,
                            detail="unreachable", prompt_hash=prompt_hash,
                            tokens_in=tokens_in, tokens_out=tokens_out, call_id=call_id,
                            repairs=repairs)
-        except Exception:  # noqa: BLE001 - a transport surprise is not a page crash
+        except Exception as exc:  # noqa: BLE001 - a transport surprise is not a page crash
             wall = int((time.monotonic() - started) * 1000)
+            cause_kind = "unreachable"
             call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                    prompt_hash=repair_hash, tokens_in=0, tokens_out=0,
-                                   cached=False, wall_ms=wall, outcome="error", cause="unreachable")
-            return Outcome(state=STATE_UNAVAILABLE, model=model, cause="unreachable",
+                                   cached=False, wall_ms=wall, outcome="error", cause=cause_kind, route=route)
+            return Outcome(state=STATE_UNAVAILABLE, model=model, cause=cause_kind,
                            detail="unreachable", prompt_hash=prompt_hash,
                            tokens_in=tokens_in, tokens_out=tokens_out, call_id=call_id,
                            repairs=repairs)
@@ -1202,7 +1432,7 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
             call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                    prompt_hash=repair_hash, tokens_in=repair_in,
                                    tokens_out=repair_out, cached=False, wall_ms=wall,
-                                   outcome="error", cause="malformed")
+                                   outcome="error", cause="malformed", route=route)
             return Outcome(state=STATE_UNAVAILABLE, model=model, cause="malformed",
                            detail="malformed", prompt_hash=prompt_hash,
                            tokens_in=tokens_in, tokens_out=tokens_out, call_id=call_id,
@@ -1213,12 +1443,12 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
                                prompt_hash=repair_hash, tokens_in=repair_in,
                                tokens_out=repair_out, cached=False, wall_ms=wall,
                                outcome="rejected" if invented else "ok",
-                               cause=("rejected: " + invented[0]) if invented else "")
+                               cause=("rejected: " + invented[0]) if invented else "", route=route)
     elif reading.cause:
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=tokens_in,
                                tokens_out=tokens_out, cached=False, wall_ms=wall,
-                               outcome="error", cause=reading.cause)
+                               outcome="error", cause=reading.cause, route=route)
         return Outcome(state=STATE_UNAVAILABLE, model=model, cause=reading.cause,
                        detail=reading.cause, prompt_hash=prompt_hash,
                        tokens_in=tokens_in, tokens_out=tokens_out, call_id=call_id)
@@ -1230,7 +1460,7 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
                                prompt_hash=prompt_hash, tokens_in=tokens_in,
                                tokens_out=tokens_out, cached=False, wall_ms=wall,
                                outcome="rejected" if invented else "ok",
-                               cause=("rejected: " + invented[0]) if invented else "")
+                               cause=("rejected: " + invented[0]) if invented else "", route=route)
     # One repair round (AC3): the model is shown the exact violations and asked to change only those
     # sentences. The reply is checked again from scratch, so a repair buys nothing but a second
     # chance to satisfy the same check - it cannot relax it.
@@ -1241,19 +1471,22 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
         try:
             completion = ask(repair_system, repair_user, model,
                              endpoint_url=cfg.endpoint, access_token=cfg.token)
-        except (urllib.error.HTTPError, urllib.error.URLError, OSError, TimeoutError):
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError, TimeoutError,
+                client.AgentReplyError) as exc:
             # The repair could not be asked for. The original reply is still rejected, so the fallback
             # is the honest sentence - and the attempt is still a row in the ledger.
             wall = int((time.monotonic() - started) * 1000)
+            cause_kind = failure_cause(route, exc)
             call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                    prompt_hash=repair_hash, tokens_in=0, tokens_out=0,
-                                   cached=False, wall_ms=wall, outcome="error", cause="unreachable")
+                                   cached=False, wall_ms=wall, outcome="error", cause=cause_kind, route=route)
             break
-        except Exception:  # noqa: BLE001 - a transport surprise is not a page crash
+        except Exception as exc:  # noqa: BLE001 - a transport surprise is not a page crash
             wall = int((time.monotonic() - started) * 1000)
+            cause_kind = "unreachable"
             call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                    prompt_hash=repair_hash, tokens_in=0, tokens_out=0,
-                                   cached=False, wall_ms=wall, outcome="error", cause="unreachable")
+                                   cached=False, wall_ms=wall, outcome="error", cause=cause_kind, route=route)
             break
         wall = int((time.monotonic() - started) * 1000)
         repair_in, repair_out = int(completion.tokens_in or 0), int(completion.tokens_out or 0)
@@ -1263,7 +1496,7 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
             call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                    prompt_hash=repair_hash, tokens_in=repair_in,
                                    tokens_out=repair_out, cached=False, wall_ms=wall,
-                                   outcome="error", cause=cause)
+                                   outcome="error", cause=cause, route=route)
             break
         assert candidate is not None
         reply = candidate
@@ -1272,7 +1505,7 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
                                prompt_hash=repair_hash, tokens_in=repair_in,
                                tokens_out=repair_out, cached=False, wall_ms=wall,
                                outcome="rejected" if invented else "ok",
-                               cause=("rejected: " + invented[0]) if invented else "")
+                               cause=("rejected: " + invented[0]) if invented else "", route=route)
 
     if invented:
         return Outcome(state=STATE_REJECTED, model=model, cause="rejected", detail=invented[0],
@@ -1289,11 +1522,42 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
                    call_id=call_id, repairs=repairs)
 
 
+def explain_foundry(conn, record: dict, *, cfg: Config, completer=None,
+                    now: str | None = None) -> Outcome:
+    """The agent route, with the one substitution a deployment may explicitly ask for (AC4).
+
+    The hosted agent is asked first, always. Only when its failure is a transport one - it could not
+    be reached, or did not answer within the timeout - and only when the deployment set
+    ``TESTOPS_AGENT_FALLBACK=model`` is this build's own model route asked instead. The outcome then
+    carries ``fallback_from``, and the page says so in words: a reader is never left to believe the
+    Foundry agent answered when it did not. A rejected reply is not a transport failure and is never
+    re-asked of another route - that would be a second opinion about the same record, bought
+    silently.
+    """
+    outcome = explain_case(conn, record, cfg=cfg, now=now,
+                           variant=VARIANT_FOUNDRY, route=ROUTE_FOUNDRY)
+    if outcome.cause in FALLBACK_CAUSES and cfg.fallback_to_model:
+        failed = outcome.cause
+        fell_back = explain_case(conn, record, cfg=cfg, completer=completer, now=now,
+                                 variant=VARIANT_FOUNDRY, route=ROUTE_MODEL)
+        fell_back.fallback_from = SERVED_BY[ROUTE_FOUNDRY]
+        fell_back.fallback_cause = failed
+        return fell_back
+    return outcome
+
+
 # ---------------------------------------------------------------- the report
 
-# How the two variants are named to a reader. A variant is a page, not a feature: one shows the
-# stored evidence, the other shows it with a model-written explanation beside it.
-VARIANT_LABEL = {VARIANT_OFF: "Agent off", VARIANT_ON: "Agent on"}
+# How the variants are named to a reader. A variant is a page, not a feature: one shows the stored
+# evidence, one shows it with this build's model-written explanation beside it, and one shows it with
+# the hosted Foundry agent's. TESTOPS-93: the third is named by its route so the A/B cannot be read
+# as two spellings of one thing.
+VARIANT_LABEL = {VARIANT_OFF: "Agent off", VARIANT_ON: "Agent on",
+                 VARIANT_FOUNDRY: "Agent on (Foundry-hosted)"}
+
+# The route each variant asks. A fallback is still recorded under the variant the *reader* asked for;
+# the route column on each call is what says which transport actually answered.
+VARIANT_ROUTE = {VARIANT_OFF: "", VARIANT_ON: ROUTE_MODEL, VARIANT_FOUNDRY: ROUTE_FOUNDRY}
 
 # How each state is named to a reader, and whether it is value (an explanation a reader saw), cost
 # (a call that was paid for and thrown away) or neither.
@@ -1379,6 +1643,12 @@ def report(conn) -> list[dict]:
         rows.append({
             "variant": variant,
             "label": VARIANT_LABEL[variant],
+            # TESTOPS-93: the route this page asks, and the number of calls the ledger holds for it.
+            # A foundry view that fell back still sits under this variant - the reader asked for it -
+            # while the route column on each call says which transport answered.
+            "route": VARIANT_ROUTE[variant],
+            "served_by": SERVED_BY.get(VARIANT_ROUTE[variant], ""),
+            "failures_by_kind": _failures_by_kind(conn, variant),
             "views": sum(entry["views"] for entry in states.values()),
             "explanation_views": served,
             "repaired_accepts": states[STATE_FRESH_REPAIRED]["views"],
@@ -1404,7 +1674,55 @@ def recent_calls(conn, limit: int = 20) -> list[dict]:
     """The last few calls, with what happened, so a failure is a row an operator can read."""
     out = []
     for row in conn.execute(
-            "SELECT id, case_id, variant, model, tokens_in, tokens_out, cached, wall_ms, outcome,"
-            " cause FROM agent_call ORDER BY id DESC LIMIT ?", (int(limit),)):
+            "SELECT id, case_id, variant, route, model, tokens_in, tokens_out, cached, wall_ms,"
+            " outcome, cause FROM agent_call ORDER BY id DESC LIMIT ?", (int(limit),)):
         out.append({key: row[key] for key in row.keys()})
+    return out
+
+
+def _failures_by_kind(conn, variant: str) -> dict[str, dict[str, int]]:
+    """Per route, the failures of one variant counted by the cause the ledger recorded (AC3).
+
+    ``unreachable``, ``timeout``, ``non_200``, ``missing_text`` and ``rejected`` are separate rows
+    here because they call for different actions: the first two are the deployment's, the third is
+    the endpoint's, the fourth is the agent's, and the fifth is the reply's.
+    """
+    out: dict[str, dict[str, int]] = {}
+    for row in conn.execute(
+            "SELECT route, cause, COUNT(*) FROM agent_call WHERE variant=?"
+            " AND outcome NOT IN ('ok', 'cached')"
+            " GROUP BY route, cause ORDER BY route, cause", (variant,)):
+        out.setdefault(str(row[0]), {})[str(row[1])] = int(row[2])
+    return out
+
+
+def route_report(conn) -> list[dict]:
+    """The two routes side by side: what each was asked, what it cost, and how each failed (AC3).
+
+    Every figure is a count of stored ``agent_call`` rows or a sum over them, grouped by the route
+    column - so a foundry view that fell back to the model route is one foundry view and one model
+    call, which is exactly what happened. Votes are the report's per-variant figures, printed beside
+    the route the variant asks.
+    """
+    votes = {row["variant"]: row for row in report(conn)}
+    out: list[dict] = []
+    for route in ROUTES:
+        calls, tokens, wall = conn.execute(
+            "SELECT COUNT(*), SUM(tokens_in + tokens_out), SUM(wall_ms) FROM agent_call"
+            " WHERE route=?", (route,)).fetchone()
+        failures: dict[str, int] = {}
+        for row in conn.execute(
+                "SELECT cause, COUNT(*) FROM agent_call WHERE route=?"
+                " AND outcome NOT IN ('ok', 'cached')"
+                " GROUP BY cause ORDER BY cause", (route,)):
+            failures[str(row[0])] = int(row[1])
+        variant = next((v for v, r in VARIANT_ROUTE.items() if r == route), "")
+        row = votes.get(variant) or {}
+        out.append({"route": route, "served_by": SERVED_BY[route], "variant": variant,
+                    "label": row.get("label", ""), "calls": int(calls or 0),
+                    "total_tokens": int(tokens or 0), "wall_ms": int(wall or 0),
+                    "explanations_written": int(row.get("explanations_written") or 0),
+                    "helped": int(row.get("helped") or 0),
+                    "did_not_help": int(row.get("did_not_help") or 0),
+                    "failures_by_kind": failures})
     return out
