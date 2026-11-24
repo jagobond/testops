@@ -87,6 +87,33 @@ regression-free fix should look like. That the *shapes* work is pinned by the fi
 The stored-snapshot pins (`COTW_SENTENCE` 95 items, `REQOVERFLOW_SENTENCE` 158 items) are untouched
 and pass: those snapshots predate the noun.
 
+## Amendment — the review's three concerns
+
+`factory/reports/2026-11-24/TESTOPS-74-review.md` failed this build: two silently wrong routes
+still got through, in the class of defect the ticket exists to close. All three concerns are fixed
+in this amendment.
+
+1. **A prefix on an implemented interface was dropped.** `java.Reading` now carries `interfaces`
+   (`_implements` reads the header, skipping generic arguments), and the resolution loop in
+   `discover.py` treats `extends` and `implements` alike: one level from the same repository,
+   recorded in `inherited_prefixes` under the `interface` key, or unread with the interface named.
+   `GET /{id}` is no longer emitted for `InterfaceChildController implements BookingPrefixApi`.
+2. **A parent whose own prefix is a constant made the child unprefixed.** The parent's
+   `class_problem` is now consulted: the child is unread carrying the parent's own reason
+   (`class prefix is a constant`) and the parent's name and expression in the detail.
+3. **A superclass file that exists but does not lex was reported as "does not hold".** Files this
+   reader could not lex now have their declared type names read without lexing (comments stripped),
+   so the refusal says the repository *holds* the file and this reader could not read it, naming
+   the path.
+
+Pinned by five new tests in `tests/test_java_honesty.py` (interface prefix resolved and recorded;
+unheld interface -> unread naming it; interface with no class prefix -> not refused; constant
+parent -> unread with the parent's reason; unlexable superclass -> "could not read", not "does not
+hold"), plus four new fixtures. Full suite **1164 passed, 2 skipped**; contract suite **37 passed,
+2 skipped**. Corpus re-read unchanged: **142 parsed, 25 surfaces, 0 unread, 0 inherited, 14
+targets** — no surface disappeared. No case-page golden changed, and the 7 stored run pages
+rendered from a copy of the scratch store are byte-identical to the build commit's rendering.
+
 ## Store and network
 
 No port was opened (pages were rendered by calling the app directly), port 8791 was never contacted,

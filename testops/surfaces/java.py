@@ -20,12 +20,12 @@ and reports routes, never types, and never anything it could not lex.
 TESTOPS-74. Two shapes this reader used to get silently wrong, both a wrong answer that looks like a
 right one:
 
-  * a class that extends a base controller carrying the ``@RequestMapping`` prefix. Dropping the
-    prefix turns ``GET /booking/{id}`` into ``GET /{id}`` - a route that does not exist, presented
-    as one that does. The reader now records the superclass it saw (``Reading.superclass``) and
-    leaves the prefix to its caller, which can read that superclass in the same repository; when the
-    caller cannot, the mapping is *unread* and says so, naming the superclass. This file never
-    guesses a prefix.
+  * a class that extends a base controller, or implements an interface, carrying the
+    ``@RequestMapping`` prefix (Spring honours both). Dropping the prefix turns
+    ``GET /booking/{id}`` into ``GET /{id}`` - a route that does not exist, presented as one that
+    does. The reader now records the types it saw (``Reading.superclass``, ``Reading.interfaces``)
+    and leaves the prefix to its caller, which can read them in the same repository; when the caller
+    cannot, the mapping is *unread* and says so, naming the type. This file never guesses a prefix.
   * a mapping path that is not a string literal, e.g. ``@GetMapping(Paths.BOOKING)``. The old reader
     found no string, fell back to ``/`` and invented a route at the root of the service. A path this
     reader cannot resolve is now *unread*, with a reason naming the expression, and produces no
@@ -83,9 +83,10 @@ class Reading:
     """What one file declared: its routes, what could not be read, and what the caller must resolve.
 
     ``own_prefix`` is ``None`` when the type declares no class-level ``@RequestMapping``; a tuple when
-    it does. ``superclass`` is the type it ``extends`` (as written), which the caller may read in the
-    same repository to recover an inherited prefix. ``class_problem`` is set when the type's own
-    prefix could not be read as a literal, so no method under it can be placed.
+    it does. ``superclass`` is the type it ``extends`` (as written), and ``interfaces`` the types a
+    class ``implements``: Spring honours a class-level ``@RequestMapping`` on either, so the caller
+    may read them in the same repository to recover an inherited prefix. ``class_problem`` is set
+    when the type's own prefix could not be read as a literal, so no method under it can be placed.
     """
     type_name: str | None
     superclass: str | None
@@ -93,6 +94,7 @@ class Reading:
     routes: tuple[Route, ...]
     unread: tuple[Unread, ...] = ()
     class_problem: tuple[str, str] | None = None
+    interfaces: tuple[str, ...] = ()
 
 
 # Why a mapping is unread. Fixed wording, grouped on the run page (TESTOPS-74 AC3).
@@ -309,6 +311,47 @@ def _extends(header: tuple[_Token, ...]) -> str | None:
     return None
 
 
+def _implements(header: tuple[_Token, ...]) -> tuple[str, ...]:
+    """The types a class header implements, as written, in order (``[BookingApi, Audited]``).
+
+    Spring serves a class-level ``@RequestMapping`` declared on an interface the controller
+    implements, so these types matter to the caller exactly as much as ``extends`` does. Generic
+    arguments are skipped (the name is what identifies the type); the list ends at anything that is
+    not a name, a dot, a comma, or a generic bracket.
+    """
+    for index, token in enumerate(header):
+        if token.kind != "word" or token.value != "implements":
+            continue
+        names: list[str] = []
+        parts: list[str] = []
+        depth = 0
+        for following in header[index + 1:]:
+            if following.kind == "symbol" and following.value == "<":
+                depth += 1
+                continue
+            if following.kind == "symbol" and following.value == ">":
+                depth = max(depth - 1, 0)
+                continue
+            if depth:
+                continue
+            if following.kind == "word":
+                parts.append(following.value)
+            elif following.kind == "symbol" and following.value == ".":
+                parts.append(".")
+            elif following.kind == "symbol" and following.value == ",":
+                name = "".join(parts).strip(".")
+                if name:
+                    names.append(name)
+                parts = []
+            else:
+                break
+        name = "".join(parts).strip(".")
+        if name:
+            names.append(name)
+        return tuple(names)
+    return ()
+
+
 def _verbs(tokens: tuple[_Token, ...]) -> list[str]:
     """``RequestMethod.GET`` and ``{RequestMethod.GET, RequestMethod.POST}`` -> ``["GET", ...]``."""
     out: list[str] = []
@@ -339,6 +382,7 @@ class _Parser:
         self.unread: list[Unread] = []
         self.type_name: str | None = None
         self.superclass: str | None = None
+        self.interfaces: tuple[str, ...] = ()
         self.own_prefix: tuple[str, ...] | None = None
         self.class_problem: tuple[str, str] | None = None
 
@@ -374,7 +418,8 @@ class _Parser:
     def parse(self) -> Reading:
         self._scope(depth=0, prefixes=(), unresolved=self.unresolved)
         return Reading(self.type_name, self.superclass, self.own_prefix,
-                       tuple(self.routes), tuple(self.unread), self.class_problem)
+                       tuple(self.routes), tuple(self.unread), self.class_problem,
+                       self.interfaces)
 
     def _scope(self, depth: int, prefixes: tuple[str, ...],
                unresolved: tuple[str, str] | None) -> None:
@@ -404,11 +449,13 @@ class _Parser:
                     header.append(self.tokens[self.index])
                     self.index += 1
                 name = header[0].value if header and header[0].kind == "word" else None
-                extends = _extends(tuple(header)) if kind == "class" else None
+                extends = _extends(tuple(header)) if kind in ("class", "interface") else None
+                implements = _implements(tuple(header)) if kind == "class" else ()
                 child_prefixes, child_unresolved = self._type_prefixes(
                     depth, prefixes, annotations, unresolved)
                 if depth == 0:
                     self.type_name, self.superclass = name, extends
+                    self.interfaces = implements
                 if self._at("{"):
                     self.index += 1
                     self._scope(depth + 1, child_prefixes, child_unresolved)

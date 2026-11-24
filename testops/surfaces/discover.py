@@ -17,10 +17,11 @@ routes were read is ``found``, one whose Java declares no route is ``zero``, and
 is now reserved for a repository holding nothing these readers can parse.
 
 TESTOPS-74. A mapping the reader cannot place is no longer a surface with a guessed route. A
-class-level prefix inherited from a superclass is read from that superclass in the same repository,
-one level, and the resolution is recorded; a superclass this repository does not hold, or a path
-that is not a string literal, makes the mapping ``unread`` with a reason - and ``unread`` is carried
-on the run, not dropped, so the page can say how many mappings it could not read and why.
+class-level prefix inherited from a superclass or an implemented interface is read from that type
+in the same repository, one level, and the resolution is recorded; a type this repository does not
+hold, or a path that is not a string literal, makes the mapping ``unread`` with a reason - and
+``unread`` is carried on the run, not dropped, so the page can say how many mappings it could not
+read and why.
 
 The languages this reader can parse are :data:`LANGUAGES`, which is data. Adding one widens the
 reader; it does not make a repository it cannot parse look empty.
@@ -117,6 +118,56 @@ def _reader() -> str:
     return ", ".join(named[:-1]) + " and " + named[-1]
 
 
+# A type declaration, read without lexing the file that holds it. Comments are stripped first, so a
+# word in a comment cannot make a refusal claim the repository holds something it does not.
+_TYPE_DECLARATION = re.compile(r"\b(?:class|interface|enum|record)\s+([A-Za-z_$][A-Za-z0-9_$]*)")
+_COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
+
+
+def _declared_type_names(text: str) -> list[str]:
+    """The type names a file declares, as far as they can be read without lexing it."""
+    return _TYPE_DECLARATION.findall(_COMMENTS.sub(" ", text))
+
+
+def _inherited_prefix(name: str, path: str, declared_types: dict[str, list[str]],
+                      unreadable_types: dict[str, list[str]],
+                      readings: dict[str, java.Reading]
+                      ) -> tuple[tuple[str, ...] | None, str | None, tuple[str, str] | None]:
+    """The prefix a class-level ``@RequestMapping`` on ``name`` supplies, or why it cannot be known.
+
+    Returns ``(prefix, file, None)`` when the type is held once and declares a literal prefix;
+    ``(None, None, None)`` when it is held once and declares no prefix at all (there is none to
+    drop); and ``(None, None, (reason, detail))`` when knowing it would take a guess. The reason
+    carried for a parent whose own prefix is a constant is the parent's own, named against the
+    parent, so the child is refused for the fact that made the parent unreadable.
+    """
+    simple = name.rsplit(".", 1)[-1]
+    candidates = [candidate for candidate in declared_types.get(simple, []) if candidate != path]
+    if len(candidates) > 1:
+        return None, None, (java.REASON_PREFIX_NOT_READ,
+                            f"{name}, which this repository holds more than once")
+    if not candidates:
+        held = unreadable_types.get(simple, [])
+        if held:
+            return None, None, (java.REASON_PREFIX_NOT_READ,
+                                f"{name} ({held[0]}), which this repository holds but this "
+                                f"reader could not read")
+        return None, None, (java.REASON_PREFIX_NOT_READ,
+                            f"{name}, which this repository does not hold")
+    parent = readings[candidates[0]]
+    if parent.class_problem is not None:
+        reason, expression = parent.class_problem
+        return None, None, (reason, f"{name}, whose own prefix could not be read "
+                                    f"({reason}: {expression})")
+    if parent.own_prefix is not None:
+        return parent.own_prefix, candidates[0], None
+    if parent.superclass:
+        return None, None, (java.REASON_PREFIX_NOT_READ,
+                            f"{name}, whose own prefix is inherited from {parent.superclass} "
+                            f"(this reader reads one level)")
+    return None, None, None
+
+
 def discover(files: dict[str, str]) -> Discovery:
     """files: path -> text for the product repo. Returns the surfaces, and what it could read."""
     routes: dict[str, Surface] = {}
@@ -174,47 +225,63 @@ def discover(files: dict[str, str]) -> Discovery:
         parsed += 1
         readings[path] = reading
 
-    # TESTOPS-74 AC1. A class-level prefix can live on a superclass. Read that superclass when it is
-    # in this repository - one level, no more - and record where the prefix came from. When it is
-    # not, every mapping under the subclass is unread and names the class it could not read: the
-    # alternative is emitting ``GET /{id}`` for a route that is really ``GET /booking/{id}``.
+    # TESTOPS-74 AC1. A class-level prefix can live on a superclass or on an interface the class
+    # implements; Spring honours both, so both are read - one level, no more - from this repository,
+    # and every resolution is recorded. When the type is not held, is held more than once, or its
+    # own prefix could not be read, every mapping under the subclass is unread and names the type it
+    # needed: the alternative is emitting ``GET /{id}`` for a route that is really
+    # ``GET /booking/{id}``. A refusal is never dropped just because it arrived through an interface.
     declared_types: dict[str, list[str]] = {}
+    unreadable_types: dict[str, list[str]] = {}
     for path in sorted(readings):
         name = readings[path].type_name
         if name:
             declared_types.setdefault(name, []).append(path)
+    for path in java_files:
+        if path in readings:
+            continue
+        # A file this repository holds but that does not lex may still declare the type a
+        # subclass needs. Its declarations are readable without lexing it, and saying "held but
+        # not read" keeps the refusal true: the file is there (review 2026-11-24, concern 3).
+        for name in _declared_type_names(files[path]):
+            unreadable_types.setdefault(name, []).append(path)
+
     inherited: list[dict] = []
     for path in sorted(readings):
         reading = readings[path]
-        if not (reading.superclass and reading.own_prefix is None
-                and reading.class_problem is None):
+        if reading.own_prefix is not None or reading.class_problem is not None:
+            continue                       # its own prefix answers the question, or already refuses
+        sources: list[tuple[str, str]] = []
+        if reading.superclass:
+            sources.append(("superclass", reading.superclass))
+        sources.extend(("interface", name) for name in reading.interfaces)
+        if not sources:
             continue
-        superclass = reading.superclass
-        candidates = [candidate for candidate in declared_types.get(superclass.rsplit(".", 1)[-1], [])
-                      if candidate != path]
-        if len(candidates) == 1:
-            parent = readings[candidates[0]]
-            if parent.own_prefix is not None:
-                readings[path] = java.read(files[path], path, inherited=parent.own_prefix) or reading
-                inherited.append({"source": path, "type": reading.type_name,
-                                  "superclass": superclass, "read_from": candidates[0],
-                                  "prefix": list(parent.own_prefix)})
-                continue
-            if parent.superclass:
-                detail = (f"{superclass}, whose own prefix is inherited from {parent.superclass} "
-                          f"(this reader reads one level)")
-            else:
-                detail = ""
-            if detail:
-                readings[path] = java.read(files[path], path, unresolved=(
-                    java.REASON_PREFIX_NOT_READ, detail)) or reading
-                continue
-            # The superclass is here and declares no prefix of its own: there is none to drop.
+        prefixes: list[tuple[str, str, str | None, tuple[str, ...]]] = []
+        refusal: tuple[str, str] | None = None
+        for kind, name in sources:
+            prefix, read_from, why = _inherited_prefix(
+                name, path, declared_types, unreadable_types, readings)
+            if why is not None:
+                refusal = refusal or why       # one unknown source is enough: never guess a route
+            elif prefix is not None:
+                prefixes.append((kind, name, read_from, prefix))
+        if refusal is not None:
+            readings[path] = java.read(files[path], path, unresolved=refusal) or reading
             continue
-        why = "which this repository does not hold" if not candidates else \
-            "which this repository holds more than once"
-        readings[path] = java.read(files[path], path, unresolved=(
-            java.REASON_PREFIX_NOT_READ, f"{superclass}, {why}")) or reading
+        if len(prefixes) > 1:
+            named = ", ".join(f"{kind} {name}" for kind, name, _from, _prefix in prefixes)
+            readings[path] = java.read(files[path], path, unresolved=(
+                java.REASON_PREFIX_NOT_READ,
+                f"{named}, whose prefixes it inherits through more than one type "
+                f"(this reader reads one level)")) or reading
+            continue
+        if not prefixes:
+            continue                       # the types are here and declare no prefix to drop
+        kind, name, read_from, prefix = prefixes[0]
+        readings[path] = java.read(files[path], path, inherited=prefix) or reading
+        inherited.append({"source": path, "type": reading.type_name, kind: name,
+                          "read_from": read_from, "prefix": list(prefix)})
 
     unread: list[java.Unread] = []
     for path in sorted(readings):

@@ -117,6 +117,95 @@ public class Child extends PlainBase {
     assert discovery.record()["inherited_prefixes"] == []
 
 
+# ------------------------------------------- AC1, amended: the same defect through an interface
+
+def test_a_prefix_on_an_implemented_interface_is_resolved_and_recorded():
+    """Spring serves @RequestMapping on an interface; the class's route is /booking/{id}."""
+    discovery = _discover("BookingPrefixApi.java", "InterfaceChildController.java")
+
+    assert _targets(discovery) == {"GET /booking/{id}"}
+    assert "GET /{id}" not in _targets(discovery), "the dropped-prefix route must not be emitted"
+    assert discovery.record()["inherited_prefixes"] == [{
+        "source": "InterfaceChildController.java",
+        "type": "InterfaceChildController",
+        "interface": "BookingPrefixApi",
+        "read_from": "BookingPrefixApi.java",
+        "prefix": ["/booking"],
+    }]
+
+
+def test_an_interface_prefix_the_repository_cannot_supply_is_unread_and_names_the_interface():
+    texts = {
+        "RemoteInterfaceController.java": """\
+@RestController
+public class RemoteInterfaceController implements RemoteApi {
+    @GetMapping("/{id}")
+    public ResponseEntity<Booking> getBooking() { return null; }
+}
+""",
+    }
+    discovery = surface_discovery.discover(texts)
+
+    assert discovery.surfaces == (), "a route whose interface is not held is not a route"
+    assert len(discovery.unread) == 1
+    entry = discovery.unread[0]
+    assert entry.reason == java.REASON_PREFIX_NOT_READ
+    assert "RemoteApi" in entry.detail
+    assert "does not hold" in entry.detail
+
+
+def test_an_interface_with_no_class_prefix_is_not_a_reason_to_refuse_the_route():
+    texts = {
+        "MarkerApi.java": "public interface MarkerApi { String find(int id); }",
+        "MarkerController.java": """\
+@RestController
+public class MarkerController implements MarkerApi {
+    @GetMapping("/marker/{id}")
+    public String find(int id) { return null; }
+}
+""",
+    }
+    discovery = surface_discovery.discover(texts)
+
+    assert _targets(discovery) == {"GET /marker/{id}"}
+    assert discovery.unread == ()
+
+
+def test_a_child_of_a_parent_whose_prefix_is_a_constant_is_unread_with_the_parents_reason():
+    """The parent's own prefix is a constant; the child must not read that as 'no prefix'."""
+    discovery = _discover("ConstantPrefixBase.java", "ConstantPrefixChild.java")
+
+    assert discovery.surfaces == ()
+    assert len(discovery.unread) == 1
+    entry = discovery.unread[0]
+    assert entry.reason == java.REASON_CLASS_PATH_CONSTANT
+    assert "ConstantPrefixBase" in entry.detail
+    assert "Paths.BASE" in entry.detail
+
+
+def test_a_superclass_file_that_does_not_lex_says_the_file_could_not_be_read():
+    """The repository holds the file; this reader could not read it. Say that, not 'does not hold'."""
+    texts = {
+        "BrokenBase.java": "public abstract class BrokenBase {\n",     # unbalanced: not lexed
+        "BrokenChild.java": """\
+@RestController
+public class BrokenChild extends BrokenBase {
+    @GetMapping("/{id}")
+    public String getItem(int id) { return null; }
+}
+""",
+    }
+    discovery = surface_discovery.discover(texts)
+
+    assert discovery.surfaces == ()
+    assert len(discovery.unread) == 1
+    entry = discovery.unread[0]
+    assert entry.reason == java.REASON_PREFIX_NOT_READ
+    assert "BrokenBase" in entry.detail and "BrokenBase.java" in entry.detail
+    assert "could not read" in entry.detail
+    assert "does not hold" not in entry.detail
+
+
 # --------------------------------------------------------------------------- AC2: constant paths
 
 def test_a_mapping_path_that_is_a_constant_is_unread_and_invents_no_route():
