@@ -101,6 +101,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-83 | The case page quotes its evidence but never shows the code | F1 | ready | No snippet of the test assertion or the product handler it is compared with; a reader must leave the page to check the tool's own claim |
 | TESTOPS-84 | When the code block cannot delimit a declaration it renders as if it were complete | F1 | ready | From the T83 review: an unclosed body shows no ellipsis and no count, so a partial declaration looks whole; the caption also blames the line cap for a cut the cap did not make |
 | TESTOPS-85 | Three refusals in the quoted-copy rule that should have been findings | F1 | ready | From the T82 round-2 review: compound nouns read as captions, the unquoted subject is ignored, one reason string is empty, and the passive voice is still unassessed |
+| TESTOPS-86 | A Python signature end is counted in strings and comments | F1 | ready | From the T84 review: the unparseable-path signature end is a raw bracket count, so brackets inside strings, comments and f-strings can move it |
 
 |----|-------|---------|--------|------|
 

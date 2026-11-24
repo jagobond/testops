@@ -2,7 +2,7 @@
 id: TESTOPS-84
 title: When the code block cannot delimit a declaration it renders as if it were complete
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-83
 ---
