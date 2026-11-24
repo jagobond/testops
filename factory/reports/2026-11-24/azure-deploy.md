@@ -62,3 +62,36 @@ The script registers the resource providers, creates the registry if absent, bui
 ```bash
 az group delete -n rg-testops-demo --yes --no-wait
 ```
+
+
+## 24 November, evening - the Foundry agent route goes live
+
+`?agent=foundry` now renders an explanation produced by the hosted Foundry agent `testops-narrator`, and the page names
+the route that served it (`served by: foundry-hosted-agent`). `?agent=on` (this build's own model call) and `?agent=off`
+are unchanged. Verified live at 19:5x:
+
+    off      no explanation, 0.4 s
+    on       explanation from the model route, 3.0 s
+    foundry  explanation from the hosted agent, route named, 7.0 s
+    /agent-report  routes side by side: model-route 2 calls 4021 tokens; foundry 1 call 2068 tokens
+
+### Configuration that the deployment needs (and why)
+
+| variable | value | why |
+|---|---|---|
+| `TESTOPS_FOUNDRY_ENDPOINT` | `.../openai/v1/chat/completions` | the **model** route; once renamed to the project base it 404s |
+| `TESTOPS_AGENT_TOKEN` | secret `testops-agent-token` | api-key for the hosted agent's responses endpoint |
+| `TESTOPS_AGENT_PROJECT` | `testops` | the **project** name, which is not the account name - the code's default derived `projects/testops-resource` and every call 404'd |
+| `TESTOPS_AGENT_ROUTE_ENDPOINT` | full agent responses URL | the explicit override; the derived form was wrong for this account/project pair |
+| `TESTOPS_AGENT_TIMEOUT` | `60` | the agent's first call in a fresh session can take far longer than the 20 s default |
+
+### Two failures worth remembering
+
+- **SQLite on an Azure Files share does not survive a migration.** v5 would not start: two revisions were warm, each
+  opened the mounted `testops.db`, and `ALTER TABLE agent_call ADD COLUMN route ...` died with `database is locked`.
+  Deactivating the old revision did not clear it; the mount was removed for the demo and the site now runs on the baked
+  store again. **Consequence: votes and cached explanations do not survive a revision restart.** Measured pages still
+  work; a post-demo ticket replaces the storage rather than re-mounting SQLite over SMB.
+- **A stale environment variable can break the other route.** `TESTOPS_AGENT_ENDPOINT` looked like the agent's override
+  but is the *first* name in the model route's endpoint list, so setting it to the project base made `?agent=on` 404
+  while `?agent=foundry` worked. The agent route's real override is `TESTOPS_AGENT_ROUTE_ENDPOINT`.

@@ -115,6 +115,8 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-97 | The proposal stage - an agent that may suggest, never decide | F3 | queued | Candidates stored with full provenance, opt-in per run, incapable of rendering as a finding |
 | TESTOPS-98 | The gate - what a candidate must prove before it becomes a finding | F3 | queued | A deterministic gate per candidate kind, acceptance rate per kind on /agent-report, proposals-off byte-identical |
 | TESTOPS-99 | Price a verified finding, then decide | F3 | queued | Cost per verified finding against a human baseline, with every price marked verified or assumed |
+| TESTOPS-100 | The store must not be SQLite over an SMB share | F2 | queued | A migration locked the v5 deployment; persistence needs a single-writer store and a serialised migration |
+| TESTOPS-101 | A default that names the account where the project belongs | F2 | queued | The derived agent URL used the account name as the project; unset must mean unconfigured, never invented |
 
 |----|-------|---------|--------|------|
 
