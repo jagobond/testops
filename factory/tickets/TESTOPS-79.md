@@ -2,7 +2,7 @@
 id: TESTOPS-79
 title: Eight of nine repeats are homonyms - a word in quoted UI copy is not an entity
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-72
 ---
