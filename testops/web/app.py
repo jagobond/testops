@@ -3243,18 +3243,25 @@ def agent_report(conn) -> bytes:
             '<a href="/agent-check">can this deployment reach a model?</a> answers, in words, for '
             'the process that is serving you.</p>']
     body.append('<table>')
-    body.append('<tr><th>Variant</th><th>Views</th><th>Explanations shown</th><th>Rejected</th>'
+    body.append('<tr><th>Variant</th><th>Views</th><th>Explanations shown</th>'
+                '<th>Accepted after repair</th><th>Rejected</th>'
                 '<th>Failed</th><th>Calls</th><th>Cache hits</th><th>Total tokens</th>'
                 '<th>Mean tokens per explanation</th><th>Helped</th><th>Did not</th></tr>')
     for row in rows:
         mean = row["mean_tokens_per_explanation"]
         body.append(f'<tr><td>{esc(row["label"])}</td><td>{row["views"]}</td>'
-                    f'<td>{row["explanation_views"]}</td><td>{row["rejected"]}</td>'
+                    f'<td>{row["explanation_views"]}</td>'
+                    f'<td>{row["repaired_accepts"]}</td><td>{row["rejected"]}</td>'
                     f'<td>{row["errors"]}</td><td>{row["calls"]}</td><td>{row["cache_hits"]}</td>'
                     f'<td>{row["total_tokens"]}</td>'
                     f'<td>{mean if mean is not None else "&mdash;"}</td>'
                     f'<td>{row["helped"]}</td><td>{row["did_not_help"]}</td></tr>')
     body.append('</table>')
+    body.append('<p class="meta">An explanation under <span class="code">fresh_repaired</span> is '
+                'one the model had to be asked for twice: the first reply was rejected, or was one '
+                'field short of an answer, the one repair round quoted the exact fault, and the '
+                'second reply passed. Both calls are in the ledger, so the repair round can be '
+                'priced separately rather than folded into a first-time explanation.</p>')
     body.append('<h2 class="section">What each view actually was</h2>')
     body.append('<p class="meta">A variant is not one experiment. A page can be a first view that paid '
                 'for an explanation, a later view of the stored one, a reply that was paid for and '
@@ -3431,7 +3438,7 @@ def feedback_page(conn, case_id: str, view: str, vote: str) -> tuple[bytes, int]
     row = conn.execute(
         "SELECT case_id, variant, served FROM agent_view WHERE id = ?", (view_id,)).fetchone()
     if row is None or row["case_id"] != case_id or agent.canonical_state(row["served"]) not in (
-            agent.STATE_FRESH, agent.STATE_CACHED):
+            agent.STATE_FRESH, agent.STATE_FRESH_REPAIRED, agent.STATE_CACHED):
         body = ['<h1>That vote was not recorded</h1>',
                 '<p>The page it names did not show an explanation of this case, so there is '
                 'nothing for the vote to be about.</p>', self_back(case_id)]

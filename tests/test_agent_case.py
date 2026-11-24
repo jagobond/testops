@@ -548,7 +548,8 @@ def test_one_rejection_is_repaired_once_and_the_good_repair_is_served(tmp_path):
     assert [call["outcome"] for call in calls] == ["rejected", "ok"]
     assert b"agent-text" in on and "was rejected" not in _text(on)
     assert stored is not None and stored["text"].startswith("This test asserts")
-    assert view["served"] == "fresh"
+    # TESTOPS-91 AC4: a repair that lands is its own state, so a repair can be priced separately.
+    assert view["served"] == "fresh_repaired"
 
 
 def test_a_second_rejection_falls_back_to_the_honest_sentence_with_state_rejected(tmp_path):
@@ -572,6 +573,76 @@ def test_a_second_rejection_falls_back_to_the_honest_sentence_with_state_rejecte
     assert stored == 0
     assert "The model-written explanation was rejected" in _text(on)
     assert b"agent-text" not in on
+
+
+# ------------------------------------- TESTOPS-91: the reply that forgot its citations
+
+EXPLANATION = " ".join(sentence for sentence, _ in GOOD_SENTENCES)
+
+
+@pytest.mark.parametrize("raw,fault", [
+    # The real shape, 3 of 10 live replies: prose, and no citations array at all.
+    (json.dumps({"explanation": EXPLANATION}), agent.FAULT_OMITTED_CITATIONS),
+    # The array written as one string.
+    (json.dumps({"explanation": EXPLANATION, "citations": "claim:1"}),
+     agent.FAULT_CITATIONS_AS_STRING),
+    # The array present and empty.
+    (json.dumps({"explanation": EXPLANATION, "citations": []}), agent.FAULT_EMPTY_CITATIONS),
+    # Citations naming a sentence the explanation does not have.
+    (json.dumps({"explanation": EXPLANATION,
+                 "citations": [{"sentence": 7, "facts": ["claim:1"]}]}),
+     agent.FAULT_MISSING_SENTENCE.format(number=7, count=3)),
+])
+def test_a_reply_one_field_short_is_repairable_not_malformed(raw, fault):
+    """AC1: the explanation is there, so this is one field short - not garbage."""
+    reply, cause = agent.parse_reply(raw)
+    assert reply is None and cause == agent.REPAIRABLE
+    reading = agent.read_reply(raw)
+    assert reading.fault == fault
+    assert reading.text == EXPLANATION
+
+
+def test_a_reply_that_forgot_its_citations_is_repaired_once_and_served(tmp_path):
+    """AC1 end to end: two calls, the exact fault quoted, and the explanation reaches the page."""
+    conn = _seed(tmp_path)
+    fake = FakeModel(json.dumps({"explanation": EXPLANATION}), _good_reply(conn))
+    try:
+        view_id = agent.start_view(conn, CASE, "on")
+        on = _on(conn, fake, view_id=view_id)
+        calls = conn.execute("SELECT outcome, cause FROM agent_call ORDER BY id").fetchall()
+        stored = conn.execute("SELECT text FROM agent_explanation").fetchone()
+        view = conn.execute("SELECT served FROM agent_view WHERE id=?", (view_id,)).fetchone()
+    finally:
+        conn.close()
+    assert len(fake.calls) == 2, "one ask, then one repair - not a loop"
+    fault = "you wrote the explanation but omitted the citations array - add one entry per sentence"
+    assert fault in fake.calls[1]["user"], "the repair quotes the exact fault"
+    assert EXPLANATION in fake.calls[1]["user"], "and shows the explanation it is to keep"
+    assert [call["outcome"] for call in calls] == ["error", "ok"]
+    assert calls[0]["cause"] == agent.REPAIRABLE
+    assert b"agent-text" in on and "was rejected" not in _text(on)
+    assert stored is not None and stored["text"].startswith("This test asserts")
+    assert view["served"] == "fresh_repaired"
+
+
+@pytest.mark.parametrize("raw", [
+    "The product declares GET /rooms and that is all there is to say.",   # not JSON
+    json.dumps({"citations": [{"sentence": 1, "facts": ["claim:1"]}]}),    # no explanation
+    json.dumps({"explanation": "Too short"}),                              # not prose
+])
+def test_a_reply_with_nothing_to_repair_is_malformed_and_not_repaired(tmp_path, raw):
+    """AC2: a second call would be a guess, so the reply stays malformed and no call is made."""
+    conn = _seed(tmp_path)
+    fake = FakeModel(raw)
+    try:
+        on = _on(conn, fake)
+        row = conn.execute("SELECT outcome, cause FROM agent_call ORDER BY id DESC LIMIT 1").fetchone()
+        stored = conn.execute("SELECT COUNT(*) FROM agent_explanation").fetchone()[0]
+    finally:
+        conn.close()
+    assert len(fake.calls) == 1, "a malformed reply buys no second call"
+    assert row["outcome"] == "error" and row["cause"] == "malformed"
+    assert b"agent-text" not in on and stored == 0
 
 
 def test_the_prompt_offers_the_citations_and_the_check_reads_the_whole_record():
@@ -826,6 +897,29 @@ def test_the_report_page_breaks_the_numbers_down_by_state(tmp_path):
     # The cached row is present and its tokens are zero: a cached page is not an explanation's value.
     cached_index = text.index("cached - an explanation served from the store")
     assert " 0 " in text[cached_index:cached_index + 120]
+
+
+def test_the_report_shows_a_repaired_explanation_as_its_own_state(tmp_path):
+    """AC4: fresh_repaired is in the ledger and on the report page, so a repair can be priced."""
+    conn = _seed(tmp_path)
+    fake = FakeModel(json.dumps({"explanation": EXPLANATION}), _good_reply(conn))
+    try:
+        view_id = agent.start_view(conn, CASE, "on")
+        _on(conn, fake, view_id=view_id)
+        rows = {row["variant"]: row for row in agent.report(conn)}
+        body = app.agent_report(conn)
+    finally:
+        conn.close()
+    on = rows["on"]
+    assert on["states"]["fresh"]["views"] == 0, "nothing was accepted on the first reply"
+    assert on["states"]["fresh_repaired"]["views"] == 1
+    assert on["states"]["fresh_repaired"]["value"]
+    assert on["repaired_accepts"] == 1 and on["explanation_views"] == 1
+    assert on["calls"] == 2, "both calls were paid for"
+    assert on["total_tokens"] == 360, "180 for the reply, 180 for the repair"
+    text = _text(body)
+    assert "Accepted after repair" in text
+    assert "fresh_repaired - an explanation a repair round made acceptable" in text
 
 
 def test_a_variant_nobody_viewed_reports_no_mean_rather_than_zero(tmp_path):
