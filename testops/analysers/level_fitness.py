@@ -1,4 +1,23 @@
-"""Level fitness v0.11 - one claim per assertion, in words a reader can act on.
+"""Level fitness v0.12 - one claim per assertion, in words a reader can act on.
+
+v0.12 is TESTOPS-78: two holes in the product verdict that v0.11 left open.
+
+  * **a verb-less assertion does not accuse.** v0.11's verb rule only protected a sentence that
+    named an act the intent table knows; a presence/absence sentence ("booking details present")
+    had no verb, so `verb_agrees` was vacuously true and the round-1 noun-only match ran - and
+    counted a bare noun shared with ``DELETE /booking/{id}`` as a repeat over the ``GET`` that was
+    also there. A shared noun with no recognised intent is not evidence of anything, so it is now
+    refused as a near miss, exactly as a method disagreement is. The record says why in words:
+    the assertion names no act this rule recognises, so a shared noun alone is not a repeat;
+  * **the intent table is an explicit list of English forms.** ``_intent_forms`` generated
+    inflections by string surgery, which produced forms no English speaker writes (``getted``,
+    ``readed``). The table is now a pinned literal, and a test asserts its contents exactly, so a
+    future change to it is a deliberate one rather than a side effect of a generator;
+  * **the near miss is shown.** A near-miss claim stays ``distinct`` and so raises no case, but the
+    run page counts the claims it refused on one line and lists them with their sentence and a
+    link to the case page of their scenario when one exists; and a case page shows the near-miss
+    sentence of any claim in its own scenario that the product did not count. The refusal is
+    recorded, and now a reader can reach it. Nothing here moves a verdict.
 
 v0.11 is TESTOPS-72: the product becomes evidence, and ``surfaces`` stops being a parameter nobody
 reads.
@@ -208,7 +227,7 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.11"
+version = "0.12"
 uses_model = False
 
 # What this analyser's verdict rests on, and what it would like to check itself against but does
@@ -357,62 +376,97 @@ PRODUCT_CLAIM_VERBS = frozenset({"get", "list", "read", "create", "add", "update
 # What a target has to start with to be a route rather than a file path.
 _ROUTE_VERBS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "ANY"})
 
-# The assertion's intent, as the HTTP methods that could settle it (TESTOPS-72 amendment). The
-# verb is a rule, not a tie-break: "New room will be created" is creation, and a route that happens
-# to name the noun "room" but answers a GET is a near miss, not evidence that the product publishes
-# creation. The review found exactly this case: "created" is not in ``PRODUCT_CLAIM_VERBS``, so both
-# surfaces scored the same and the id sort picked the GET. The mapping is explicit and small, because
-# a guessed intent is worse than no intent: an assertion with no verb in this table keeps the old
-# noun-only matching and says so on the claim.
-_INTENT_METHODS = {
-    "create": frozenset({"POST"}), "add": frozenset({"POST"}), "new": frozenset({"POST"}),
-    "read": frozenset({"GET"}), "get": frozenset({"GET"}), "show": frozenset({"GET"}),
-    "display": frozenset({"GET"}), "list": frozenset({"GET"}), "view": frozenset({"GET"}),
-    "see": frozenset({"GET"}), "fetch": frozenset({"GET"}), "retrieve": frozenset({"GET"}),
-    "update": frozenset({"PUT", "PATCH"}), "edit": frozenset({"PUT", "PATCH"}),
-    "change": frozenset({"PUT", "PATCH"}), "modify": frozenset({"PUT", "PATCH"}),
-    "delete": frozenset({"DELETE"}), "remove": frozenset({"DELETE"}),
-    "destroy": frozenset({"DELETE"}),
+# The assertion's intent, as the HTTP methods that could settle it (TESTOPS-72; the table is
+# explicit from TESTOPS-78). The verb is a rule, not a tie-break: "New room will be created" is
+# creation, and a route that happens to name the noun "room" but answers a GET is a near miss, not
+# evidence that the product publishes creation.
+#
+# The table is a pinned literal, one entry per form an assertion may actually use, because a
+# generated form is not a reading. v0.11 built it by string surgery and produced ``getted`` and
+# ``readed`` - forms no English speaker writes, and a form nobody writes can never be a deliberate
+# intent. Every entry maps a form to (the verb recorded on the claim, the methods that settle it),
+# and ``tests/test_product_evidence.py`` asserts the whole table exactly, so adding a form is a
+# change somebody made on purpose rather than a side effect of a generator.
+_INTENT_FORMS: dict[str, tuple[str, frozenset[str]]] = {
+    # creation
+    "create": ("create", frozenset({"POST"})),
+    "creates": ("create", frozenset({"POST"})),
+    "created": ("create", frozenset({"POST"})),
+    "creating": ("create", frozenset({"POST"})),
+    "add": ("add", frozenset({"POST"})),
+    "adds": ("add", frozenset({"POST"})),
+    "added": ("add", frozenset({"POST"})),
+    "adding": ("add", frozenset({"POST"})),
+    # An adjective that implies creation. "news" is not an intent to create, so it is the one form.
+    "new": ("new", frozenset({"POST"})),
+    # reading
+    "read": ("read", frozenset({"GET"})),
+    "reads": ("read", frozenset({"GET"})),
+    "reading": ("read", frozenset({"GET"})),
+    "get": ("get", frozenset({"GET"})),
+    "gets": ("get", frozenset({"GET"})),
+    "getting": ("get", frozenset({"GET"})),
+    "show": ("show", frozenset({"GET"})),
+    "shows": ("show", frozenset({"GET"})),
+    "showed": ("show", frozenset({"GET"})),
+    "shown": ("show", frozenset({"GET"})),
+    "showing": ("show", frozenset({"GET"})),
+    "display": ("display", frozenset({"GET"})),
+    "displays": ("display", frozenset({"GET"})),
+    "displayed": ("display", frozenset({"GET"})),
+    "displaying": ("display", frozenset({"GET"})),
+    "list": ("list", frozenset({"GET"})),
+    "lists": ("list", frozenset({"GET"})),
+    "listed": ("list", frozenset({"GET"})),
+    "listing": ("list", frozenset({"GET"})),
+    "view": ("view", frozenset({"GET"})),
+    "views": ("view", frozenset({"GET"})),
+    "viewed": ("view", frozenset({"GET"})),
+    "viewing": ("view", frozenset({"GET"})),
+    "see": ("see", frozenset({"GET"})),
+    "sees": ("see", frozenset({"GET"})),
+    "saw": ("see", frozenset({"GET"})),
+    "seen": ("see", frozenset({"GET"})),
+    "seeing": ("see", frozenset({"GET"})),
+    "fetch": ("fetch", frozenset({"GET"})),
+    "fetches": ("fetch", frozenset({"GET"})),
+    "fetched": ("fetch", frozenset({"GET"})),
+    "fetching": ("fetch", frozenset({"GET"})),
+    "retrieve": ("retrieve", frozenset({"GET"})),
+    "retrieves": ("retrieve", frozenset({"GET"})),
+    "retrieved": ("retrieve", frozenset({"GET"})),
+    "retrieving": ("retrieve", frozenset({"GET"})),
+    # update
+    "update": ("update", frozenset({"PUT", "PATCH"})),
+    "updates": ("update", frozenset({"PUT", "PATCH"})),
+    "updated": ("update", frozenset({"PUT", "PATCH"})),
+    "updating": ("update", frozenset({"PUT", "PATCH"})),
+    "edit": ("edit", frozenset({"PUT", "PATCH"})),
+    "edits": ("edit", frozenset({"PUT", "PATCH"})),
+    "edited": ("edit", frozenset({"PUT", "PATCH"})),
+    "editing": ("edit", frozenset({"PUT", "PATCH"})),
+    "change": ("change", frozenset({"PUT", "PATCH"})),
+    "changes": ("change", frozenset({"PUT", "PATCH"})),
+    "changed": ("change", frozenset({"PUT", "PATCH"})),
+    "changing": ("change", frozenset({"PUT", "PATCH"})),
+    "modify": ("modify", frozenset({"PUT", "PATCH"})),
+    "modifies": ("modify", frozenset({"PUT", "PATCH"})),
+    "modified": ("modify", frozenset({"PUT", "PATCH"})),
+    "modifying": ("modify", frozenset({"PUT", "PATCH"})),
+    # deletion
+    "delete": ("delete", frozenset({"DELETE"})),
+    "deletes": ("delete", frozenset({"DELETE"})),
+    "deleted": ("delete", frozenset({"DELETE"})),
+    "deleting": ("delete", frozenset({"DELETE"})),
+    "remove": ("remove", frozenset({"DELETE"})),
+    "removes": ("remove", frozenset({"DELETE"})),
+    "removed": ("remove", frozenset({"DELETE"})),
+    "removing": ("remove", frozenset({"DELETE"})),
+    "destroy": ("destroy", frozenset({"DELETE"})),
+    "destroys": ("destroy", frozenset({"DELETE"})),
+    "destroyed": ("destroy", frozenset({"DELETE"})),
+    "destroying": ("destroy", frozenset({"DELETE"})),
 }
-
-
-def _intent_forms(base: str) -> set[str]:
-    """The inflected forms of an intent verb that an assertion might use.
-
-    "created", "creates" and "creating" are the same act as "create", and the review's case turns on
-    an inflected form. Only forms that are real English are generated - no "seed" for "see" - so a
-    form that is never written can never be read as an intent.
-    """
-    forms = {base, base + "s"}
-    if base.endswith("e"):
-        forms.add(base + "d")
-        forms.add(base[:-1] + "ing")
-    elif len(base) > 2 and base[-1] not in "aeiouwy":
-        forms.add(base + "ed")
-        forms.add(base + "ing")
-        forms.add(base + base[-1] + "ed")      # added
-        forms.add(base + base[-1] + "ing")     # adding
-    else:
-        forms.add(base + "ed")
-        forms.add(base + "ing")
-    if base == "new":
-        # An adjective, not a verb: "news" is not an intent to create.
-        forms = {base}
-    return forms
-
-
-# form -> (base verb, the methods that settle it). Built once, deterministically; the first base to
-# claim a form keeps it, and every base here has a distinct set of forms.
-def _intent_forms_by_word() -> dict[str, tuple[str, frozenset[str]]]:
-    table: dict[str, tuple[str, frozenset[str]]] = {}
-    for base, methods in _INTENT_METHODS.items():
-        for form in _intent_forms(base):
-            table.setdefault(form, (base, methods))
-    return table
-
-
-_INTENT_FORMS = _intent_forms_by_word()
-del _intent_forms_by_word
 
 
 _PRODUCT_WORD = re.compile(r"[a-z0-9]+")
@@ -547,7 +601,8 @@ def product_match(assertion: str, surfaces) -> dict | None:
     The returned record always names the assertion's verb, the surface's method and whether they
     agree. Where they do not, this is still the nearest surface, and :func:`_product_record` records
     it as a near miss rather than a repeat: the caller decides the verdict, but the evidence names
-    both verbs so the refusal is arguable.
+    both verbs so the refusal is arguable. An assertion that names no act at all has no verb to
+    agree with anything, and a shared noun alone is likewise a near miss, not a repeat (TESTOPS-78).
     """
     assertion_words = _product_meaningful(assertion)
     readings = [_surface_reading(surface) for surface in surfaces or ()]
@@ -588,7 +643,13 @@ def product_match(assertion: str, surfaces) -> dict | None:
     return {"surface": identifier, "route": route, "claim": claim_text, "word": word,
             "shared_with": shared_with, "surfaces": total,
             "assertion_verb": intent_verb, "surface_verb": method or "",
-            "verb_agrees": not (intent_methods and method and method not in intent_methods)}
+            # With no recognised intent nothing can agree, and nothing can disagree either: the
+            # match is a shared noun, which is not evidence (TESTOPS-78, AC1). ``intent_known`` is
+            # carried separately so the record can say *which* refusal it is - a method that
+            # differs, or an assertion that names no act at all.
+            "intent_known": intent is not None,
+            "verb_agrees": (intent is not None
+                            and not (intent_methods and method and method not in intent_methods))}
 
 
 # The four states a claim's product record can be in. They never share wording, and none of them is
@@ -618,7 +679,10 @@ def _product_record(interaction: str, assertion: str, surfaces, state: str, reas
               # The verb rule's evidence, on every record in every state: the assertion's own intent
               # (when it named one) and, when a surface was read, that surface's method. A near miss
               # keeps both so a reader can argue with the refusal rather than take it on trust.
-              "assertion_verb": "", "surface_verb": "", "verb_agrees": None, "near_miss": False}
+              "assertion_verb": "", "surface_verb": "", "verb_agrees": None, "near_miss": False,
+              # Which near miss this is, when it is one (TESTOPS-78, AC3): a method that differs,
+              # or an assertion with no recognised act at all. ``None`` on every other record.
+              "near_miss_kind": None, "intent_known": None}
     if not placed or interaction == "U":
         record["reason"] = ("nothing placed this claim, so nothing is known about what would settle "
                             "it and the product is not evidence about it")
@@ -651,17 +715,32 @@ def _product_record(interaction: str, assertion: str, surfaces, state: str, reas
         return record
     record.update(match)
     if not match["verb_agrees"]:
-        # The nearest surface names the same noun with a different method - a GET route for an
-        # assertion about creation. That is a near miss, not evidence that the product publishes
-        # the act, so the state is ``zero`` (the product was read and settles nothing here), and
-        # both verbs and the route are recorded so the refusal is arguable rather than silent.
+        # The nearest surface names the same noun without settling the assertion - a GET route for
+        # an assertion about creation, or a bare noun for an assertion that names no act at all.
+        # Neither is evidence that the product publishes the act, so the state is ``zero`` (the
+        # product was read and settles nothing here), and the route and the word are recorded so the
+        # refusal is arguable rather than silent.
         record["state"] = PRODUCT_ZERO
         record["near_miss"] = True
+        if not match["intent_known"]:
+            # v0.11 treated "no verb" as "any verb agrees", which handed a presence sentence back to
+            # round-1 noun matching and accused a DELETE of being a repeat over the GET beside it
+            # (TESTOPS-78, AC1). A shared noun with no recognised act is not evidence of anything.
+            record["near_miss_kind"] = "no_intent"
+            record["reason"] = (f'the product declares {match["route"]}, and it shares the word '
+                                f'"{match["word"]}", but the assertion names no act this rule '
+                                f'recognises (none of get, create, update or delete), so a shared '
+                                f'noun alone is not evidence that the product already does this - '
+                                f'it is not counted as a repeat. Name the act the assertion checks, '
+                                f'or check this one by hand')
+            return record
+        record["near_miss_kind"] = "verb_differs"
         record["reason"] = (f'the product declares {match["route"]}, and it shares the word '
                             f'"{match["word"]}", but the assertion\'s verb is "{match["assertion_verb"]}" '
                             f'and the route\'s method is {match["surface_verb"]} - a '
                             f'{match["surface_verb"]} route does not settle "{match["assertion_verb"]}" '
-                            f'- so it is not counted as a repeat')
+                            f'- so it is not counted as a repeat. Check whether the product declares '
+                            f'a route for "{match["assertion_verb"]}", or check this one by hand')
         return record
     record["state"] = PRODUCT_FOUND
     record["reason"] = (f'the product declares {match["route"]}, whose own claim is '

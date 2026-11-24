@@ -329,6 +329,11 @@ def product_evidence(conn, run_id: str) -> dict:
     claims that needed the product and whose record says it could not be consulted. The two sets do
     not overlap: a claim nobody could judge is never counted as a repeat, and a repeat is never
     counted as unconsulted.
+
+    ``near_miss`` counts claims the rule looked at and declined (TESTOPS-78, AC3): a noun shared with
+    a product route that was not counted as a repeat, split by why - ``near_miss_verb_differs`` (the
+    route's method settles a different act) and ``near_miss_no_intent`` (the assertion names no act
+    the intent table knows). They are counted here, never folded into ``repeats`` or ``unconsulted``.
     """
     rows = conn.execute(
         """SELECT c.id, c.verdict, c.interaction_code,
@@ -336,6 +341,7 @@ def product_evidence(conn, run_id: str) -> dict:
                     ORDER BY i.id DESC LIMIT 1) AS output
              FROM claim c WHERE c.run_id = ? ORDER BY c.id""", (run_id,)).fetchall()
     recorded = repeats = unconsulted = examined = 0
+    near_miss = near_miss_verb_differs = near_miss_no_intent = 0
     for row in rows:
         detail = _json(row["output"]) if row["output"] else {}
         product = detail.get("product") if isinstance(detail, dict) else None
@@ -346,10 +352,74 @@ def product_evidence(conn, run_id: str) -> dict:
             repeats += 1
         elif product.get("state") == PRODUCT_NOT_CONSULTED:
             unconsulted += 1
+        elif product.get("near_miss"):
+            near_miss += 1
+            if product.get("near_miss_kind") == "no_intent" or not product.get("assertion_verb"):
+                near_miss_no_intent += 1
+            else:
+                near_miss_verb_differs += 1
         elif product.get("state") == PRODUCT_FOUND:
             examined += 1
     return {"recorded": recorded, "claims": len(rows), "repeats": repeats,
-            "unconsulted": unconsulted, "matched": examined}
+            "unconsulted": unconsulted, "matched": examined,
+            "near_miss": near_miss, "near_miss_verb_differs": near_miss_verb_differs,
+            "near_miss_no_intent": near_miss_no_intent}
+
+
+def near_miss_claims(conn, run_id: str, scenarios: set[str] | None = None) -> list[dict]:
+    """The claims this run's product rule looked at and declined, as records a page can render.
+
+    A near-miss claim is ``distinct``, so it raises no finding and gets no case page of its own. That
+    made its refusal invisible in the build before TESTOPS-78: recorded on the claim, rendered
+    nowhere. This read model is what the run page lists and what a case page uses to show the near
+    misses belonging to its own scenario.
+
+    ``scenarios`` restricts the answer to those ``subject_ref`` values - the case page passes the
+    scenarios its findings belong to. Each entry carries the claim's identity, its own words, and the
+    product record (route, shared word, kind of refusal, reason). Order is deterministic.
+    """
+    rows = conn.execute(
+        """SELECT c.id, c.subject_ref, c.assertion_text, c.verdict, c.assertion_line,
+                  (SELECT i.output FROM inference i WHERE i.claim_id = c.id
+                    ORDER BY i.id DESC LIMIT 1) AS output
+             FROM claim c WHERE c.run_id = ? ORDER BY c.subject_ref, c.assertion_line, c.id""",
+        (run_id,)).fetchall()
+    out: list[dict] = []
+    for row in rows:
+        if scenarios is not None and row["subject_ref"] not in scenarios:
+            continue
+        detail = _json(row["output"]) if row["output"] else {}
+        product = detail.get("product") if isinstance(detail, dict) else None
+        if not isinstance(product, dict) or not product.get("near_miss"):
+            continue
+        _, _, scenario = row["subject_ref"].partition("#")
+        out.append({"id": row["id"], "subject_ref": row["subject_ref"], "scenario": scenario,
+                    "assertion_text": row["assertion_text"] or "", "verdict": row["verdict"],
+                    "product": product})
+    return out
+
+
+def case_for_scenario(conn, run_id: str) -> dict[str, str]:
+    """``subject_ref -> case id`` for the cases this run raised, first case wins.
+
+    A near-miss claim has no case of its own, so the run page can only point a reader at the case
+    page of the scenario it belongs to - when that scenario raised a finding. Read from the
+    findings' own claim ids, so the link is a fact about stored rows rather than a guess from titles.
+    """
+    links: dict[str, str] = {}
+    claim_scenario: dict[int, str] = {}
+    for finding in conn.execute(
+            """SELECT f.case_id, f.claim_ids FROM finding f
+                 JOIN case_ c ON c.id = f.case_id WHERE c.run_id = ?""", (run_id,)):
+        for claim_id in _json(finding["claim_ids"], []):
+            if claim_id not in claim_scenario:
+                row = conn.execute("SELECT subject_ref FROM claim WHERE id = ?",
+                                   (claim_id,)).fetchone()
+                if row is None:
+                    continue
+                claim_scenario[claim_id] = row["subject_ref"]
+            links.setdefault(claim_scenario[claim_id], finding["case_id"])
+    return links
 
 
 def _attach_sources(conn, claim: dict) -> dict:

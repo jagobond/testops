@@ -36,7 +36,7 @@ FEATURE_TEXT = """\
 Feature: booking page
   Scenario: a visitor books a room
     Given a visitor opens the booking page
-    Then the booking confirmation is announced with an accessible name
+    Then the booking confirmation is shown with an accessible name
 
   Scenario: the page is served with the room list
     Given a visitor opens the booking page
@@ -49,7 +49,7 @@ public sealed class BookingSteps
     [Given("a visitor opens the booking page")]
     internal void GivenOpened() => Driver.Page.Open("/booking");
 
-    [Then("the booking confirmation is announced with an accessible name")]
+    [Then("the booking confirmation is shown with an accessible name")]
     internal void ThenAnnounced() => Driver.Page.FindElement(By.Id("confirmation")).IsVisible();
 
     [Then("the page is served with the room list")]
@@ -57,11 +57,11 @@ public sealed class BookingSteps
 }
 """
 
-ASSERTION = "the booking confirmation is announced with an accessible name"
+ASSERTION = "the booking confirmation is shown with an accessible name"
 SERVED = "the page is served with the room list"
 
-ROUTE = "POST /booking"
-ROUTE_CLAIM = "create booking"
+ROUTE = "GET /booking"
+ROUTE_CLAIM = "show booking"
 COMMIT = "b" * 40
 
 # Captured before any test patches ``pipeline.db.connect``: the pipeline and the tests share one
@@ -152,7 +152,7 @@ def test_the_flip_test_one_suite_two_products_and_one_assertion_that_changes_ver
     """AC2, the proof: the same assertion, the same suite, two products - and only the verdict moves.
 
     The two runs are the same feature text and the same bindings. The only difference is that the
-    product declares ``POST /booking`` or does not, so the difference in verdict is traceable to the
+    product declares ``GET /booking`` or does not, so the difference in verdict is traceable to the
     product alone.
     """
     with_route = _analyse(WITH_ROUTE)[ASSERTION]
@@ -175,6 +175,7 @@ def test_the_flip_test_one_suite_two_products_and_one_assertion_that_changes_ver
 
 
 def _pipeline_run(path, surfaces, monkeypatch, *, feature_text=FEATURE_TEXT,
+                  stepdef_text=STEPDEF_TEXT,
                   product_file="booking/src/BookingController.java",
                   product_text="public class BookingController {}", state="found", reason=""):
     """One real levels run over an in-memory repository and a throwaway store.
@@ -185,7 +186,7 @@ def _pipeline_run(path, surfaces, monkeypatch, *, feature_text=FEATURE_TEXT,
     files = {"features/booking_page.feature": ("sha-feature", "feature"),
              "steps/BookingSteps.cs": ("sha-steps", "stepdef"),
              product_file: ("sha-product", "source")}
-    texts = {"sha-feature": feature_text, "sha-steps": STEPDEF_TEXT, "sha-product": product_text}
+    texts = {"sha-feature": feature_text, "sha-steps": stepdef_text, "sha-product": product_text}
     monkeypatch.setattr(pipeline, "load_env", lambda: {})
     monkeypatch.setattr(pipeline.db, "connect", lambda: REAL_CONNECT(path))
     monkeypatch.setattr(pipeline.blobs, "text", lambda sha: texts[sha])
@@ -434,3 +435,225 @@ def test_the_run_page_says_so_when_the_product_could_not_be_consulted(tmp_path, 
     assert "could not be consulted" in section
     assert "not counted among the repeats" in section
     assert "No claim in this run repeats work the product already exposes." in text
+
+
+# ------------------------------------------------------------ TESTOPS-78: the two remaining holes
+
+# The explicit intent table, pinned exactly (AC2). A form that is not here is not an intent, and a
+# form added here is a deliberate change to how an assertion is read - which is why the whole table
+# is written out rather than sampled.
+EXPECTED_INTENT_FORMS = {
+    "create": ("create", frozenset({"POST"})),
+    "creates": ("create", frozenset({"POST"})),
+    "created": ("create", frozenset({"POST"})),
+    "creating": ("create", frozenset({"POST"})),
+    "add": ("add", frozenset({"POST"})),
+    "adds": ("add", frozenset({"POST"})),
+    "added": ("add", frozenset({"POST"})),
+    "adding": ("add", frozenset({"POST"})),
+    "new": ("new", frozenset({"POST"})),
+    "read": ("read", frozenset({"GET"})),
+    "reads": ("read", frozenset({"GET"})),
+    "reading": ("read", frozenset({"GET"})),
+    "get": ("get", frozenset({"GET"})),
+    "gets": ("get", frozenset({"GET"})),
+    "getting": ("get", frozenset({"GET"})),
+    "show": ("show", frozenset({"GET"})),
+    "shows": ("show", frozenset({"GET"})),
+    "showed": ("show", frozenset({"GET"})),
+    "shown": ("show", frozenset({"GET"})),
+    "showing": ("show", frozenset({"GET"})),
+    "display": ("display", frozenset({"GET"})),
+    "displays": ("display", frozenset({"GET"})),
+    "displayed": ("display", frozenset({"GET"})),
+    "displaying": ("display", frozenset({"GET"})),
+    "list": ("list", frozenset({"GET"})),
+    "lists": ("list", frozenset({"GET"})),
+    "listed": ("list", frozenset({"GET"})),
+    "listing": ("list", frozenset({"GET"})),
+    "view": ("view", frozenset({"GET"})),
+    "views": ("view", frozenset({"GET"})),
+    "viewed": ("view", frozenset({"GET"})),
+    "viewing": ("view", frozenset({"GET"})),
+    "see": ("see", frozenset({"GET"})),
+    "sees": ("see", frozenset({"GET"})),
+    "saw": ("see", frozenset({"GET"})),
+    "seen": ("see", frozenset({"GET"})),
+    "seeing": ("see", frozenset({"GET"})),
+    "fetch": ("fetch", frozenset({"GET"})),
+    "fetches": ("fetch", frozenset({"GET"})),
+    "fetched": ("fetch", frozenset({"GET"})),
+    "fetching": ("fetch", frozenset({"GET"})),
+    "retrieve": ("retrieve", frozenset({"GET"})),
+    "retrieves": ("retrieve", frozenset({"GET"})),
+    "retrieved": ("retrieve", frozenset({"GET"})),
+    "retrieving": ("retrieve", frozenset({"GET"})),
+    "update": ("update", frozenset({"PUT", "PATCH"})),
+    "updates": ("update", frozenset({"PUT", "PATCH"})),
+    "updated": ("update", frozenset({"PUT", "PATCH"})),
+    "updating": ("update", frozenset({"PUT", "PATCH"})),
+    "edit": ("edit", frozenset({"PUT", "PATCH"})),
+    "edits": ("edit", frozenset({"PUT", "PATCH"})),
+    "edited": ("edit", frozenset({"PUT", "PATCH"})),
+    "editing": ("edit", frozenset({"PUT", "PATCH"})),
+    "change": ("change", frozenset({"PUT", "PATCH"})),
+    "changes": ("change", frozenset({"PUT", "PATCH"})),
+    "changed": ("change", frozenset({"PUT", "PATCH"})),
+    "changing": ("change", frozenset({"PUT", "PATCH"})),
+    "modify": ("modify", frozenset({"PUT", "PATCH"})),
+    "modifies": ("modify", frozenset({"PUT", "PATCH"})),
+    "modified": ("modify", frozenset({"PUT", "PATCH"})),
+    "modifying": ("modify", frozenset({"PUT", "PATCH"})),
+    "delete": ("delete", frozenset({"DELETE"})),
+    "deletes": ("delete", frozenset({"DELETE"})),
+    "deleted": ("delete", frozenset({"DELETE"})),
+    "deleting": ("delete", frozenset({"DELETE"})),
+    "remove": ("remove", frozenset({"DELETE"})),
+    "removes": ("remove", frozenset({"DELETE"})),
+    "removed": ("remove", frozenset({"DELETE"})),
+    "removing": ("remove", frozenset({"DELETE"})),
+    "destroy": ("destroy", frozenset({"DELETE"})),
+    "destroys": ("destroy", frozenset({"DELETE"})),
+    "destroyed": ("destroy", frozenset({"DELETE"})),
+    "destroying": ("destroy", frozenset({"DELETE"})),
+}
+
+
+def test_the_intent_table_is_an_explicit_list_and_holds_no_generated_form():
+    """AC2: the table's contents are pinned, and a form nobody writes does not exist."""
+    assert level_fitness._INTENT_FORMS == EXPECTED_INTENT_FORMS
+    for absent in ("getted", "readed", "seed", "newed", "seesed", "listedting"):
+        assert absent not in level_fitness._INTENT_FORMS, absent
+
+
+GET_BOOKING = _surface("GET /booking/{id}", "get booking")
+DELETE_BOOKING = _surface("DELETE /booking/{id}", "delete booking")
+# Six surfaces so the shared noun is not the noun the whole product is about (the common-share
+# guard), exactly as the reviewer's probe had.
+BOOKING_CORPUS = (GET_BOOKING, DELETE_BOOKING, BRANDING, AUTH, GET_ROOM, REPORTS)
+
+PRESENT = "booking details present"
+
+
+def test_a_verb_less_assertion_shares_a_noun_and_is_refused_not_counted():
+    """AC1, the reviewer's own probe: presence is not an act, and a bare noun is not evidence.
+
+    ``booking details present`` matched ``DELETE /booking/{id}`` on the bare noun over the
+    ``GET /booking/{id}`` beside it and was counted as a repeat. It must not be: no recognised act
+    means nothing the product does can agree with it, so the claim stays ``distinct`` and the record
+    says why in words a reader can act on.
+    """
+    claim = _verb_claim(PRESENT, BOOKING_CORPUS)
+    product = claim.detail["product"]
+    assert claim.verdict == "distinct"
+    assert product["state"] == "zero"
+    assert product["near_miss"] is True
+    assert product["near_miss_kind"] == "no_intent"
+    assert product["assertion_verb"] == ""
+    assert product["verb_agrees"] is False
+    # The nearest surface is the DELETE the review saw; the route is recorded, not hidden.
+    assert product["route"] == "DELETE /booking/{id}"
+    assert product["word"] == "booking"
+    assert "no act this rule recognises" in product["reason"]
+    assert "not counted as a repeat" in product["reason"]
+
+
+def test_precision_is_unchanged_on_the_round_2_fixtures():
+    """AC5: every repeat the amendment's fixtures pinned still fires, and the verb-less ones refuse.
+
+    ``New room will be created`` against a POST is a repeat; against a GET-only product it is a near
+    miss; the two-verb sentence still prefers the mutation. Nothing here is new behaviour - the test
+    pins that the new refusal did not buy its honesty by losing a true positive.
+    """
+    assert _verb_claim(CREATION, CORPUS).verdict == "repeats_product"
+    assert _verb_claim("A room is created and then the room is displayed",
+                       CORPUS).verdict == "repeats_product"
+    assert _verb_claim(CREATION, (GET_ROOM, BRANDING, REPORTS, AUTH)).verdict == "distinct"
+    assert _verb_claim(PRESENT, BOOKING_CORPUS).verdict == "distinct"
+
+
+# ------------------------------------------------------- AC3 and AC4: the refusal is on the page
+
+ROOM_SHOWN = "the room is shown with an accessible name"
+CASE_FEATURE_TEXT = f"""\
+Feature: room admin
+  Scenario: a new room
+    Given a visitor opens the room admin page
+    Then {ROOM_SHOWN}
+    And {PRESENT}
+"""
+
+CASE_STEPDEF_TEXT = f"""\
+public sealed class RoomSteps
+{{
+    [Given("a visitor opens the room admin page")]
+    internal void GivenPage() => Driver.Page.Open("/rooms");
+
+    [Then("{ROOM_SHOWN}")]
+    internal void ThenShown() => Driver.Page.FindElement(By.Id("room")).IsVisible();
+
+    [Then("{PRESENT}")]
+    internal void ThenDetails() => Driver.Page.FindElement(By.Id("details")).IsVisible();
+}}
+"""
+
+# One repeat and one near miss in one scenario: the case page for the repeat is the page a reader is
+# already on when the sibling's refusal matters.
+CASE_SURFACES = (GET_ROOM, _surface("GET /booking", "show booking"), GET_BOOKING,
+                 DELETE_BOOKING, _surface("GET /report", "get report"), AUTH)
+
+
+def test_the_run_page_counts_the_claims_it_refused_separately(tmp_path, monkeypatch):
+    """AC3: one line, its own count, split by why - never folded into repeats or blind spots."""
+    result, _claims, connect = _pipeline_run(
+        tmp_path / "near.db", CASE_SURFACES, monkeypatch, feature_text=CASE_FEATURE_TEXT,
+        stepdef_text=CASE_STEPDEF_TEXT)
+    assert result.stats["repeats_product"] == 1, result.stats
+    assert result.stats["product_near_miss"] == 1, result.stats
+    conn = connect(tmp_path / "near.db")
+    try:
+        page, status = app.run_response(conn, result.run_id)
+    finally:
+        conn.close()
+
+    assert status == 200
+    text = page.decode("utf-8")
+    section = text.split("What the product says", 1)[1].split("<h2", 1)[0]
+    assert ("1 claim shares a noun with a product route but was not counted "
+            "(verb differs 0 / no intent 1)") in section
+    assert "could not be consulted" not in section
+
+
+def test_a_near_miss_is_reachable_from_its_run_page_and_from_its_scenarios_case_page(
+        tmp_path, monkeypatch):
+    """AC4: recorded and invisible is not acceptable - the sentence is on a page, and linked.
+
+    The near-miss claim is ``distinct``, so it raises no case. Its own sentence must be on the run
+    page, and where its scenario raised a finding, the run page must link to that case page and the
+    case page must show the same sentence: route, shared word, why it is not a repeat.
+    """
+    result, _claims, connect = _pipeline_run(
+        tmp_path / "shown.db", CASE_SURFACES, monkeypatch, feature_text=CASE_FEATURE_TEXT,
+        stepdef_text=CASE_STEPDEF_TEXT)
+    assert result.case_ids, result.stats
+    case_id = result.case_ids[0]
+    conn = connect(tmp_path / "shown.db")
+    try:
+        run_page, _ = app.run_response(conn, result.run_id)
+        case_page, case_status = app.case_response(conn, case_id)
+    finally:
+        conn.close()
+
+    run_text = run_page.decode("utf-8")
+    assert "What the product refused" in run_text
+    assert PRESENT in run_text
+    assert "DELETE /booking/{id}" in run_text
+    assert "no act this rule recognises" in run_text
+    assert f'/case/{case_id}#near-miss-claim-' in run_text
+
+    assert case_status == 200
+    case_text = case_page.decode("utf-8")
+    assert "What the product refused" in case_text
+    assert PRESENT in case_text
+    assert "DELETE /booking/{id}" in case_text
+    assert "no act this rule recognises" in case_text

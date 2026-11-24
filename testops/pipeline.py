@@ -796,6 +796,11 @@ def run_level_fitness(project: Project, token: str,
                             "product_not_consulted": sum(
                                 1 for c in claims
                                 if (c.detail.get("product") or {}).get("state") == "not_assessable"),
+                            # Claims the product rule looked at and declined (TESTOPS-78). Counted
+                            # here so the run's own record says the rule looked, not only the page.
+                            "product_near_miss": sum(
+                                1 for c in claims
+                                if (c.detail.get("product") or {}).get("near_miss")),
                             "ecosystems": ecosystems_record,
                             "placement": placement,
                             "read": _counts(arms), "skipped": _skips(arms), "budget": budget})
