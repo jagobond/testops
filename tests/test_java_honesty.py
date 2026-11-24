@@ -17,12 +17,14 @@ over in-memory trees written to throwaway stores.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from testops import config, pipeline
 from testops.collectors import github
 from testops.surfaces import discover as surface_discovery
 from testops.surfaces import java
+from testops.web import lint
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "java"
 
@@ -149,7 +151,8 @@ public class RemoteInterfaceController implements RemoteApi {
     assert discovery.surfaces == (), "a route whose interface is not held is not a route"
     assert len(discovery.unread) == 1
     entry = discovery.unread[0]
-    assert entry.reason == java.REASON_PREFIX_NOT_READ
+    assert entry.reason == java.REASON_INTERFACE_NOT_READ
+    assert "interface" in entry.reason and "superclass" not in entry.reason
     assert "RemoteApi" in entry.detail
     assert "does not hold" in entry.detail
 
@@ -204,6 +207,166 @@ public class BrokenChild extends BrokenBase {
     assert "BrokenBase" in entry.detail and "BrokenBase.java" in entry.detail
     assert "could not read" in entry.detail
     assert "does not hold" not in entry.detail
+
+
+# ------------------------------------------ TESTOPS-77 AC1: a type name is read in code position
+
+def test_declared_type_names_come_from_the_lexer_not_from_literals_or_comments():
+    """The unlexable file mentions PhantomBase only in a string and a comment: not a declaration."""
+    names = surface_discovery._declared_type_names(_fixtures()["LiteralMentionOnly.java"])
+
+    assert names == ["LiteralMentionOnly"]
+    assert "PhantomBase" not in names
+
+
+def test_a_superclass_named_only_in_prose_does_not_make_the_refusal_claim_it_is_held():
+    discovery = surface_discovery.discover({
+        "LiteralMentionOnly.java": _fixtures()["LiteralMentionOnly.java"],
+        "PhantomChild.java": """\
+@RestController
+public class PhantomChild extends PhantomBase {
+    @GetMapping("/{id}")
+    public String get(int id) { return null; }
+}
+""",
+    })
+
+    assert discovery.surfaces == ()
+    assert len(discovery.unread) == 1
+    entry = discovery.unread[0]
+    assert "PhantomBase" in entry.detail
+    assert "does not hold" in entry.detail
+    assert "holds but this reader could not read" not in entry.detail
+
+
+def test_a_superclass_really_declared_by_an_unlexable_file_is_held_and_says_so():
+    discovery = surface_discovery.discover({
+        "UnlexableBase.java": _fixtures()["UnlexableBase.java"],
+        "RealChild.java": """\
+@RestController
+public class RealChild extends UnlexableBase {
+    @GetMapping("/{id}")
+    public String get(int id) { return null; }
+}
+""",
+    })
+
+    assert discovery.surfaces == ()
+    assert len(discovery.unread) == 1
+    entry = discovery.unread[0]
+    assert entry.reason == java.REASON_PREFIX_NOT_READ
+    assert "UnlexableBase.java" in entry.detail
+    assert "holds but this reader could not read" in entry.detail
+    assert "does not hold" not in entry.detail
+
+
+# ------------------------------- TESTOPS-77 AC2: every refusal names what is actually missing
+
+def test_a_superclass_refusal_uses_the_superclass_noun():
+    discovery = surface_discovery.discover({
+        "SuperChild.java": """\
+@RestController
+public class SuperChild extends MissingSuperclass {
+    @GetMapping("/{id}")
+    public String get(int id) { return null; }
+}
+""",
+    })
+    entry = discovery.unread[0]
+
+    assert entry.reason == java.REASON_PREFIX_NOT_READ
+    assert "superclass" in entry.reason and "interface" not in entry.reason
+    assert "MissingSuperclass" in entry.detail
+
+
+def test_an_interface_refusal_uses_the_interface_noun():
+    discovery = surface_discovery.discover({
+        "ApiChild.java": """\
+@RestController
+public class ApiChild implements MissingApi {
+    @GetMapping("/{id}")
+    public String get(int id) { return null; }
+}
+""",
+    })
+    entry = discovery.unread[0]
+
+    assert entry.reason == java.REASON_INTERFACE_NOT_READ
+    assert "interface" in entry.reason and "superclass" not in entry.reason
+    assert "MissingApi" in entry.detail
+
+
+def test_a_name_held_more_than_once_is_refused_as_ambiguous_not_as_missing():
+    discovery = surface_discovery.discover({
+        "one/BaseController.java": """\
+@RequestMapping("/one")
+public abstract class BaseController { }
+""",
+        "two/BaseController.java": """\
+@RequestMapping("/two")
+public abstract class BaseController { }
+""",
+        "ChildController.java": """\
+@RestController
+public class ChildController extends BaseController {
+    @GetMapping("/{id}")
+    public String get(int id) { return null; }
+}
+""",
+    })
+
+    assert discovery.surfaces == ()
+    entry = discovery.unread[0]
+    assert entry.reason == java.REASON_TYPE_AMBIGUOUS
+    assert "more than once" in entry.reason and "more than once" in entry.detail
+    assert "does not hold" not in entry.detail
+
+
+def test_the_both_at_once_case_names_both_types_and_calls_neither_missing():
+    """Two inherited prefixes, nothing absent: the reason must not say a superclass was not read."""
+    discovery = surface_discovery.discover({
+        "BaseController.java": """\
+@RequestMapping("/base")
+public abstract class BaseController { }
+""",
+        "PrefixApi.java": """\
+@RequestMapping("/api")
+public interface PrefixApi { }
+""",
+        "BothController.java": """\
+@RestController
+public class BothController extends BaseController implements PrefixApi {
+    @GetMapping("/{id}")
+    public String get(int id) { return null; }
+}
+""",
+    })
+
+    assert discovery.surfaces == ()
+    entry = discovery.unread[0]
+    assert entry.reason == java.REASON_PREFIX_MULTIPLE
+    assert "BaseController" in entry.detail and "PrefixApi" in entry.detail
+    assert "superclass" in entry.detail and "interface" in entry.detail
+    assert "does not hold" not in entry.detail
+    assert "was not read" not in entry.detail
+
+
+def test_a_class_whose_superclass_and_interface_are_both_absent_names_both():
+    discovery = surface_discovery.discover({
+        "AbsentBoth.java": """\
+@RestController
+public class AbsentBoth extends MissingSuperclass implements MissingApi {
+    @GetMapping("/{id}")
+    public String get(int id) { return null; }
+}
+""",
+    })
+
+    assert discovery.surfaces == ()
+    entry = discovery.unread[0]
+    assert entry.reason == java.REASON_PREFIX_SOURCES_UNREAD
+    assert "MissingSuperclass" in entry.detail and "MissingApi" in entry.detail
+    assert "superclass" in entry.detail and "interface" in entry.detail
 
 
 # --------------------------------------------------------------------------- AC2: constant paths
@@ -325,6 +488,36 @@ def test_the_assessment_sentence_names_files_not_items(monkeypatch, tmp_path):
     assert meta["count_unit"] == "file"
     assert "Assessed: code and test code were consulted and returned 3 files." in body
     assert "items" not in body
+
+
+def test_no_reason_a_page_renders_names_a_ticket_or_a_criterion(monkeypatch, tmp_path):
+    """AC3: a stranger reads the sentence and acts on it, without our backlog for a glossary."""
+    reasons = {value for name, value in vars(java).items()
+               if name.startswith("REASON_") and isinstance(value, str)}
+    assert reasons
+    for reason in reasons:
+        assert "TESTOPS-" not in reason
+        assert not re.search(r"\bAC\d+\b", reason), reason
+
+    fixtures = _fixtures()
+    TEXTS["sha:orphan"] = fixtures["OrphanController.java"]
+    TEXTS["sha:constants"] = fixtures["ConstantPathController.java"]
+    try:
+        _result, body, meta = _run_page(monkeypatch, tmp_path, {
+            "src/main/java/OrphanController.java": ("sha:orphan", "source"),
+            "src/main/java/ConstantPathController.java": ("sha:constants", "source"),
+        })
+    finally:
+        TEXTS.pop("sha:orphan", None)
+        TEXTS.pop("sha:constants", None)
+
+    unread = meta["surfaces"]["unread"]
+    assert len(unread) == 3, "one superclass refusal and two constant paths are rendered"
+    for entry in unread:
+        for text in (entry["reason"], entry["detail"]):
+            assert "TESTOPS-" not in text
+            assert not re.search(r"\bAC\d+\b", text), text
+    assert "TESTOPS-" not in lint.reader_text(body)
 
 
 def test_a_stored_snapshot_without_the_noun_keeps_the_sentence_it_rendered():

@@ -23,6 +23,14 @@ hold, or a path that is not a string literal, makes the mapping ``unread`` with 
 ``unread`` is carried on the run, not dropped, so the page can say how many mappings it could not
 read and why.
 
+TESTOPS-77. The reason a mapping is unread must be true, because the reason is what a reader acts
+on. Type names in a file this reader could not lex are read in code position only - the lexer
+consumes comments and literals first, so ``"class BaseController"`` in a string is not a
+declaration and a refusal cannot claim the repository holds a type it does not. And every refusal
+names the thing that is missing with its own noun: a superclass, an interface, an ambiguous name
+held more than once, or - when nothing is missing - two inherited prefixes it cannot choose
+between.
+
 The languages this reader can parse are :data:`LANGUAGES`, which is data. Adding one widens the
 reader; it does not make a repository it cannot parse look empty.
 """
@@ -118,41 +126,63 @@ def _reader() -> str:
     return ", ".join(named[:-1]) + " and " + named[-1]
 
 
-# A type declaration, read without lexing the file that holds it. Comments are stripped first, so a
-# word in a comment cannot make a refusal claim the repository holds something it does not.
-_TYPE_DECLARATION = re.compile(r"\b(?:class|interface|enum|record)\s+([A-Za-z_$][A-Za-z0-9_$]*)")
-_COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
-
-
 def _declared_type_names(text: str) -> list[str]:
-    """The type names a file declares, as far as they can be read without lexing it."""
-    return _TYPE_DECLARATION.findall(_COMMENTS.sub(" ", text))
+    """The type names a file declares, read from its lexer's token stream (TESTOPS-77 AC1).
+
+    The file is unlexable only in the sense that its delimiters do not balance - the lexer still
+    consumes comments, string literals, character literals and text blocks, so a ``class X`` inside
+    a string or a comment is a literal's contents, not a declaration. Reading the token stream is
+    what makes that true; a regex over the raw text, even with comments stripped, would harvest
+    ``\"class BaseController ...\"`` and let a refusal claim the repository *holds* a type it does
+    not. A word follows the keyword in code position, and ``Foo.class`` (a class literal) is not a
+    declaration because its keyword is preceded by a dot.
+    """
+    tokens = java.lex(text)
+    names: list[str] = []
+    for index, token in enumerate(tokens[:-1]):
+        if token.kind != "word" or token.value not in java.TYPE_KEYWORDS:
+            continue
+        if index and tokens[index - 1].value == ".":
+            continue
+        following = tokens[index + 1]
+        if following.kind == "word":
+            names.append(following.value)
+    return names
+
+
+def _not_read(kind: str) -> str:
+    """The reason for a type that could not be read, with the noun for how it was inherited."""
+    return java.REASON_INTERFACE_NOT_READ if kind == "interface" else java.REASON_PREFIX_NOT_READ
 
 
 def _inherited_prefix(name: str, path: str, declared_types: dict[str, list[str]],
                       unreadable_types: dict[str, list[str]],
-                      readings: dict[str, java.Reading]
+                      readings: dict[str, java.Reading],
+                      kind: str = "superclass"
                       ) -> tuple[tuple[str, ...] | None, str | None, tuple[str, str] | None]:
     """The prefix a class-level ``@RequestMapping`` on ``name`` supplies, or why it cannot be known.
 
     Returns ``(prefix, file, None)`` when the type is held once and declares a literal prefix;
     ``(None, None, None)`` when it is held once and declares no prefix at all (there is none to
-    drop); and ``(None, None, (reason, detail))`` when knowing it would take a guess. The reason
-    carried for a parent whose own prefix is a constant is the parent's own, named against the
-    parent, so the child is refused for the fact that made the parent unreadable.
+    drop); and ``(None, None, (reason, detail))`` when knowing it would take a guess. ``kind`` is
+    how the type reached the class - ``superclass`` or ``interface`` - and it picks the noun in the
+    reason: a refusal that arrived through an interface must not call the interface a superclass.
+    The reason carried for a parent whose own prefix is a constant is the parent's own, named
+    against the parent, so the child is refused for the fact that made the parent unreadable.
     """
     simple = name.rsplit(".", 1)[-1]
     candidates = [candidate for candidate in declared_types.get(simple, []) if candidate != path]
     if len(candidates) > 1:
-        return None, None, (java.REASON_PREFIX_NOT_READ,
-                            f"{name}, which this repository holds more than once")
+        return None, None, (java.REASON_TYPE_AMBIGUOUS,
+                            f"{name}, which this repository holds more than once "
+                            f"({', '.join(candidates)})")
     if not candidates:
         held = unreadable_types.get(simple, [])
         if held:
-            return None, None, (java.REASON_PREFIX_NOT_READ,
+            return None, None, (_not_read(kind),
                                 f"{name} ({held[0]}), which this repository holds but this "
                                 f"reader could not read")
-        return None, None, (java.REASON_PREFIX_NOT_READ,
+        return None, None, (_not_read(kind),
                             f"{name}, which this repository does not hold")
     parent = readings[candidates[0]]
     if parent.class_problem is not None:
@@ -162,10 +192,27 @@ def _inherited_prefix(name: str, path: str, declared_types: dict[str, list[str]]
     if parent.own_prefix is not None:
         return parent.own_prefix, candidates[0], None
     if parent.superclass:
-        return None, None, (java.REASON_PREFIX_NOT_READ,
+        return None, None, (_not_read(kind),
                             f"{name}, whose own prefix is inherited from {parent.superclass} "
                             f"(this reader reads one level)")
     return None, None, None
+
+
+def _refusal(refusals: list[tuple[str, str, tuple[str, str]]]) -> tuple[str, str]:
+    """One reason for one or more types that could not supply a prefix, saying what is missing.
+
+    One source keeps its own reason and detail. Several sources are named together, each with its
+    kind, so the sentence is true of every one of them rather than only of whichever came first:
+    when their reasons agree, that reason is the summary; when they do not, the summary names no
+    single type as missing and the detail names each (TESTOPS-77 AC2).
+    """
+    if len(refusals) == 1:
+        _kind, _name, why = refusals[0]
+        return why
+    reasons = {why[0] for _kind, _name, why in refusals}
+    reason = reasons.pop() if len(reasons) == 1 else java.REASON_PREFIX_SOURCES_UNREAD
+    detail = "; ".join(f"{kind} {why[1]}" for kind, _name, why in refusals)
+    return reason, detail
 
 
 def discover(files: dict[str, str]) -> Discovery:
@@ -258,21 +305,24 @@ def discover(files: dict[str, str]) -> Discovery:
         if not sources:
             continue
         prefixes: list[tuple[str, str, str | None, tuple[str, ...]]] = []
-        refusal: tuple[str, str] | None = None
+        refusals: list[tuple[str, str, tuple[str, str]]] = []
         for kind, name in sources:
             prefix, read_from, why = _inherited_prefix(
-                name, path, declared_types, unreadable_types, readings)
+                name, path, declared_types, unreadable_types, readings, kind)
             if why is not None:
-                refusal = refusal or why       # one unknown source is enough: never guess a route
+                refusals.append((kind, name, why))  # never reflected in the route below
             elif prefix is not None:
                 prefixes.append((kind, name, read_from, prefix))
-        if refusal is not None:
-            readings[path] = java.read(files[path], path, unresolved=refusal) or reading
+        if refusals:
+            readings[path] = java.read(files[path], path,
+                                       unresolved=_refusal(refusals)) or reading
             continue
         if len(prefixes) > 1:
-            named = ", ".join(f"{kind} {name}" for kind, name, _from, _prefix in prefixes)
+            # Nothing is missing here: the class has two inherited prefixes, so the reader cannot
+            # say which one the route sits under. Say that, and name both types (TESTOPS-77 AC2).
+            named = " and ".join(f"{kind} {name}" for kind, name, _from, _prefix in prefixes)
             readings[path] = java.read(files[path], path, unresolved=(
-                java.REASON_PREFIX_NOT_READ,
+                java.REASON_PREFIX_MULTIPLE,
                 f"{named}, whose prefixes it inherits through more than one type "
                 f"(this reader reads one level)")) or reading
             continue
