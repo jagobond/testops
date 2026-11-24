@@ -69,25 +69,102 @@ _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 #      paste of the most recognisable prefix is refused with a reason that says so, never accepted
 #      silently as a truncation.
 #
+# TESTOPS-63 narrowed that and TESTOPS-65 widens it again, honestly. The vocabulary below is
+# **knowingly incomplete**, and it will stay incomplete: credential naming is open-class prose.
+# `the-dsn` was invisible until this ticket and `the-webhook-signing-secret` is invisible today; next
+# year's word will be invisible tomorrow, because the list only holds the words somebody has already
+# thought of. An unlisted word therefore means an **unscreened name** - this screen does not claim to
+# know every credential noun, and no reader should infer that it does.
+#
+# What holds when the list fails is the **value shape**, which is word-free and needs nobody to have
+# thought of the word first: the pair rule, the PEM block, the JWT, the issued-prefix bodies, the
+# base64/entropy floor, and (TESTOPS-65 AC4) a bare `key`/`apikey` pair carrying a literal value
+# rather than a slot. Those rules are the real floor; the vocabulary is a convenience laid on top of
+# them, and every value-shaped rule is written to fire on a name nobody has listed.
+#
 # Credential words are matched singular and plural alike, so `passwords-list` and `password-list` are
 # decided by the same rule instead of by an accident of spelling (TESTOPS-59 AC3).
 #
-# `key` is deliberately not in this vocabulary (TESTOPS-63). It is the one credential word whose
-# reading is decided by *qualification* rather than by membership: `api-key`, `signing-key` and
+# `key` is deliberately not a member of the membership vocabulary (TESTOPS-63). It is the one
+# credential word whose reading is decided by *qualification*: `api-key`, `signing-key` and
 # `encryption-key` name a credential, while `keyboard`, `primary-key`, `key-metrics` and a bare `key`
 # name a part of a keyboard, an index, a measurement or a configuration slot. The rule is stated once:
 # a `key`/`keys` part is a credential word when another part stands before it in the same name
 # (qualified, `the-signing-key`) or when a determiner/possessive does (bare in the instance position,
-# `my-key`) - never when it stands alone or as the only word. That test is applied in the two rules
-# where a name is a *position* rather than a bare word: the instance rule below (`_KEY_WORD`) and the
-# pair's name when a determiner qualifies it (`_DETERMINER_KEY_PAIR`). It is not applied to a settings
-# field name, where `board_keys` is exactly the field the refusal message says settings may hold.
-_CREDENTIAL_NAME = (r"(?:passwords?|passwd|pwd|tokens?|api[ _-]?keys?|apikeys?|secrets?|bearer|"
-                    r"authorizations?|private[ _-]?keys?|access[ _-]?keys?|client[ _-]?secrets?)")
+# `my-key`) - never when it stands alone or as the only word. TESTOPS-65 AC3 removes the last way
+# spelling could decide that: the name is **normalised into parts before any rule reads it**, so
+# `apikey`, `apiKey`, `api_key` and `api-key` arrive as the same two parts and reach the same branch.
+# Qualification is a property of the name, not of the hyphen.
+_STRONG_WORDS = (r"passwords?|passphrases?|passwd|pwd|tokens?|api[ _-]?keys?|apikeys?|secrets?|"
+                 r"authorizations?|private[ _-]?keys?|access[ _-]?keys?|client[ _-]?secrets?")
+# TESTOPS-65 AC1/AC2. Words that carry a credential in ordinary use **and** have an honest life of
+# their own: `pass` is a build step, `cert` is a file, `salt` is hashing vocabulary, `seed` is data,
+# `jwt` is a format, `cookie` is a policy, `cred` is a path segment in `credentials-provider`, and
+# `bearer` is the HTTP scheme name (`bearer-scheme`). They are therefore screened only where they
+# stand in a credential *position* - the instance position, a compound that names the credential
+# outright (`seed-phrase`, `pin-number`, `totp-seed`), or a pair whose value is the secret itself -
+# and left alone where they name a kind of thing. AC2's table is the measurement, one word at a time.
+_CONTEXT_WORDS = (r"pass|creds?|credentials?|jwts?|certs?|certificates?|salts?|seeds?|otps?|totps?|"
+                  r"dsns?|webhooks?|cookies?|bearer")
+# The membership vocabulary used by the instance rule. The key family (`apikey`, `api_key`,
+# `api-key`, `apiKey`) is deliberately absent: `key` is decided by qualification, not membership, so
+# `apikey` is normalised to `api` + `key` and read as a qualified key - the same branch, and so the
+# same verdict, as `api_key` and `api-key`.
+_INSTANCE_WORDS = (r"passwords?|passphrases?|passwd|pwd|tokens?|secrets?|authorizations?|"
+                   r"client[ _-]?secrets?")
 # The pair's name is followed by `=` or `:` and then something - the shape a secret is pasted in.
-_CREDENTIAL_PAIR = re.compile(rf"(?i)(?<![A-Za-z0-9])({_CREDENTIAL_NAME})[ \t]*[:=][ \t]*[^\s,;]")
+# The value is captured because TESTOPS-65 AC4 decides a key pair by the *shape of the value*: a slot
+# reference (`${API_KEY}`, `from-env`, `os.environ[...]`) names where the credential lives, while a
+# literal is the credential.
+_CREDENTIAL_PAIR = re.compile(rf"(?i)(?<![A-Za-z0-9])({_STRONG_WORDS})[ \t]*[:=][ \t]*"
+                              rf"(?P<value>[^\s,;]+)")
+# TESTOPS-65: the same shape for the context words, which have honest roles where the value is a
+# reference rather than a secret - `cert=/etc/ssl/ca.pem`, `salt=$SALT`, `webhook=https://...` are
+# configuration, while `salt=abc123` and `cert=MIIC...` are the material itself.
+_CONTEXT_PAIR = re.compile(rf"(?i)(?<![A-Za-z0-9])({_CONTEXT_WORDS})[ \t]*[:=][ \t]*"
+                           rf"(?P<value>[^\s,;]+)")
+# TESTOPS-65 AC4: a *bare* `key` has no qualifier to make it a credential word, so it is the value
+# that decides. The lookbehind excludes `_` and `-` as well as alphanumerics, which is what keeps
+# `sort_keys=True`, `sorting_keys=asc` and `primary_key=id` - the settings this product really has -
+# out of the rule; and it excludes a space, which is what keeps the sentence "the key: it is in the
+# vault" prose rather than a pair (the TESTOPS-63 boundary, kept).
+_BARE_KEY_PAIR = re.compile(r"(?i)(?:^|(?<=[^A-Za-z0-9_\s]))keys?[ \t]*[:=][ \t]*"
+                            r"(?P<value>[^\s,;]+)")
+# The key family as a *name*: the spellings AC3 normalises to one reading.
+_KEY_FAMILY = re.compile(r"(?i)^(?:keys?|apikeys?|api[ _-]?keys?|apikey|accesskeys?|sshkeys?)$")
+# A value that names where a credential lives rather than being the credential: an environment
+# reference, a template placeholder, an options-flag lookup, a `from-<source>` name, or a path/URL.
+_REFERENCE_VALUE = re.compile(
+    r"""(?ix)^(?:
+          \$ | %\w+% | \{\{? | <                     # ${VAR}, $VAR, %VAR%, {{ ref }}, <slot>
+        | (?:os\.)?(?:environ|getenv|env)(?:\[|\(|\s*:)   # os.environ[...], getenv(...), env:
+        | from[-_][a-z0-9_-]+                        # from-env, from_vault
+        | (?:vault|ssm|secrets?|env|ref|secret)://
+        | [a-z][a-z0-9+.-]*://                       # any scheme: postgres://, amqp://, redis://
+        | [.~]?[/\\] | [A-Za-z]:[\\/] | https?://    # a path or a URL: a location, not a secret
+        )[^\s]*$""")
+# A URL that carries its own password - `scheme://user:secret@host/db` - is not a location: the
+# credential is written into it. `dsn=postgres://app:«secret»@db/qa` is the secret itself, while
+# `dsn=postgres://db.example/qa` and `cert=/etc/ssl/ca.pem` are references.
+_INLINE_PASSWORD = re.compile(r"(?i)://[^/@\s]*:[^/@\s]*@")
+
+
+def _is_reference(value: str) -> bool:
+    """Whether a pair's value names a slot/location rather than carrying a secret (TESTOPS-65 AC4)."""
+    if _INLINE_PASSWORD.search(value):
+        return False
+    return bool(_REFERENCE_VALUE.match(value))
+
+
+# Compounds whose *name* is a credential in ordinary use, not a kind of thing: a seed phrase is the
+# passphrase, a pin number is the PIN, a connection string carries the DSN. Accepted alone they would
+# be `session-token`-shaped kind names; naming a credential outright is what makes them instances.
+_COMPOUND_CREDENTIAL = re.compile(
+    r"(?i)^(?:seed[ _-]?phrases?|pass[ _-]?phrases?|pin[ _-]?numbers?|totps?[ _-]?seeds?|"
+    r"otps?[ _-]?seeds?|session[ _-]?ids?|cookie[ _-]?values?|connection[ _-]?strings?|"
+    r"conn[ _-]?strings?|dsns?)$")
 # A name on its own, used for the settings *key* and for the single-token rule.
-_CREDENTIAL_NAME_ALONE = re.compile(rf"(?i)(?:^|[^A-Za-z0-9]){_CREDENTIAL_NAME}(?:$|[^A-Za-z0-9])")
+_CREDENTIAL_NAME_ALONE = re.compile(rf"(?i)(?:^|[^A-Za-z0-9]){_STRONG_WORDS}(?:$|[^A-Za-z0-9])")
 # `Bearer abc123`, `Basic dXNlcjpwYXNz`: an authorization scheme and exactly one unbroken value.
 # TESTOPS-59 AC1/AC2: the scheme is the shape only when the value is the whole remainder. A sentence
 # that happens to open with the word ("Bearer token rotation work continues") continues past the
@@ -249,10 +326,58 @@ _NEGATORS = frozenset({"not", "never", "no"})
 # The heads that can carry a predication. `no` is deliberately absent: a word in two classes must not
 # satisfy both tests (TESTOPS-62 AC3).
 _PREDICATE_HEADS = (_FINITE_VERBS | _NEGATORS) - _DETERMINERS
-_CREDENTIAL_WORD = re.compile(rf"(?i)^{_CREDENTIAL_NAME}$")
+_CREDENTIAL_WORD = re.compile(rf"(?i)^{_INSTANCE_WORDS}$")
+# TESTOPS-65 AC1: a context word is a credential head only in a credential position (see the
+# vocabulary note above), which is what keeps `pass-through`, `cert-store` and `cookie-policy` names.
+_CONTEXT_WORD = re.compile(rf"(?i)^{_CONTEXT_WORDS}$")
 # TESTOPS-63. The one word whose reading is decided by qualification (see the vocabulary note above):
 # `key`/`keys` is a credential head only when a part or a determiner stands before it in the name.
 _KEY_WORD = re.compile(r"(?i)^keys?$")
+# TESTOPS-65 AC3. The modifiers that make a *merged* `key` name a credential word, the same way a
+# preceding hyphenated part does: `apikey`, `apikeys`, `sshkeys`, `accesskey`. This is a closed class
+# of qualifiers, not a list of credential nouns - it exists so the merged, camel-case and
+# separator-joined spellings of the same name reach the same branch. A merged word whose prefix is
+# not one of these (`monkey`, `hotkey`, `turnkey`) is a different word and stays a name.
+_KEY_QUALIFIERS = frozenset({
+    "api", "ssh", "access", "private", "secret", "signing", "encryption", "auth", "deploy", "master",
+    "client", "public", "gpg", "hmac", "session", "storage", "subscription", "license", "webhook",
+})
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+
+
+def _split_merged(part: str) -> list[str]:
+    """Split a merged credential name into qualifier and head (`apikey` -> `api`, `key`).
+
+    TESTOPS-65 AC3: the same name written merged (`apikey`), camel-cased (`apiKey`), underscored
+    (`api_key`) or hyphenated (`api-key`) must be read by the same rule. The separators are undone by
+    the split in :func:`_credential_parts`; this undoes the merge, and only for a prefix that is a
+    known qualifier, so `monkey` and `hotkey` stay single words.
+    """
+    for head in ("keys", "key"):
+        lowered = part.lower()
+        if lowered.endswith(head) and len(lowered) > len(head):
+            prefix = lowered[:-len(head)]
+            if prefix in _KEY_QUALIFIERS:
+                cut = len(part) - len(head)
+                return [part[:cut], part[cut:]]
+    return [part]
+
+
+def _credential_parts(name: str) -> list[str]:
+    """The parts any rule reads a name by: separators and camel case undone, merged keys split.
+
+    Called before the rule sees the name, so qualification is a property of the name rather than of
+    its spelling (TESTOPS-65 AC3). `api_key`, `api-key`, `apiKey` and `apikey` all arrive as
+    `["api", "key"]`, and `the-signing-key` as `["the", "signing", "key"]`.
+    """
+    parts: list[str] = []
+    for raw in re.split(r"[^A-Za-z0-9]+", name):
+        if not raw:
+            continue
+        for piece in _CAMEL_BOUNDARY.sub("-", raw).split("-"):
+            if piece:
+                parts.extend(_split_merged(piece))
+    return parts
 # The same qualification in the pair branch: a pair whose *name* is a determiner plus `key`
 # (`my-key=hunter2`, `the_keys: abc`) is a credential name, while `sort_keys=True` - the name a
 # setting really has - is not. Only a hyphen or an underscore joins the two: with a space allowed,
@@ -341,6 +466,18 @@ def _names_a_credential(parts: list[str]) -> bool:
     vocabulary itself: a pair name and a settings field name are honestly `sort_keys=` and
     `board_keys`.
 
+    TESTOPS-65 makes the rule read the *normalised* name (``_credential_parts``), so qualification is
+    a property of the name rather than of the hyphen: `apikey`, `apiKey`, `api_key` and `api-key`
+    arrive as `api` + `key` and are decided together, alone (a kind name, accepted) and with a
+    determiner (an instance, refused). The words AC1 adds - `passphrase`, `cred`/`creds`, `pass`,
+    `bearer`, `jwt`, `cert`, `salt`, `seed`, `otp`/`totp`, `dsn`, `webhook`, `cookie` - join the head
+    set as *context* words: they are read where they stand in a credential position and left alone
+    where they name a kind of thing (`pass-through`, `cert-store`, `jwt-decode`, `cookie-policy`).
+    A compound that *is* the credential rather than a kind of it (`seed-phrase`, `pin-number`,
+    `totp-seed`, `connection-string`, `session-id`, `cookie-value`) is an instance on its own.
+    The list is knowingly incomplete: an unlisted word is an unscreened name, and the value-shape
+    rules are what catch a credential whose name nobody has thought of yet.
+
     Residual risk, stated rather than hidden: a compound whose head is a credential word but which
     carries no determiner (`prod-db-password`) is accepted as a type name, and a name whose only
     determiner is inside a predication about the credential word (`this-is-my-password`) is accepted
@@ -348,16 +485,29 @@ def _names_a_credential(parts: list[str]) -> bool:
     pasted credential is caught by rules 1, 2, 4 and 5 wherever it sits in the value.
     """
     lowered = [part.lower() for part in parts]
-    strong = [i for i, part in enumerate(parts) if _CREDENTIAL_WORD.fullmatch(part)]
+    if not lowered:
+        return False
+    # TESTOPS-65: a compound whose own name is the credential - `seed-phrase`, `pin-number`,
+    # `totp-seed`, `connection-string`, `session-id`, `cookie-value` - names the thing rather than a
+    # kind of thing, so it is an instance with or without a determiner. The tail after a determiner is
+    # read the same way, which is what closes `the-seed-phrase` and `the-cookie-value`.
+    if _COMPOUND_CREDENTIAL.fullmatch("-".join(lowered)):
+        return True
+    for index, part in enumerate(lowered):
+        if part in _DETERMINERS and _COMPOUND_CREDENTIAL.fullmatch("-".join(lowered[index + 1:])):
+            return True
+    strong = [i for i, part in enumerate(lowered) if _CREDENTIAL_WORD.fullmatch(part)]
+    context = [i for i, part in enumerate(lowered) if _CONTEXT_WORD.fullmatch(part)]
     # TESTOPS-63: `key` is a credential word in this rule only (see the vocabulary note), so it joins
     # the head set here and nowhere else. It is not a credential word on its own - a lone `key` is a
-    # configuration slot name, not an instance label - which is why `strong` decides the one-word case.
-    credential = sorted(strong + [i for i, part in enumerate(parts)
-                                  if _KEY_WORD.fullmatch(part)])
+    # configuration slot name, not an instance label - which is why `strong`/`context` decide the
+    # one-word case. TESTOPS-65 AC1 adds the context words to the head set in the same way.
+    credential = sorted(set(strong + context + [i for i, part in enumerate(lowered)
+                                                if _KEY_WORD.fullmatch(part)]))
     if not credential:
         return False
-    if len(parts) == 1:
-        return bool(strong)                           # `password` names the thing; `key` is a slot name
+    if len(lowered) == 1:
+        return bool(strong or context)                # `password`/`creds` name the thing; `key` is a slot name
     head = credential[-1]
     if not any(part in _DETERMINERS for part in lowered):
         return False                                  # a kind name: `session-token`, `vault-token`
@@ -366,9 +516,33 @@ def _names_a_credential(parts: list[str]) -> bool:
     # otherwise the parts label an instance and the determiner decides the name.
     if any(part in _FINITE_VERBS or part in _NEGATORS for part in lowered):
         return not _is_predication(lowered, head)
-    if head != len(parts) - 1:
+    if head != len(lowered) - 1:
         return False                                  # the head is a later noun: a compound noun
     return True                                       # a determiner and a credential head: an instance
+
+
+def _field_names_a_credential(name: str) -> bool:
+    """Whether a settings **field** name is named like a credential (TESTOPS-65).
+
+    A field name is a slot name rather than a label, which is why `key` is not a credential word here
+    (`board_keys` and `jira_key` are fields this product really has) and why the membership vocabulary
+    keeps deciding the strong words by search: `api_key` and `db_password` are refused unchanged.
+    The words this ticket adds have honest lives as field names (`certs-dir`, `pass-through`,
+    `jwt-library`, `cookie-banner`, `credentials-provider`), so they are refused only where they are
+    the *last* part - `cert`, `seed`, `creds` - and a key qualified by a known modifier (`api_key`)
+    is refused while one qualified by an ordinary noun (`board_keys`, `sorting_keys`) is not.
+    """
+    if _CREDENTIAL_NAME_ALONE.search(name):
+        return True
+    parts = _credential_parts(name)
+    if not parts:
+        return False
+    if _names_a_credential(parts):
+        return True
+    if _CONTEXT_WORD.fullmatch(parts[-1]):
+        return True
+    return (len(parts) > 1 and bool(_KEY_WORD.fullmatch(parts[-1]))
+            and parts[-2].lower() in _KEY_QUALIFIERS)
 
 
 
@@ -411,7 +585,10 @@ def _looks_like_secret(value: str) -> str | None:
     Names and prefixes may be named, because they are what the reader has to change.
 
     The value is scanned, not prefix-matched: a real token, pair, JWT or PEM block anywhere in the
-    string is a credential (TESTOPS-59 AC1). Residual risk, stated rather than implied: an
+    string is a credential (TESTOPS-59 AC1). The vocabulary is knowingly incomplete (TESTOPS-65 AC5):
+    a credential *name* built from a word nobody listed is unscreened, which is why the value-shape
+    rules below - pair, PEM, JWT, prefix, entropy - are the floor this screen really stands on.
+    Residual risk, stated rather than implied: an
     unrecognised format is not detected at all; a covered prefix whose body is too short to tell a
     word from a fragment (below eight characters, or all lower-case letters) is a name and is
     accepted (see ``_TOKEN_FORMATS`` and ``_truncated_token_in``); a compound label whose head is a
@@ -423,11 +600,31 @@ def _looks_like_secret(value: str) -> str | None:
     plain = (value or "").strip()
     if not plain:
         return None
-    # 1. A pasted `name=value` (or `name: value`) pair: the shape a credential arrives in.
-    pair = _CREDENTIAL_PAIR.search(plain)
-    if pair:
+    # 1. A pasted `name=value` (or `name: value`) pair: the shape a credential arrives in. The reason
+    #    names the field, never the value. TESTOPS-65 AC4: a key-family name whose value is a slot
+    #    reference (`${API_KEY}`, `from-env`, `os.environ[...]`) names where the credential lives and
+    #    is configuration, while a literal after the same name is the credential itself - which is
+    #    also why `apikey`, `api_key`, `api-key` and `apiKey` cannot disagree here.
+    for pair in _CREDENTIAL_PAIR.finditer(plain):
+        if _KEY_FAMILY.match(pair.group(1)) and _is_reference(pair.group("value")):
+            continue
         return (f"it reads as a credential: the name {pair.group(1)!r} is followed by '=' or ':' "
                 f"and a value")
+    # TESTOPS-65 AC1: a context word with a value is decided by the shape of that value too -
+    # `cert=/etc/ssl/ca.pem` and `salt=$SALT` are references, `salt=abc123` is the material.
+    for pair in _CONTEXT_PAIR.finditer(plain):
+        if _is_reference(pair.group("value")):
+            continue
+        return (f"it reads as a credential: the name {pair.group(1)!r} is followed by '=' or ':' "
+                f"and a value")
+    # TESTOPS-65 AC4: a *bare* `key`/`keys` has no qualifier to make it a credential word, so the
+    # value decides the name. `key = hunter2` and `key=hunter2` are refused; `key = ${API_KEY}` and
+    # `key = from-env` are accepted, because they name a slot rather than carrying a secret.
+    # `sort_keys=True` never reaches this rule: the lookbehind excludes `_` and `-`.
+    bare = _BARE_KEY_PAIR.search(plain)
+    if bare and not _is_reference(bare.group("value")):
+        return ("it reads as a credential: a bare `key` is followed by '=' or ':' and a value that "
+                "is not a slot reference")
     # TESTOPS-63: the same shape for the one word the pair vocabulary cannot carry alone - a `key`
     # named with a determiner (`my-key=hunter2`). `sort_keys=True` and `board_keys` stay configuration.
     if _DETERMINER_KEY_PAIR.search(plain):
@@ -452,7 +649,7 @@ def _looks_like_secret(value: str) -> str | None:
     #    the rule itself in :func:`_names_a_credential`. The pair, PEM, JWT and prefix rules catch a
     #    real credential in any other form.
     if not any(ch.isspace() for ch in plain) and "/" not in plain:
-        parts = [part for part in re.split(r"[^A-Za-z0-9]+", plain) if part]
+        parts = _credential_parts(plain)
         if _names_a_credential(parts):
             return "it is a short identifier naming a credential"
     # 4. A known credential prefix with its format's real body, anywhere in the value (TESTOPS-59
@@ -504,7 +701,7 @@ def validate_settings(settings: dict) -> dict:
     for key, value in settings.items():
         if not isinstance(key, str) or not key.strip():
             raise ConfigError("every settings field needs a name")
-        if _CREDENTIAL_NAME_ALONE.search(key.strip()):
+        if _field_names_a_credential(key.strip()):
             # AC3: the field name and the reason are logged; the value never is. A refusal that
             # printed the secret would be a second way to leak it.
             _LOG.warning("settings field %r refused: the field name reads as a credential", key)
@@ -515,6 +712,18 @@ def validate_settings(settings: dict) -> dict:
         if isinstance(value, (dict, list, tuple)):
             raise ConfigError(f"settings field {key!r} must be a single value, not a nested "
                               f"{type(value).__name__}")
+        # TESTOPS-65 AC4: the field that is itself a key slot (`key`, `keys`, `apikey`, `api_key`)
+        # holds the secret or a reference to it - `{"key": "hunter2"}` is the hole the T63 review left
+        # open, while `{"key": "${API_KEY}"}` and `{"key": "from-env"}` name where the secret lives.
+        # The JSON/HTTP form whitelists field names, so this closes the rule, not just that route.
+        if _KEY_FAMILY.match(key.strip()) and not _is_reference(str(value).strip()):
+            _LOG.warning("settings field %r refused: a key slot holding a literal value", key)
+            raise ConfigError(
+                f"settings field {key!r} was refused: a field named as a key holds the secret "
+                f"itself, and a literal value there would leak through the store, the page and "
+                f"every backup. Name the slot instead (an environment reference such as "
+                f"'${{API_KEY}}' or 'os.environ[NAME]'), or rename the field if it holds a key "
+                f"such as a board key.")
         reason = _looks_like_secret(str(value))
         if reason:
             _LOG.warning("settings field %r refused: %s", key, reason)
