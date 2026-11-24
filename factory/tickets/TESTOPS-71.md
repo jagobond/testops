@@ -2,7 +2,7 @@
 id: TESTOPS-71
 title: The guard goes quiet when git is down, and the URL rule cannot read a placeholder
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-69
 ---
