@@ -207,6 +207,7 @@ pre.snippet code { font-family: ui-monospace, Consolas, monospace; }
 pre.snippet .sline { display:block; white-space:pre; }
 pre.snippet .ln { display:inline-block; width:2.6rem; color:var(--dim); user-select:none; }
 pre.snippet .sline.hit { background:#f6e7c8; }
+pre.snippet .sline.omission { color:var(--dim); }
 pre.snippet mark.hit { background:transparent; color:inherit; font-weight:600; }
 aside.xref { margin:.2rem 0 1rem; padding:.55rem .85rem .6rem; background:#f6f4f0;
              border-radius:5px; font-size:.94rem; }
@@ -660,6 +661,10 @@ def product_evidence_block(claim: dict) -> list[str]:
     nothing, and a product nobody could consult. A claim the product is not evidence about (it does
     not need a browser) renders nothing - the claim's record still carries the state, but a line on
     every case page saying "the product is irrelevant here" is noise, not evidence.
+
+    TESTOPS-83 adds the product's own line below that sentence: the annotation and signature the
+    matched route came from, read from the stored blob. Naming a route and asking the reader to
+    leave the page to check it was the defect; the declaration is the evidence.
     """
     product = (claim.get("detail") or {}).get("product")
     if not isinstance(product, dict):
@@ -678,25 +683,31 @@ def product_evidence_block(claim: dict) -> list[str]:
                    else f'it declares <span class="code">{route}</span>')
         counted = (f', which appears in {shared} of the product\u2019s {total} surfaces'
                    if isinstance(shared, int) and isinstance(total, int) else "")
-        return [f'<p class="meta"><span class="fn">What the product says:</span> {surface}. The '
-                f'assertion and that surface share the word \u201c{word}\u201d{counted}, so it is '
-                f'not the noun the whole product is about.</p>']
-    if state == "not_assessable":
+        out = [f'<p class="meta"><span class="fn">What the product says:</span> {surface}. The '
+               f'assertion and that surface share the word \u201c{word}\u201d{counted}, so it is '
+               f'not the noun the whole product is about.</p>']
+    elif state == "not_assessable":
         reason = (product.get("reason") or "").strip().rstrip(".")
         return [f'<p class="meta"><span class="fn">What the product says:</span> '
                 f'{esc(reason) if reason else "the product could not be consulted"}, so nothing '
                 f'here says whether this claim repeats it. That is not a zero.</p>']
-    if state == "zero":
+    elif state == "zero":
         if product.get("near_miss"):
-            return [f'<p class="meta near-miss"><span class="fn">What the product says:</span> '
-                    f'{near_miss_sentence(product)}</p>']
-        total = product.get("surfaces")
-        held = (f'it was read and declares {total} surfaces, and none of them shares a meaningful '
-                f'word with this assertion' if isinstance(total, int) and total
-                else 'it was read and declares no surface at all')
-        return [f'<p class="meta"><span class="fn">What the product says:</span> {held}, so nothing '
-                f'here says the product already does this.</p>']
-    return []
+            out = [f'<p class="meta near-miss"><span class="fn">What the product says:</span> '
+                   f'{near_miss_sentence(product)}</p>']
+        else:
+            total = product.get("surfaces")
+            held = (f'it was read and declares {total} surfaces, and none of them shares a ' 
+                    f'meaningful word with this assertion' if isinstance(total, int) and total
+                    else 'it was read and declares no surface at all')
+            out = [f'<p class="meta"><span class="fn">What the product says:</span> {held}, so '
+                   f'nothing here says the product already does this.</p>']
+    else:
+        return []
+    snippet = (claim.get("snippets") or {}).get("product")
+    if snippet:
+        out.extend(product_line_block(snippet))
+    return out
 
 
 def provenance_line(claim: dict) -> list[str]:
@@ -846,9 +857,11 @@ def also_reported_block(claim: dict) -> list[str]:
 
 def _snippet_caption(snip: dict, label: str) -> str:
     where = f'{esc(snip["path"])}:{snip["line"]}'
+    commit = (f' at commit <span class="code">{esc((snip.get("commit") or "")[:8])}</span>'
+              if snip.get("commit") else "")
     link = (f' \u2014 <a href="{esc(snip["link"])}">view in repository</a>'
             if snip.get("link") else "")
-    return f'{label} <span class="code">{where}</span>{link}'
+    return f'{label} <span class="code">{where}</span>{commit}{link}'
 
 
 def snippet_block(snip: dict | None, label: str) -> list[str]:
@@ -902,6 +915,106 @@ def step_definition_snippet(c: dict) -> list[str]:
     """The step definition's body, labelled as the step that is asserted."""
     return snippet_block((c.get("snippets") or {}).get("step_definition"),
                          "The step definition that runs it:")
+
+
+def _mark_matched_word(text: str, word: str) -> str:
+    """One source line as escaped text, with every occurrence of the matched word marked.
+
+    The mark carries an accessible name, so the word that decided the match is not communicated by
+    colour alone. Marking is per occurrence, because the word may be the camel hump inside an
+    identifier (``createRoom``) rather than a standalone token.
+    """
+    if not word:
+        return esc(text)
+    out: list[str] = []
+    lowered, needle, at = text.lower(), word.lower(), 0
+    label = esc(f"matched word: {word}")
+    while True:
+        found = lowered.find(needle, at)
+        if found < 0:
+            break
+        out.append(esc(text[at:found]))
+        out.append(f'<mark class="hit" role="mark" aria-label="{label}">'
+                   f'{esc(text[found:found + len(needle)])}</mark>')
+        at = found + len(needle)
+    out.append(esc(text[at:]))
+    return "".join(out)
+
+
+def _product_snippet_caption(snip: dict) -> str:
+    """The file, the declaration line and the commit the product line was read from."""
+    where = f'{esc(snip["path"])}:{snip["line"]}'
+    commit = (f' at commit <span class="code">{esc((snip.get("commit") or "")[:8])}</span>'
+              if snip.get("commit") else "")
+    link = (f' \u2014 <a href="{esc(snip["link"])}">view in repository</a>'
+            if snip.get("link") else "")
+    trimmed = ""
+    if snip.get("omitted"):
+        last = snip["start"] + len(snip["lines"]) - 1
+        trimmed = (f' At most {snip.get("max")} lines are shown: lines {snip["start"]}\u2013{last} '
+                   f'of a {snip["total"]}-line declaration, so {snip["omitted"]} '
+                   f'line{"s" if snip["omitted"] != 1 else ""} are not shown.')
+    return (f'The product\u2019s own declaration, with the word that decided the match marked: '
+            f'<span class="code">{where}</span>{commit}{link}.{trimmed}')
+
+
+def product_line_block(snip: dict) -> list[str]:
+    """The product's annotation and signature, or the sentence naming why the store cannot show it.
+
+    Never an empty box and never a guessed line: each absence is a distinct sentence. The source is
+    already screened by the read model (a credential-shaped declaration is withheld there), so this
+    function only has to render what the store will show, escaped as text.
+    """
+    state = snip.get("state")
+    word = snip.get("word") or ""
+    if state == queries.PRODUCT_LINE_NO_COORDINATES:
+        surface = esc(snip.get("surface") or snip.get("route") or "this product surface")
+        return [f'<p class="quiet">The run recorded the matched product surface '
+                f'<span class="code">{surface}</span>, but not the file and declaration it came '
+                f'from, so this page cannot show the product line the verdict rests on. That is '
+                f'not a judgement about the code.</p>']
+    if state == queries.PRODUCT_LINE_NOT_STORED:
+        where = f'{snip.get("path")}:{snip.get("line") or ""}'.rstrip(":")
+        return [f'<p class="quiet">The product file was recorded at '
+                f'<span class="code">{esc(where)}</span>, but its content is not in this store, so '
+                f'the declaration the verdict rests on cannot be shown.</p>']
+    if state == queries.PRODUCT_LINE_NOT_FOUND:
+        reason = (snip.get("reason") or "").strip().rstrip(".")
+        if reason:
+            sentence = reason
+        elif snip.get("path"):
+            sentence = (f'the stored copy of {snip["path"]} holds no declaration named '
+                        f'{snip.get("method") or "the matched method"}')
+        else:
+            sentence = "the stored product holds no declaration for the matched surface"
+        return [f'<p class="quiet">The product line could not be located: {esc(sentence)}, so this '
+                f'page cannot show it. The verdict above still rests on the recorded surface; it '
+                f'is not shown as if it had been read here.</p>']
+    if state == queries.PRODUCT_LINE_AMBIGUOUS:
+        reason = (snip.get("reason") or "more than one declaration holds the matched route").rstrip(".")
+        return [f'<p class="quiet">The product line could not be located without guessing: '
+                f'{esc(reason)}, so this page does not print one.</p>']
+    if state == queries.PRODUCT_LINE_BLIND:
+        reason = (snip.get("reason") or "it matches a credential shape").strip().rstrip(".")
+        return [f'<p class="quiet">The stored declaration is withheld rather than printed: '
+                f'{esc(reason)}. A credential must not reach a page, and a future private '
+                f'repository must not leak through this path.</p>']
+    if state != queries.PRODUCT_LINE_OK:
+        return []
+    rendered: list[str] = []
+    for line in snip["lines"]:
+        rendered.append(f'<span class="sline"><span class="ln">{line["n"]}</span>'
+                        f'{_mark_matched_word(line["text"], word)}</span>')
+    if snip.get("omitted"):
+        label = (f'{snip["omitted"]} line{"s" if snip["omitted"] != 1 else ""} of the '
+                 f'declaration not shown')
+        rendered.append(f'<span class="sline omission" role="note" aria-label="{esc(label)}" '
+                        f'tabindex="0">\u2026</span>')
+    code = "\n".join(rendered)
+    region = esc(f'Product code at {snip["path"]}:{snip["line"]}')
+    return [f'<figure class="snippet product" role="group" aria-label="{region}">'
+            f'<figcaption>{_product_snippet_caption(snip)}</figcaption>'
+            f'<pre class="snippet" tabindex="0"><code>{code}</code></pre></figure>']
 
 
 # ---------------------------------------------------------------- the case list's headline

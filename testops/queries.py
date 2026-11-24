@@ -6,16 +6,18 @@ returns plain dicts.
 """
 from __future__ import annotations
 
+import ast
 import difflib
 import json
 import re
 import sqlite3
 
-from . import blobs, cases, config, sources
+from . import blobs, cases, config, services, sources
 from .analysers import is_registered
 from .extract import csproj, gherkin, stepbindings
 from .links import GITHUB, blob_permalink, permalink, short_location
 from .surfaces import discover as surface_discovery
+from .surfaces import java as java_surface
 
 
 def _json(s, default=None):
@@ -555,9 +557,11 @@ def finding_rows(conn, case_id: str) -> list[dict]:
             detail = _json(inf["output"]) if inf else {}
             claim = claim_view(c, repo=_repo_for_coordinates(conn, project, c["assertion_commit"],
                                                              c["assertion_path"]))
+            # The analyser's products record is what the product snippet is resolved from, so it is
+            # on the claim before the read model attaches the snippet (TESTOPS-83).
+            claim["detail"] = detail
             claim = _with_snippets(conn, claim)
-            claim.update({"used_model": bool(detail.get("model") and detail.get("model") != "none"),
-                          "detail": detail})
+            claim.update({"used_model": bool(detail.get("model") and detail.get("model") != "none")})
             claims.append(claim)
         out.append({"id": f["id"], "title": f["title"], "severity": f["severity"],
                     "fingerprint": f["fingerprint"], "claims": claims,
@@ -1557,6 +1561,7 @@ def _assertion_snippet(conn, claim: dict) -> dict:
     start = max(1, line - SNIPPET_CONTEXT)
     end = min(len(lines), line + SNIPPET_CONTEXT)
     return {"state": SNIPPET_OK, "path": path, "line": line, "start": start, "end": end,
+            "commit": prov["assertion_commit"],
             "lines": [{"n": n, "text": lines[n - 1], "asserted": n == line}
                       for n in range(start, end + 1)],
             "link": claim.get("permalink")}
@@ -1612,9 +1617,335 @@ def _binding_snippet(conn, snapshot: str | None, binding: dict) -> dict:
             break
     end = line + len(window) - 1
     return {"state": SNIPPET_OK, "path": path, "line": line, "start": line, "end": end,
+            "commit": m["sha"] if m else None,
             "lines": [{"n": n, "text": window[n - line], "asserted": n == line}
                       for n in range(line, end + 1)],
             "link": binding.get("link")}
+
+
+# ---------------------------------------------------------------- the product's own line (TESTOPS-83)
+#
+# The case page made two claims and showed one line of code. "The product already declares POST /"
+# is a claim about the product's own source, and a reader had to leave the page to check it - which
+# for a tool whose claim is that it read both sides is the argument missing. The matched surface is
+# recorded on the claim as an id (``api:POST /@room/src/.../RoomController.java:createRoom``), and
+# the run stored the product repository at the commit it read. This module resolves that id against
+# the stored bytes: the annotation and the method signature, with their file, line and commit. It
+# never opens a checkout, never fetches anything, and says which absence it found when the store
+# cannot produce the line.
+#
+# The trim is honest: a handful of declaration lines are shown, and when the declaration is longer
+# the page states how many of its lines were not shown. The matched word is marked per occurrence, so
+# the reader sees the word that justified the match rather than being told about it.
+
+PRODUCT_LINE_OK = "ok"
+PRODUCT_LINE_NO_COORDINATES = "no_coordinates"
+PRODUCT_LINE_NOT_STORED = "not_stored"
+PRODUCT_LINE_NOT_FOUND = "not_found"
+PRODUCT_LINE_AMBIGUOUS = "ambiguous"
+PRODUCT_LINE_BLIND = "blind"
+
+# The most declaration lines the page shows. The annotation and signature normally fit well within
+# it; a longer declaration states the rest as a count, never as a silent cut.
+PRODUCT_SNIPPET_MAX = 8
+
+# ``api:<VERB> <route>@<path>:<method>``, with an optional ``#2`` for a duplicate declaration.
+_JAVA_SURFACE = re.compile(r"^api:(?P<target>.+)@(?P<path>.+):(?P<method>[^:#]+?)(?:#\d+)?$")
+# A Python route surface records the route only: ``api:GET /booking``.
+_ROUTE_SURFACE = re.compile(r"^api:(?P<verb>[A-Z]+) (?P<route>.+)$")
+
+
+def _line_starts(text: str) -> list[int]:
+    """The offset at which each line starts, so a token offset becomes a line number."""
+    starts = [0]
+    for offset, char in enumerate(text):
+        if char == "\n":
+            starts.append(offset + 1)
+    return starts
+
+
+def _line_at(starts: list[int], offset: int) -> int:
+    """The 1-based line holding ``offset``."""
+    import bisect
+    return bisect.bisect_right(starts, offset)
+
+
+def _locate_java_declaration(lines: list[str], method: str) -> dict | None:
+    """The annotation block and signature that declare ``method``, by line, from stored bytes.
+
+    The Java reader's own lexer is used, so a method name inside a comment or a string cannot be
+    mistaken for the declaration. Returns ``None`` when the stored file holds no such declaration -
+    an absence the page names rather than guesses around.
+    """
+    text = "\n".join(lines)
+    tokens = java_surface.lex(text)
+    starts = _line_starts(text)
+    found = None
+    for index, token in enumerate(tokens[:-1]):
+        if (token.kind == "word" and token.value == method
+                and tokens[index + 1].kind == "symbol" and tokens[index + 1].value == "("):
+            found = index
+            break
+    if found is None:
+        return None
+    decl_line = _line_at(starts, tokens[found].start)
+    signature_end = decl_line
+    depth = 0
+    for index in range(found + 1, len(tokens)):
+        token = tokens[index]
+        if token.kind != "symbol":
+            continue
+        if token.value == "(":
+            depth += 1
+        elif token.value == ")":
+            depth -= 1
+            if depth == 0:
+                signature_end = _line_at(starts, token.start)
+                break
+    else:
+        return None
+    # The declaration's extent: the method body, so the count of lines not shown is the handler's
+    # own length and not the file's.
+    decl_end = signature_end
+    index = found
+    while index < len(tokens):
+        token = tokens[index]
+        if token.kind == "symbol" and token.value in ("{", ";"):
+            if token.value == ";":
+                break
+            level = 0
+            for following in range(index, len(tokens)):
+                if tokens[following].kind != "symbol":
+                    continue
+                if tokens[following].value == "{":
+                    level += 1
+                elif tokens[following].value == "}":
+                    level -= 1
+                    if level == 0:
+                        decl_end = _line_at(starts, tokens[following].start)
+                        break
+            break
+        index += 1
+    # Annotations sit above the signature, contiguously. A multi-line annotation is walked through
+    # by its own unbalanced parentheses, so a wrapped argument cannot be mistaken for the signature.
+    start = decl_line
+    above = decl_line - 1
+    while above >= 1:
+        stripped = lines[above - 1].strip()
+        if not stripped:
+            break
+        if stripped.startswith("@"):
+            start = above
+            above -= 1
+            continue
+        block = "\n".join(lines[above - 1:decl_line - 1])
+        if block.count("(") > block.count(")"):
+            start = above
+            above -= 1
+            continue
+        break
+    return {"start": start, "decl_line": decl_line,
+            "signature_end": signature_end, "end": decl_end}
+
+
+def _locate_python_declarations(lines: list[str], route: str):
+    """Every function in one stored Python file whose declaration holds ``route`` as a literal.
+
+    The declaration includes its decorators: a route may be named by ``@app.route("/booking")`` or
+    by a literal inside the body, and the surface reader counts a function as a route handler when
+    the route appears in its source.
+    """
+    source = "\n".join(lines)
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    pattern = re.compile("[\"']" + re.escape(route) + "[\"']")
+    out = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        start = min([node.lineno] + [decorator.lineno for decorator in node.decorator_list])
+        end = node.end_lineno or node.lineno
+        if pattern.search("\n".join(lines[start - 1:end])):
+            out.append(node)
+    return out
+
+
+def _python_signature_end(lines: list[str], first_line: int) -> int:
+    """The line on which the ``def`` parameter list closes."""
+    depth = 0
+    for number in range(first_line, len(lines) + 1):
+        text = lines[number - 1]
+        for char in text:
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+        if depth <= 0 and "(" in "\n".join(lines[first_line - 1:number]):
+            return number
+    return first_line
+
+
+def _snapshot_product_coordinates(conn, claim: dict) -> tuple[str | None, str | None]:
+    """The product repository slug and the commit this claim's run read it at."""
+    row = conn.execute("SELECT meta, artefact_versions FROM snapshot WHERE id = ?",
+                       (_claim_snapshot(conn, claim),)).fetchone()
+    if row is None:
+        return None, None
+    meta = _json(row["meta"])
+    versions = _json(row["artefact_versions"])
+    slug = ((meta.get("arms") or {}).get("product")) if isinstance(meta, dict) else None
+    return slug, versions.get(slug) if slug else None
+
+
+def _product_artefact(conn, claim: dict, path: str):
+    """The stored product file at the exact path this run read, or ``None``.
+
+    The artefact rows are searched for a ``repo@commit:path`` whose path is *equal* to the surface's
+    and whose repository is the product arm; the commit recorded for the product arm is preferred, so
+    a file at another commit in the same store cannot stand in for this run's evidence.
+    """
+    snapshot = _claim_snapshot(conn, claim)
+    slug, commit = _snapshot_product_coordinates(conn, claim)
+    best = None
+    for row in conn.execute("SELECT uri, kind, blob_sha FROM artefact WHERE snapshot_id = ?",
+                            (snapshot,)):
+        match = GITHUB.match(row["uri"] or "")
+        if match is None or match["path"] != path:
+            continue
+        repo = f"{match['owner']}/{match['repo']}"
+        if slug and repo != slug:
+            continue
+        if commit and match["sha"] == commit:
+            return row, match
+        if best is None:
+            best = (row, match)
+    return best if best else (None, None)
+
+
+def _declaration_lines(lines: list[str], start: int, signature_end: int, total_end: int,
+                       ceiling: int) -> tuple[list[dict], int]:
+    """The annotation and signature lines shown, and how many declaration lines are not.
+
+    The declaration's *body* is not shown: the line a verdict rests on is the annotation and the
+    signature, not the handler's implementation. The count of lines not shown still describes the
+    whole declaration, so a 400-line handler says so rather than appearing to be two lines.
+    """
+    shown_end = min(signature_end, start + ceiling - 1)
+    shown = [{"n": number, "text": lines[number - 1], "asserted": False}
+             for number in range(start, shown_end + 1)]
+    return shown, max(0, total_end - shown_end)
+
+
+def _product_record(record: dict, shown: list[dict], omitted: int, end: int) -> dict:
+    """Fill a product-snippet record once the declaration has been located."""
+    text = "\n".join(line["text"] for line in shown)
+    reason = services.credential_reason(text)
+    if reason is not None:
+        record.update({"state": PRODUCT_LINE_BLIND, "reason": reason})
+        return record
+    record.update({"state": PRODUCT_LINE_OK, "lines": shown, "omitted": omitted,
+                   "total": end - record["start"] + 1, "max": PRODUCT_SNIPPET_MAX})
+    return record
+
+
+def _java_product_line(conn, claim: dict, record: dict, path: str, method: str) -> dict:
+    """The annotation and signature of the Java method the matched route came from."""
+    artefact, match = _product_artefact(conn, claim, path)
+    record.update({"path": path, "method": method,
+                   "link": blob_permalink(f"{match['owner']}/{match['repo']}", match["sha"], path)
+                   if match else None, "commit": match["sha"] if match else None})
+    if artefact is None:
+        return record                            # no recorded line and no stored file
+    assert match is not None
+    lines = _blob_lines(artefact["blob_sha"])
+    if lines is None:
+        record["state"] = PRODUCT_LINE_NOT_STORED
+        return record
+    located = _locate_java_declaration(lines, method)
+    if located is None:
+        record["state"] = PRODUCT_LINE_NOT_FOUND
+        record["total"] = len(lines)
+        return record
+    start, end = located["start"], located["end"]
+    shown, omitted = _declaration_lines(lines, start, located["signature_end"], end,
+                                        PRODUCT_SNIPPET_MAX)
+    record.update({"start": start, "line": start,
+                   "signature_line": located["signature_end"], "end": end,
+                   "link": blob_permalink(f"{match['owner']}/{match['repo']}", match["sha"],
+                                          path, start)})
+    return _product_record(record, shown, omitted, end)
+
+
+def _python_product_line(conn, claim: dict, record: dict, surface_id: str) -> dict:
+    """The decorator and signature of the Python function behind a matched route surface.
+
+    A Python route surface records its route and nothing else, so the declaration is resolved from
+    the stored product files by the surface reader's own rule: a function whose source holds the
+    route as a string literal. One match is evidence; none, or more than one, is said rather than
+    guessed at.
+    """
+    target = _ROUTE_SURFACE.match(surface_id or "")
+    if target is None:
+        return record
+    route = target["route"]
+    snapshot = _claim_snapshot(conn, claim)
+    candidates = []
+    for row in conn.execute("SELECT uri, blob_sha FROM artefact WHERE snapshot_id = ?",
+                            (snapshot,)):
+        match = GITHUB.match(row["uri"] or "")
+        if match is None or not match["path"].endswith(".py"):
+            continue
+        lines = _blob_lines(row["blob_sha"])
+        if lines is None:
+            continue
+        for node in _locate_python_declarations(lines, route):
+            candidates.append((row, match, lines, node))
+    record.update({"route": route, "state": PRODUCT_LINE_NOT_FOUND})
+    if not candidates:
+        record["reason"] = "the stored product holds no function that declares this route"
+        return record
+    if len(candidates) > 1:
+        record["state"] = PRODUCT_LINE_AMBIGUOUS
+        record["reason"] = (f"the stored product holds {len(candidates)} functions that declare "
+                            f"this route, so the page cannot say which one the verdict rests on")
+        return record
+    row, match, lines, node = candidates[0]
+    start = min([node.lineno] + [decorator.lineno for decorator in node.decorator_list])
+    signature_end = _python_signature_end(lines, node.lineno)
+    end = node.end_lineno or signature_end
+    shown, omitted = _declaration_lines(lines, start, signature_end, end, PRODUCT_SNIPPET_MAX)
+    record.update({"path": match["path"], "method": node.name, "line": start,
+                   "signature_line": signature_end, "start": start, "end": end,
+                   "commit": match["sha"],
+                   "link": blob_permalink(f"{match['owner']}/{match['repo']}", match["sha"],
+                                          match["path"], start)})
+    return _product_record(record, shown, omitted, end)
+
+
+def product_line_for(conn, claim: dict) -> dict | None:
+    """The product's own declaration for the surface this claim matched, or ``None``.
+
+    ``None`` when the claim recorded no product surface at all: the page then has nothing it could
+    show, and a block saying so on every claim the product is not evidence about would be noise. A
+    recorded surface the store cannot resolve is a dict in one of the absence states, which the page
+    names.
+    """
+    product = (claim.get("detail") or {}).get("product")
+    if not isinstance(product, dict) or product.get("state") not in ("found", "zero"):
+        return None
+    surface_id = product.get("surface")
+    if not surface_id:
+        return None
+    record = {"state": PRODUCT_LINE_NO_COORDINATES, "surface": surface_id,
+              "route": product.get("route"), "word": product.get("word") or ""}
+    java = _JAVA_SURFACE.match(surface_id)
+    if java is not None:
+        return _java_product_line(conn, claim, record, java["path"], java["method"])
+    if (surface_id or "").startswith("api:") and "@" not in surface_id:
+        return _python_product_line(conn, claim, record, surface_id)
+    return record
 
 
 # ---------------------------------------------------------------- the copy a duplicate claim names
@@ -1735,6 +2066,7 @@ def _step_at(scenario, line: int):
 def _attach_snippets(conn, claim: dict) -> dict:
     """Attach the source excerpts after the evidence, which names the asserting binding."""
     claim["snippets"] = source_snippets(conn, claim)
+    claim["snippets"]["product"] = product_line_for(conn, claim)
     claim["counterpart"] = counterpart_for(conn, claim)
     claim["also_reported"] = cross_references(conn, claim)
     return claim

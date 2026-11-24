@@ -265,6 +265,8 @@ def test_the_asserted_step_is_shown_inline_with_its_line_numbers(tmp_path):
     assert "Scenario: another one" not in text      # outside ±2
     assert "view in repository" in text
     assert f"features/panel_api.feature:{LINE}" in text
+    # TESTOPS-83 AC1: the test line names its commit beside the file and line.
+    assert f"at commit {COMMIT[:8]}" in text
 
 
 def test_the_asserted_step_is_read_at_the_claims_own_commit(tmp_path):
