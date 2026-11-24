@@ -2,7 +2,7 @@
 id: TESTOPS-68
 title: The bare-value rule misses the next line, the camel split invents a key, and the URL rule is not a floor
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-65
 ---
