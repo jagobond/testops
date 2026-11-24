@@ -56,6 +56,7 @@ VARIANTS = (VARIANT_OFF, VARIANT_ON)
 # states, and the report breaks every figure down by state so that a cached page is never counted as
 # an explanation's value and a failed render is never counted as a loss.
 STATE_FRESH = "fresh"                        # an explanation written for this view
+STATE_FRESH_REPAIRED = "fresh_repaired"      # an explanation a repair round made acceptable
 STATE_CACHED = "cached"                      # an explanation served from the store
 STATE_REJECTED = "rejected"                  # a reply that failed the check
 STATE_UNAVAILABLE = "failed_unavailable"     # the model could not answer, or answered unusably
@@ -64,8 +65,8 @@ STATE_NO_FINDING = "no_finding"              # the case raised no finding to exp
 STATE_OFF = "off"                            # the agent was not asked for
 STATE_PENDING = "pending"                    # the render started and never closed
 
-VIEW_STATES = (STATE_FRESH, STATE_CACHED, STATE_REJECTED, STATE_UNAVAILABLE, STATE_UNCONFIGURED,
-               STATE_NO_FINDING, STATE_OFF, STATE_PENDING)
+VIEW_STATES = (STATE_FRESH, STATE_FRESH_REPAIRED, STATE_CACHED, STATE_REJECTED,
+               STATE_UNAVAILABLE, STATE_UNCONFIGURED, STATE_NO_FINDING, STATE_OFF, STATE_PENDING)
 
 # Rows written before this vocabulary existed. They are read as the state they meant, never
 # rewritten: a ledger is history, and history is not edited to fit a later table.
@@ -167,7 +168,7 @@ class Outcome:
 
     @property
     def served(self) -> bool:
-        return self.state in (STATE_FRESH, STATE_CACHED)
+        return self.state in (STATE_FRESH, STATE_FRESH_REPAIRED, STATE_CACHED)
 
     @property
     def sentence(self) -> str:
@@ -661,38 +662,110 @@ def _as_json_object(raw: str) -> dict | None:
     return client.extract_json(candidate)
 
 
-def parse_reply(raw: str) -> tuple[Reply | None, str]:
-    """The reply as :class:`Reply`, or the cause (``empty`` / ``malformed``) why it is not one."""
-    if not str(raw or "").strip():
-        return None, "empty"
-    payload = _as_json_object(raw)
-    if payload is None:
-        return None, "malformed"
-    explanation, citations = payload.get("explanation"), payload.get("citations")
-    if not isinstance(explanation, str) or not isinstance(citations, list):
-        return None, "malformed"
-    text = " ".join(explanation.split())
-    if len(text) < 40 or not _HAS_WORD.search(text):
-        return None, "malformed"
-    sentences = split_sentences(text)
-    if not sentences:
-        return None, "malformed"
-    cited: dict[int, list[str]] = {}
+REPAIRABLE = "repairable"
+
+# The exact faults a repair round quotes back at the model. A repairable reply is not a bad answer:
+# it is one field short of an answer, and the fault names the field and the shape it must take.
+FAULT_OMITTED_CITATIONS = (
+    "you wrote the explanation but omitted the citations array - add one entry per sentence")
+FAULT_CITATIONS_AS_STRING = (
+    'you sent the citations as a string - send it as a JSON array of {"sentence": n, '
+    '"facts": [...]} entries')
+FAULT_EMPTY_CITATIONS = (
+    "you sent an empty citations array - add one entry per sentence")
+FAULT_MISSING_SENTENCE = (
+    "the citations name sentence {number}, which does not exist - the explanation has "
+    "{count} sentences")
+FAULT_BAD_ENTRY = (
+    'the citations array holds an entry that is not {"sentence": n, "facts": [...]} - send one '
+    "entry per sentence, with the sentence's number and the facts it rests on")
+
+
+@dataclass(frozen=True)
+class Reading:
+    """What a raw reply is, before anything is done about it.
+
+    ``cause`` is empty for a usable reply, ``malformed`` or ``empty`` for one no second call could
+    rescue, and ``repairable`` for one that carries its explanation but no usable citations - the
+    shape that used to be thrown away as malformed. ``fault`` is the sentence the repair prompt
+    quotes back at the model; ``text`` is the explanation it already wrote.
+    """
+
+    reply: Reply | None = None
+    cause: str = ""
+    fault: str = ""
+    text: str = ""
+
+
+def _citations_fault(citations, sentence_count: int) -> str:
+    """Why the citations cannot be read, in the words the model is told - or ``""`` if they can."""
+    if citations is None:
+        return FAULT_OMITTED_CITATIONS
+    if isinstance(citations, str):
+        return FAULT_CITATIONS_AS_STRING
+    if not isinstance(citations, list):
+        return FAULT_OMITTED_CITATIONS
+    if not citations:
+        return FAULT_EMPTY_CITATIONS
+    faults: list[str] = []
     for entry in citations:
         if not isinstance(entry, dict):
-            return None, "malformed"
+            faults.append(FAULT_BAD_ENTRY)
+            continue
         number, facts = entry.get("sentence"), entry.get("facts")
         if isinstance(number, bool) or not isinstance(number, int):
-            return None, "malformed"
-        if not 1 <= number <= len(sentences):
-            return None, "malformed"
-        if not isinstance(facts, list):
-            return None, "malformed"
-        if not all(isinstance(fact, str) and fact.strip() for fact in facts):
-            return None, "malformed"
+            faults.append(FAULT_BAD_ENTRY)
+            continue
+        if not 1 <= number <= sentence_count:
+            faults.append(FAULT_MISSING_SENTENCE.format(number=number, count=sentence_count))
+            continue
+        if not isinstance(facts, list) or not all(
+                isinstance(fact, str) and fact.strip() for fact in facts):
+            faults.append(FAULT_BAD_ENTRY)
+    return "; ".join(dict.fromkeys(faults))
+
+
+def read_reply(raw: str) -> Reading:
+    """The reply as a :class:`Reading`: usable, repairable, or the cause it is neither.
+
+    A JSON object with a real explanation and citations that do not parse is **repairable**: the
+    prose is already written, only the citations array is missing or the wrong shape, and the one
+    repair round can ask for it. A reply that is not JSON, or has no explanation at all, has nothing
+    to repair - a second call would be a guess - so it stays ``malformed`` (AC2).
+    """
+    if not str(raw or "").strip():
+        return Reading(cause="empty")
+    payload = _as_json_object(raw)
+    if payload is None:
+        return Reading(cause="malformed")
+    explanation, citations = payload.get("explanation"), payload.get("citations")
+    if not isinstance(explanation, str):
+        return Reading(cause="malformed")
+    text = " ".join(explanation.split())
+    sentences = split_sentences(text)
+    if len(text) < 40 or not _HAS_WORD.search(text) or not sentences:
+        return Reading(cause="malformed")
+    fault = _citations_fault(citations, len(sentences))
+    if fault:
+        return Reading(cause=REPAIRABLE, fault=fault, text=text)
+    assert isinstance(citations, list), "a fault-free citations value is a list"
+    cited: dict[int, list[str]] = {}
+    for entry in citations:
+        number, facts = entry["sentence"], entry["facts"]
         cited.setdefault(number, []).extend(fact.strip() for fact in facts)
-    return Reply(text=text, citations={number: tuple(dict.fromkeys(facts))
-                                       for number, facts in cited.items()}), ""
+    return Reading(reply=Reply(text=text, citations={
+        number: tuple(dict.fromkeys(facts)) for number, facts in cited.items()}))
+
+
+def parse_reply(raw: str) -> tuple[Reply | None, str]:
+    """The reply as :class:`Reply`, or the cause why it is not one.
+
+    The causes are ``empty``, ``malformed`` and ``repairable``. ``repairable`` means the explanation
+    is there and only the citations array is missing or unusable; :func:`read_reply` also returns
+    the fault to quote at the model.
+    """
+    reading = read_reply(raw)
+    return reading.reply, reading.cause
 
 
 # One repair round. A reply that failed the check is shown its own violations once, and asked to
@@ -723,6 +796,31 @@ def repair_prompt(record: dict, model: str, reply: Reply,
             "leave every other sentence and every citation exactly as it was. The identifiers from "
             "the record's CITATIONS list belong in the citations array only - never write one in the "
             "prose. Reply with one JSON object in the same shape, and nothing else.")
+    body = f"{PROMPT_VERSION}\n{system}\n{user}\n--\n{model}"
+    try:
+        digest = hashlib.sha256(body.encode()).hexdigest()[:16]
+    except UnicodeEncodeError:  # a record with undecodable text still gets a stable key
+        digest = hashlib.sha256(body.encode("utf-8", "replace")).hexdigest()[:16]
+    return system, user, digest
+
+
+def citations_repair_prompt(record: dict, model: str, text: str,
+                            fault: str) -> tuple[str, str, str]:
+    """The prompt that asks once for the citations array a reply left out (TESTOPS-91 AC1).
+
+    The explanation is already written, so the whole original prompt and the model's own prose are
+    shown back, and the *exact* fault - not a summary of it - is quoted. Only the citations array is
+    asked for: the prose is not to be rewritten, so a repair cannot become a second attempt at the
+    answer. The hash keys the repair like any other call, so its tokens land in their own row.
+    """
+    system, user, _ = prompt(record, model)
+    user = (f"{user}\n\nYour previous reply was rejected for one reason: {fault}.\n\n"
+            f"Your previous explanation was:\n{text}\n\n"
+            "Write the explanation again exactly as you wrote it, and add a \"citations\" array "
+            "with one entry for each sentence, counting from 1: "
+            "{\"sentence\": 1, \"facts\": [\"claim:12\"]}. Every fact must be an identifier from "
+            "the record's CITATIONS list. Reply with one JSON object in the same shape, and "
+            "nothing else.")
     body = f"{PROMPT_VERSION}\n{system}\n{user}\n--\n{model}"
     try:
         digest = hashlib.sha256(body.encode()).hexdigest()[:16]
@@ -1028,27 +1126,79 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
     wall = int((time.monotonic() - started) * 1000)
 
     tokens_in, tokens_out = int(completion.tokens_in or 0), int(completion.tokens_out or 0)
-    # The reply must be structured evidence. Anything that is not a JSON object with an explanation
-    # and per-sentence citations is unusable, and is recorded as such rather than guessed at.
-    reply, cause = parse_reply(completion.text or "")
-    if cause:
+    # A reply is read before it is judged. Three shapes matter: usable; *repairable* - the
+    # explanation is written and only the citations array is missing or unusable, which used to be
+    # thrown away as malformed (TESTOPS-91); and unusable, where a second call would be a guess.
+    reading = read_reply(completion.text or "")
+    repairs = 0
+    if reading.cause == REPAIRABLE:
+        # One repair round, sharing the budget with the violations repair below: the model is shown
+        # the explanation it already wrote and the exact fault, and asked only for the citations.
+        repairs = 1
+        _record_call(conn, case_id=case_id, variant=variant, model=model,
+                     prompt_hash=prompt_hash, tokens_in=tokens_in, tokens_out=tokens_out,
+                     cached=False, wall_ms=wall, outcome="error", cause=REPAIRABLE)
+        repair_system, repair_user, repair_hash = citations_repair_prompt(
+            record, model, reading.text, reading.fault)
+        started = time.monotonic()
+        try:
+            completion = ask(repair_system, repair_user, model,
+                             endpoint_url=cfg.endpoint, access_token=cfg.token)
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError, TimeoutError):
+            wall = int((time.monotonic() - started) * 1000)
+            call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
+                                   prompt_hash=repair_hash, tokens_in=0, tokens_out=0,
+                                   cached=False, wall_ms=wall, outcome="error", cause="unreachable")
+            return Outcome(state=STATE_UNAVAILABLE, model=model, cause="unreachable",
+                           detail="unreachable", prompt_hash=prompt_hash,
+                           tokens_in=tokens_in, tokens_out=tokens_out, call_id=call_id,
+                           repairs=repairs)
+        except Exception:  # noqa: BLE001 - a transport surprise is not a page crash
+            wall = int((time.monotonic() - started) * 1000)
+            call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
+                                   prompt_hash=repair_hash, tokens_in=0, tokens_out=0,
+                                   cached=False, wall_ms=wall, outcome="error", cause="unreachable")
+            return Outcome(state=STATE_UNAVAILABLE, model=model, cause="unreachable",
+                           detail="unreachable", prompt_hash=prompt_hash,
+                           tokens_in=tokens_in, tokens_out=tokens_out, call_id=call_id,
+                           repairs=repairs)
+        wall = int((time.monotonic() - started) * 1000)
+        repair_in, repair_out = int(completion.tokens_in or 0), int(completion.tokens_out or 0)
+        tokens_in, tokens_out = tokens_in + repair_in, tokens_out + repair_out
+        reading = read_reply(completion.text or "")
+        if reading.cause or reading.reply is None:
+            call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
+                                   prompt_hash=repair_hash, tokens_in=repair_in,
+                                   tokens_out=repair_out, cached=False, wall_ms=wall,
+                                   outcome="error", cause="malformed")
+            return Outcome(state=STATE_UNAVAILABLE, model=model, cause="malformed",
+                           detail="malformed", prompt_hash=prompt_hash,
+                           tokens_in=tokens_in, tokens_out=tokens_out, call_id=call_id,
+                           repairs=repairs)
+        reply = reading.reply
+        invented = violations(reply, record)
+        call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
+                               prompt_hash=repair_hash, tokens_in=repair_in,
+                               tokens_out=repair_out, cached=False, wall_ms=wall,
+                               outcome="rejected" if invented else "ok",
+                               cause=("rejected: " + invented[0]) if invented else "")
+    elif reading.cause:
         call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
                                prompt_hash=prompt_hash, tokens_in=tokens_in,
                                tokens_out=tokens_out, cached=False, wall_ms=wall,
-                               outcome="error", cause=cause)
-        return Outcome(state=STATE_UNAVAILABLE, model=model, cause=cause, detail=cause,
-                       prompt_hash=prompt_hash, tokens_in=tokens_in, tokens_out=tokens_out,
-                       call_id=call_id)
-    assert reply is not None
-    text = reply.text
-
-    invented = violations(reply, record)
-    call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
-                           prompt_hash=prompt_hash, tokens_in=tokens_in, tokens_out=tokens_out,
-                           cached=False, wall_ms=wall,
-                           outcome="rejected" if invented else "ok",
-                           cause=("rejected: " + invented[0]) if invented else "")
-    repairs = 0
+                               outcome="error", cause=reading.cause)
+        return Outcome(state=STATE_UNAVAILABLE, model=model, cause=reading.cause,
+                       detail=reading.cause, prompt_hash=prompt_hash,
+                       tokens_in=tokens_in, tokens_out=tokens_out, call_id=call_id)
+    else:
+        assert reading.reply is not None
+        reply = reading.reply
+        invented = violations(reply, record)
+        call_id = _record_call(conn, case_id=case_id, variant=variant, model=model,
+                               prompt_hash=prompt_hash, tokens_in=tokens_in,
+                               tokens_out=tokens_out, cached=False, wall_ms=wall,
+                               outcome="rejected" if invented else "ok",
+                               cause=("rejected: " + invented[0]) if invented else "")
     # One repair round (AC3): the model is shown the exact violations and asked to change only those
     # sentences. The reply is checked again from scratch, so a repair buys nothing but a second
     # chance to satisfy the same check - it cannot relax it.
@@ -1099,7 +1249,10 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
 
     text = reply.text
     _store_explanation(conn, case_id, prompt_hash, model, text, tokens_in, tokens_out, now)
-    return Outcome(state=STATE_FRESH, text=text, model=model, detail=model,
+    # A repaired explanation is distinguished from a first-time one in the ledger, so the A/B can
+    # price the repair round separately instead of folding it into "fresh" (AC4).
+    return Outcome(state=STATE_FRESH_REPAIRED if repairs else STATE_FRESH,
+                   text=text, model=model, detail=model,
                    prompt_hash=prompt_hash, tokens_in=tokens_in, tokens_out=tokens_out,
                    call_id=call_id, repairs=repairs)
 
@@ -1114,6 +1267,7 @@ VARIANT_LABEL = {VARIANT_OFF: "Agent off", VARIANT_ON: "Agent on"}
 # (a call that was paid for and thrown away) or neither.
 STATE_LABEL = {
     STATE_FRESH: "fresh - an explanation written for this view",
+    STATE_FRESH_REPAIRED: "fresh_repaired - an explanation a repair round made acceptable",
     STATE_CACHED: "cached - an explanation served from the store",
     STATE_REJECTED: "rejected - a reply that failed the check",
     STATE_UNAVAILABLE: "failed, unavailable - the model could not answer, or answered unusably",
@@ -1158,7 +1312,7 @@ def _state_numbers(conn, variant: str, state: str) -> dict:
             "calls": calls, "cache_hits": cached, "explanations_written": written,
             "total_tokens": tokens, "wall_ms": int(wall or 0),
             "helped": int(helped or 0), "did_not_help": int(unhelpful or 0),
-            "value": state in (STATE_FRESH, STATE_CACHED),
+            "value": state in (STATE_FRESH, STATE_FRESH_REPAIRED, STATE_CACHED),
             "cost": state in (STATE_REJECTED, STATE_UNAVAILABLE)}
 
 
@@ -1176,7 +1330,8 @@ def report(conn) -> list[dict]:
     rows: list[dict] = []
     for variant in VARIANTS:
         states = {state: _state_numbers(conn, variant, state) for state in VIEW_STATES}
-        served = states[STATE_FRESH]["views"] + states[STATE_CACHED]["views"]
+        served = (states[STATE_FRESH]["views"] + states[STATE_FRESH_REPAIRED]["views"]
+                  + states[STATE_CACHED]["views"])
         calls = sum(entry["calls"] for entry in states.values())
         cached_hits = sum(entry["cache_hits"] for entry in states.values())
         fresh = sum(entry["explanations_written"] for entry in states.values())
@@ -1194,6 +1349,7 @@ def report(conn) -> list[dict]:
             "label": VARIANT_LABEL[variant],
             "views": sum(entry["views"] for entry in states.values()),
             "explanation_views": served,
+            "repaired_accepts": states[STATE_FRESH_REPAIRED]["views"],
             "rejected": states[STATE_REJECTED]["views"],
             "errors": states[STATE_UNAVAILABLE]["views"] + states[STATE_UNCONFIGURED]["views"],
             "calls": calls + unlinked_calls,
