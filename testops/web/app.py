@@ -2729,6 +2729,10 @@ def stale_case_page(case_id: str, unregistered_analyser: str | None = None) -> b
 # the page names when it refuses a value, so the reader is told what would have worked.
 FLAG_SHOW = ("on", "true", "1", "yes")
 FLAG_HIDE = ("off", "false", "0", "no")
+# TESTOPS-93: the third page has its own word. It is kept out of FLAG_SHOW because it is not another
+# spelling of "on" - it asks a different route for the explanation, and a reader who types it is owed
+# the one that answered, named on the page.
+FLAG_FOUNDRY = ("foundry",)
 FLAG_ACCEPTED = FLAG_SHOW + FLAG_HIDE
 
 
@@ -2756,6 +2760,8 @@ def parse_agent_flag(value: str | None) -> AgentFlag:
     """
     raw = "" if value is None else str(value).strip()
     word = raw.lower()
+    if word in FLAG_FOUNDRY:
+        return AgentFlag(raw, agent.VARIANT_FOUNDRY, True)
     if word in FLAG_SHOW:
         return AgentFlag(raw, agent.VARIANT_ON, True)
     if word in FLAG_HIDE or word == "":
@@ -2795,23 +2801,47 @@ def _explanation_block(outcome, case_id: str, view_id: int | None) -> list[str]:
     below it are the argument's, and adding one to their sequence would change the page's existing
     structure - which the agent is not allowed to do (AC1, AC2). The feedback links carry the view
     id, so one page counts one vote per variant without a cookie, a script or an identity (AC6).
+
+    TESTOPS-93: the block is the same block, but the line that says who wrote it names the route
+    that actually answered - ``served by: foundry-hosted-agent`` for the hosted agent, and a plain
+    statement of the substitution when a deployment allowed a fallback to the model route. The
+    agent-on page's bytes are untouched: neither line is emitted unless one of those happened.
     """
+    foundry = outcome.route == agent.ROUTE_FOUNDRY
+    if foundry:
+        writer = (f'Written by the Foundry hosted agent '
+                  f'<span class="code">{esc(outcome.agent_name or outcome.model)}</span> from this '
+                  f'case\'s stored record. It is commentary, not evidence: the finding above is '
+                  f'what the analysis decided, and nothing here changes it.')
+    else:
+        writer = (f'Written by the model <span class="code">{esc(outcome.model)}</span> '
+                  f'from this case\'s stored record. It is commentary, not evidence: the finding '
+                  f'above is what the analysis decided, and nothing here changes it.')
     out = ['<h2 class="section">Explanation of this case</h2>',
-           f'<p class="meta">Written by the model <span class="code">{esc(outcome.model)}</span> '
-           f'from this case\'s stored record. It is commentary, not evidence: the finding above is '
-           f'what the analysis decided, and nothing here changes it.</p>',
+           f'<p class="meta">{writer}</p>',
            f'<div class="agent-text"><p>{esc(outcome.text)}</p></div>']
+    if foundry:
+        out.append(f'<p class="meta agent-route">served by: '
+                   f'<span class="code">{esc(outcome.served_by)}</span></p>')
+    elif outcome.fallback_from:
+        reason = outcome.fallback_cause or "did not answer"
+        out.append(f'<p class="meta agent-route">served by: '
+                   f'<span class="code">{esc(outcome.served_by)}</span> '
+                   f'<span class="quiet">— the {esc(outcome.fallback_from)} {esc(reason)}, and '
+                   f'this deployment allows falling back to the model route. The reader is told '
+                   f'rather than left to infer it.</span></p>')
     if outcome.state == "cached":
         out.append('<p class="meta agent-cached">This is the explanation stored from an earlier '
                    'view of this case, so showing it cost nothing.</p>')
     if view_id is not None:
         base = f'/case/{urllib.parse.quote(case_id)}/feedback?view={int(view_id)}'
         out.append(f'<p class="agent-feedback">Was this useful? '
-                   f'<a href="{esc(base)}&amp;vote=helped">This helped</a> \u00b7 '
+                   f'<a href="{esc(base)}&amp;vote=helped">This helped</a> · '
                    f'<a href="{esc(base)}&amp;vote=did_not_help">This did not</a></p>')
-    out.append(f'<p class="meta">Agent on \u00b7 '
+    footer = "Foundry agent on" if foundry else "Agent on"
+    out.append(f'<p class="meta">{footer} · '
                f'<a href="/case/{urllib.parse.quote(case_id)}?agent=off">Read this case without the '
-               f'explanation</a> \u00b7 <a href="/agent-report">what the agent costs</a></p>')
+               f'explanation</a> · <a href="/agent-report">what the agent costs</a></p>')
     return out
 
 
@@ -2940,6 +2970,17 @@ def case_response(conn, case_id: str, *, variant: str = agent.VARIANT_OFF,
                                          completer=completer)
         else:
             outcome = agent.Outcome(state=agent.STATE_NO_FINDING, cause="no_finding")
+    elif variant == agent.VARIANT_FOUNDRY:
+        # TESTOPS-93. The third page asks the hosted agent for its explanation. The record, the
+        # block and the guard are the model route's; only the transport is different, and the block
+        # names the route that answered.
+        if findings:
+            record = agent.case_record(conn, case_id, row=row, findings=findings) or {}
+            outcome = agent.explain_foundry(conn, record, cfg=agent_config or agent.config(),
+                                            completer=completer)
+        else:
+            outcome = agent.Outcome(state=agent.STATE_NO_FINDING, cause="no_finding",
+                                    route=agent.ROUTE_FOUNDRY)
     if outcome is not None:
         if outcome.served:
             body.extend(_explanation_block(outcome, case_id, view_id))
@@ -3205,7 +3246,7 @@ class Handler(BaseHTTPRequestHandler):
                 view_id = None
                 if queries.case_row(conn, case_id) is not None:
                     view_id = (agent.start_view(conn, case_id, variant)
-                               if variant == agent.VARIANT_ON
+                               if variant in (agent.VARIANT_ON, agent.VARIANT_FOUNDRY)
                                else agent.record_view(conn, case_id, variant))
                 body, code = case_response(conn, case_id, variant=variant, view_id=view_id,
                                            flag=flag)
@@ -3344,13 +3385,15 @@ def agent_report(conn) -> bytes:
             '<a href="/agent-check">can this deployment reach a model?</a> answers, in words, for '
             'the process that is serving you.</p>']
     body.append('<table>')
-    body.append('<tr><th>Variant</th><th>Views</th><th>Explanations shown</th>'
+    body.append('<tr><th>Variant</th><th>Route</th><th>Views</th><th>Explanations shown</th>'
                 '<th>Accepted after repair</th><th>Rejected</th>'
                 '<th>Failed</th><th>Calls</th><th>Cache hits</th><th>Total tokens</th>'
                 '<th>Mean tokens per explanation</th><th>Helped</th><th>Did not</th></tr>')
     for row in rows:
         mean = row["mean_tokens_per_explanation"]
-        body.append(f'<tr><td>{esc(row["label"])}</td><td>{row["views"]}</td>'
+        route = (f'<span class="code">{esc(row["served_by"])}</span>' if row["served_by"]
+                 else '<span class="quiet">none</span>')
+        body.append(f'<tr><td>{esc(row["label"])}</td><td>{route}</td><td>{row["views"]}</td>'
                     f'<td>{row["explanation_views"]}</td>'
                     f'<td>{row["repaired_accepts"]}</td><td>{row["rejected"]}</td>'
                     f'<td>{row["errors"]}</td><td>{row["calls"]}</td><td>{row["cache_hits"]}</td>'
@@ -3382,6 +3425,30 @@ def agent_report(conn) -> bytes:
                         f'<td>{entry["views"]}</td><td>{entry["calls"]}</td>'
                         f'<td>{entry["cache_hits"]}</td><td>{entry["total_tokens"]}</td>'
                         f'<td>{entry["helped"]}</td><td>{entry["did_not_help"]}</td></tr>')
+    body.append('</table>')
+    # TESTOPS-93 AC3: the two routes side by side, with the votes their pages received and the
+    # failures counted by the kind the ledger recorded. Tokens are the agent's own USAGE figures for
+    # the foundry route and the provider's usage figures for the model route - never an estimate.
+    body.append('<h2 class="section">The routes, side by side</h2>')
+    body.append('<p class="meta">The same experiment asked two ways. A page with '
+                '<span class="code">?agent=on</span> asks this build\u2019s own model call; a page '
+                'with <span class="code">?agent=foundry</span> asks the hosted Foundry agent. For '
+                'the foundry route the token counts are the agent\u2019s own '
+                '<span class="code">USAGE</span> line, not an estimate, and a failure is counted '
+                'by its kind so an unreachable endpoint is never confused with a rejected reply.</p>')
+    body.append('<table><tr><th>Route</th><th>Asked by</th><th>Calls</th><th>Total tokens</th>'
+                '<th>Wall (ms)</th><th>Explanations written</th><th>Helped</th><th>Did not</th>'
+                '<th>Failures by kind</th></tr>')
+    for route in agent.route_report(conn):
+        failures = ", ".join(f"{esc(kind)}: {count}"
+                             for kind, count in sorted(route["failures_by_kind"].items()))
+        body.append(f'<tr><td><span class="code">{esc(route["served_by"])}</span></td>'
+                    f'<td>{esc(route["label"] or "no variant asks this route")}</td>'
+                    f'<td>{route["calls"]}</td><td>{route["total_tokens"]}</td>'
+                    f'<td>{route["wall_ms"]}</td>'
+                    f'<td>{route["explanations_written"]}</td>'
+                    f'<td>{route["helped"]}</td><td>{route["did_not_help"]}</td>'
+                    f'<td>{failures or "&mdash;"}</td></tr>')
     body.append('</table>')
     for row in rows:
         if row["unlinked_calls"]:
@@ -3481,7 +3548,23 @@ def agent_check(conn, refresh: bool = False) -> bytes:
             f'<tr><th>The az CLI</th><td>{az_text}</td></tr>',
             f'<tr><th>A token was obtained</th><td>'
             f'{"yes, from " + esc(agent.TOKEN_SOURCE_LABEL.get(str(diag.get("token_source")), "")) if diag.get("token_obtained") else "no"}</td></tr>',
-            '</table>']
+            # TESTOPS-93: the hosted agent's own configuration. The credential is a yes/no here, as
+            # it is above: the page says whether one was supplied, never what it is (AC6).
+            f'<tr><th>Foundry-hosted agent</th><td><span class="code">'
+            f'{esc(diag.get("agent_name"))}</span></td></tr>',
+            f'<tr><th>Agent endpoint</th><td><span class="code">'
+            f'{esc(diag.get("agent_endpoint"))}</span> '
+            f'<span class="quiet">({"set by " + esc(diag.get("agent_route_variable")) if diag.get("agent_route_variable") else "derived from the project and the agent name"})</span></td></tr>',
+            f'<tr><th>Credential in TESTOPS_AGENT_TOKEN</th><td>'
+            f'{"yes" if diag.get("agent_token") else "no"} '
+            f'<span class="quiet">(whether the variable is set; its value is never read here)</span>'
+            f'</td></tr>',
+            f'<tr><th>Fallback to the model route</th><td>'
+            f'{esc(diag.get("agent_fallback") or "not asked for")} '
+            f'<span class="quiet">(a failed agent route is answered by the model route only when this '
+            f'is <span class="code">model</span>)</span></td></tr>',
+            '</table>',
+            f'<p class="meta">{esc(agent.foundry_sentence(diag))}</p>']
 
     attempts = list(imds.get("attempts") or [])
     if attempts:

@@ -287,10 +287,14 @@ CREATE INDEX IF NOT EXISTS idx_service_project ON service(project);
 -- The verdict is evidence; the explanation is commentary. These tables hold only commentary, and
 -- ``agent_view.variant`` records which page a reader was shown so the two can be weighed against
 -- each other instead of assumed.
+-- TESTOPS-93. ``variant`` gains ``foundry``: the third page is an explanation written by the hosted
+-- Foundry agent rather than by this build's own model call. It is a variant and not a sub-flag of
+-- ``on`` because the two explanations come from different routes, and the report must be able to put
+-- a view of one beside a view of the other.
 CREATE TABLE IF NOT EXISTS agent_view (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   case_id TEXT NOT NULL,
-  variant TEXT NOT NULL CHECK (variant IN ('on', 'off')),
+  variant TEXT NOT NULL CHECK (variant IN ('on', 'off', 'foundry')),
   at TEXT NOT NULL,
   -- What the page actually carried: ``fresh`` (an explanation written for this view), ``cached``
   -- (one served from the store), ``rejected`` (a reply that failed the check),
@@ -306,6 +310,10 @@ CREATE TABLE IF NOT EXISTS agent_call (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   case_id TEXT NOT NULL,
   variant TEXT NOT NULL,
+  -- TESTOPS-93: which route answered - this build's own model call (``model``) or the hosted Foundry
+  -- agent (``foundry``). A row written before this column existed was a model call, and the migration
+  -- says so rather than leaving the route unknown.
+  route TEXT NOT NULL DEFAULT 'model' CHECK (route IN ('model', 'foundry')),
   model TEXT NOT NULL,
   prompt_hash TEXT NOT NULL,
   tokens_in INTEGER NOT NULL DEFAULT 0,
@@ -357,7 +365,7 @@ CREATE TABLE IF NOT EXISTS agent_flag (
   at TEXT NOT NULL,
   case_id TEXT NOT NULL,
   flag_value TEXT NOT NULL DEFAULT '',
-  variant TEXT NOT NULL CHECK (variant IN ('on', 'off')),
+  variant TEXT NOT NULL CHECK (variant IN ('on', 'off', 'foundry')),
   understood INTEGER NOT NULL DEFAULT 0
 );
 

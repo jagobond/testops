@@ -59,7 +59,12 @@ from ..config import LEGACY_PROJECTS
 # so a store can be restored from its own history; the trigger is replaced, no row is touched.
 # v7 adds `repeats_product` to the vocabulary (TESTOPS-72) and refreshes the two refusal messages,
 # which name the set; the triggers are replaced again and no row is touched.
-CURRENT_VERSION = 7
+# v8 (TESTOPS-93) gives the narrator a second route. ``agent_call`` gains ``route`` (a row written
+# before it existed was a model call, and 'model' is the truth about it), and ``agent_view`` and
+# ``agent_flag`` widen their ``variant`` CHECK to admit 'foundry'. SQLite cannot alter a CHECK, so
+# those two tables are rebuilt row for row from schema.sql's own DDL - same ids, same values - and no
+# history is rewritten: a v7 view was still a view of 'on' or 'off'.
+CURRENT_VERSION = 8
 
 # The oldest store this build can still open. v1 is readable: its claims are evidence.
 MIN_SUPPORTED_VERSION = 1
@@ -148,6 +153,9 @@ def prepare(conn: sqlite3.Connection, schema_text: str) -> int:
         # canonical DDL install v7's guard and v7's wording.
         conn.execute("DROP TRIGGER IF EXISTS claim_verdict_insert")
         conn.execute("DROP TRIGGER IF EXISTS claim_verdict_update")
+
+    if version is not None and version < 8:
+        _upgrade_agent_tables_to_v8(conn, schema_text)
 
     conn.executescript(schema_text)  # creates anything missing; a no-op on a current store
     if version is not None and version < 4:
@@ -317,15 +325,91 @@ def _canonical_claim_ddl(schema_text: str) -> str:
     is a second thing to keep in step, and the whole point of this migration is that a migrated
     store ends up shaped like a new one.
     """
+    return _canonical_ddl(schema_text, "claim")
+
+
+def _upgrade_agent_tables_to_v8(conn: sqlite3.Connection, schema_text: str) -> None:
+    """Admit the Foundry route to the narrator's ledger without rewriting any row (TESTOPS-93).
+
+    Three changes, in the order the ledger needs them:
+
+    * ``agent_call.route`` is added with a default of ``'model'``. Every call written before this
+      ticket went through this build's own model client - the hosted agent did not exist here - so
+      'model' is the truth about those rows, not a stand-in for an unknown.
+    * ``agent_view`` and ``agent_flag`` carry a CHECK on ``variant`` that admits only 'on' and 'off'.
+      SQLite cannot alter a CHECK, so each table is rebuilt from schema.sql's own DDL and every row
+      is copied by name with its id and its values. A v7 view was a view of 'on' or 'off'; nothing
+      it says is promoted to a route it never used.
+    * The indexes those tables own are dropped with them, and the ``executescript`` that follows the
+      upgrade recreates every missing index, so the migrated store ends up shaped like a new one.
+    """
+    if _table_exists(conn, "agent_call") and not _has_column(conn, "agent_call", "route"):
+        conn.execute("ALTER TABLE agent_call ADD COLUMN route TEXT NOT NULL DEFAULT 'model'")
+    for table in ("agent_view", "agent_flag"):
+        if _table_exists(conn, table) and "'foundry'" not in _table_ddl(conn, table):
+            _rebuild_table(conn, schema_text, table)
+
+
+def _table_ddl(conn: sqlite3.Connection, table: str) -> str:
+    """The stored CREATE TABLE statement for ``table``, or ``""`` when it does not exist."""
+    row = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                       (table,)).fetchone()
+    return str(row[0] or "") if row else ""
+
+
+def _canonical_ddl(schema_text: str, table: str) -> str:
+    """The CREATE TABLE statement for ``table`` exactly as schema.sql writes it."""
     scratch = sqlite3.connect(":memory:")
     try:
         scratch.executescript(schema_text)
-        row = scratch.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'claim'").fetchone()
+        row = scratch.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                              (table,)).fetchone()
     finally:
         scratch.close()
     if not row or not row[0]:
-        raise RuntimeError("schema.sql does not define a claim table")
+        raise RuntimeError(f"schema.sql does not define a table named {table}")
     return row[0]
+
+
+def _rebuild_table(conn: sqlite3.Connection, schema_text: str, table: str) -> None:
+    """Rebuild one table from schema.sql's DDL, copying every column it already holds, ids included.
+
+    Used where SQLite cannot alter a constraint in place. The columns copied are the ones the old
+    table had, by name, so a table that gains a column keeps its rows with the new column defaulted;
+    the transaction and the foreign-key check are the same discipline the claim rebuild uses.
+    """
+    new_table = f"{table}__rebuild"
+    ddl = _canonical_ddl(schema_text, table)
+    new_ddl, replaced = re.subn(r"^CREATE TABLE\s+\w+\b", f"CREATE TABLE {new_table}", ddl, count=1)
+    if not replaced:
+        raise RuntimeError(f"schema.sql no longer creates a table named {table}: {ddl[:80]!r}")
+    columns = [row[1] for row in conn.execute(f"PRAGMA table_info({table})")]
+    names = ", ".join(columns)
+    conn.commit()
+    previous_isolation = conn.isolation_level
+    try:
+        conn.isolation_level = None  # explicit transaction control for the rebuild
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(f"DROP TABLE IF EXISTS {new_table}")
+        conn.execute(new_ddl)
+        conn.execute(f"INSERT INTO {new_table} ({names}) SELECT {names} FROM {table}")
+        conn.execute(f"DROP TABLE {table}")
+        conn.execute(f"ALTER TABLE {new_table} RENAME TO {table}")
+        conn.execute("COMMIT")
+    except Exception:
+        try:
+            conn.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass
+        raise
+    finally:
+        conn.isolation_level = previous_isolation
+        conn.execute("PRAGMA foreign_keys = ON")
+
+    broken = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if broken:
+        raise RuntimeError(f"migration left dangling references: {broken[:5]}")
 
 
 def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
