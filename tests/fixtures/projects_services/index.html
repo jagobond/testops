@@ -69,6 +69,27 @@ p.provenance { margin:0 0 1rem; }
 p.provenance .fn { font-weight:600; color:var(--ink); }
 ul.context { margin:.35rem 0 0; padding-left:1.1rem; color:var(--dim); }
 ul.context li { margin:.2rem 0; }
+/* The source band (TESTOPS-73). Tags are links a reader can follow and keyboard focus can reach;
+   a source that was needed and could not be consulted carries the words "not consulted", so the
+   difference is never colour alone. */
+section.sources { margin:1rem 0 .6rem; }
+h2.sources-h { font-size:.95rem; letter-spacing:.03em; text-transform:uppercase; color:var(--dim);
+               margin:0 0 .4rem; }
+div.tags { display:flex; flex-wrap:wrap; gap:.4rem; margin:0 0 .5rem; }
+.tag { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:.22rem .7rem;
+       background:#fff; color:var(--ink); font-size:.88rem; line-height:1.4; }
+a.tag { text-decoration:none; }
+a.tag:hover { background:#f6f4f0; }
+.tag:focus { outline:2px solid var(--accent); outline-offset:2px; }
+.tag .tag-kind { font-weight:600; }
+.tag .tag-state { font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; color:var(--dim);
+                  margin-left:.2rem; }
+.tag .tag-where { color:var(--dim); font-size:.8rem; }
+.tag.unconsulted { border-style:dashed; background:#fbfaf7; color:var(--dim); }
+.tag.unconsulted .tag-state { font-weight:600; }
+.tag .tag-reason { display:block; font-size:.84rem; color:var(--dim); margin-top:.1rem; }
+p.band-note, p.test-only { margin:.2rem 0; }
+p.test-only { font-weight:600; }
 figure.snippet { margin:.7rem 0 1rem; }
 figure.snippet figcaption { font-size:.86rem; color:var(--dim); margin-bottom:.3rem; }
 pre.snippet { margin:0; background:#f3f1ec; border:1px solid var(--line); border-radius:5px;

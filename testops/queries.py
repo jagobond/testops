@@ -449,6 +449,191 @@ def finding_rows(conn, case_id: str) -> list[dict]:
     return out
 
 
+# ---------------------------------------------------------------- the source band
+#
+# TESTOPS-73. The top of a case page names what the case examined, before the statement, so a
+# reader can see at a glance whether the finding rests on test code, the product, a tracker item,
+# a pipeline run or a requirements document - and which of those was wanted and could not be
+# consulted. Everything here is read from the case's own snapshot: today's configuration says
+# nothing about what that run could see.
+
+CONSULTED = "consulted"
+NOT_CONSULTED = "not_consulted"
+
+# A kind that is not linked is not a tag (AC2). These are the kinds an analyser may record as
+# linked to a claim, in ``detail["links"]``: a list of ``{"kind", "name", "url"}``. Nothing in this
+# build emits them yet; the seam exists so that a future collector links an issue or a run exactly
+# as a repository is linked, instead of inventing a second way to say "this item was examined".
+LINKED_KIND_TITLE = {
+    "jira_issue": "Jira issue",
+    "ado_work_item": "Azure DevOps work item",
+    "pipeline_run": "Pipeline run",
+    "requirements_document": "Requirements document",
+}
+
+
+def _analyser_needs(meta: dict, analyser: str | None) -> set[str]:
+    """The capabilities this case's analysis needed, from the snapshot, then this build.
+
+    The snapshot is the record of what that run needed; the analyser's declaration is only a
+    fallback for a snapshot written before the list was recorded. Neither is today's registry.
+    """
+    spec = (meta.get("analysers") or {}).get(analyser or "") if isinstance(
+        meta.get("analysers"), dict) else None
+    needs = set(spec.get("needs") or ()) if isinstance(spec, dict) else set()
+    if needs:
+        return needs
+    from .analysers import REGISTERED        # local: the analysers import this-vicinity modules
+
+    module = REGISTERED.get(analyser or "")
+    return set(getattr(module, "NEEDS", ()) or ())
+
+
+def _service_state(meta: dict, *, kind: str, role: str) -> dict | None:
+    """One recorded service state from the snapshot, or ``None`` when none was recorded."""
+    states = meta.get("service_states")
+    if not isinstance(states, list):
+        return None
+    for state in states:
+        if isinstance(state, dict) and state.get("type") == kind and state.get("role") == role:
+            return state
+    return None
+
+
+def _repo_from_service(meta: dict, role: str) -> str:
+    """The repository a git-repo service names, from the recorded state's display name."""
+    state = _service_state(meta, kind="git_repo", role=role)
+    name = (state or {}).get("name") or ""
+    suffix = f" ({role})"
+    return name[:-len(suffix)] if name.endswith(suffix) else name
+
+
+def source_band(conn, row: dict, claims: list[dict]) -> dict:
+    """What the case examined, and what it needed and could not consult (TESTOPS-73).
+
+    Returns ``tags`` - consulted first, in a stable order - plus the two sentences a reader needs:
+    ``absent_note`` (what an absent tag means) and ``sentence`` (the case that rests on test code
+    alone). A tag is ``{"kind", "name", "href", "state", "detail", "reason"}``; ``href`` is empty
+    when the store cannot build the link AC2 asks for, and the tag says so rather than hiding the
+    source. No tag is invented for a kind that is not linked: an unconsulted tag appears only for a
+    source the analysis needed (AC3).
+    """
+    snapshot = row.get("snapshot")
+    stored = conn.execute("SELECT meta, artefact_versions FROM snapshot WHERE id = ?",
+                          (snapshot,)).fetchone() if snapshot else None
+    meta = _json(stored["meta"]) if stored and stored["meta"] else {}
+    versions = _json(stored["artefact_versions"], {}) if stored else {}
+    if not isinstance(meta, dict):
+        meta = {}
+    arms_value = meta.get("arms")
+    arms = arms_value if isinstance(arms_value, dict) else {}
+    reads_value = meta.get("reads")
+    reads = reads_value if isinstance(reads_value, dict) else {}
+    needs = _analyser_needs(meta, row.get("analyser"))
+    recorded = bool(meta) or bool(versions)
+
+    tags: list[dict] = []
+
+    # ---- the test repository: link to the file the assertion was read from, at its commit.
+    first = next((claim for claim in claims
+                  if (claim.get("provenance") or {}).get("assertion_path")), None)
+    prov = (first or {}).get("provenance") or {}
+    test_repo = (first.get("repo") if first is not None else "") or arms.get("test") or ""
+    if not test_repo and len(versions) == 1:
+        test_repo = next(iter(versions))
+    commit = prov.get("assertion_commit") or (versions.get(test_repo) if test_repo else None)
+    path = prov.get("assertion_path")
+    line = prov.get("assertion_line")
+    href = blob_permalink(test_repo, commit, path, line) if (test_repo and path) else None
+    if test_repo or path:
+        detail = f"{path}:{line}" if path else ""
+        if not href:
+            note = ("this run recorded no link to the file" if path
+                    else "this run recorded no assertion to open")
+            detail = f"{detail}; {note}" if detail else note
+        tags.append({"kind": "Test repository", "name": test_repo or "the test repository",
+                     "href": href, "state": CONSULTED, "detail": detail, "reason": ""})
+
+    # ---- the product repository: read by the run, or wanted and not consultable.
+    product_repo = arms.get("product") or _repo_from_service(meta, "product")
+    if not product_repo:
+        ecosystems = meta.get("ecosystems")
+        product_eco = (ecosystems or {}).get("product") if isinstance(ecosystems, dict) else None
+        product_repo = (product_eco or {}).get("repository") or ""
+    product_read = reads.get("product") if isinstance(reads.get("product"), dict) else None
+    examined = "product" in arms or product_read is not None
+    product_commit = (product_read or {}).get("commit") or (versions.get(product_repo)
+                                                            if product_repo else None)
+    if examined:
+        href = (f"https://github.com/{product_repo}/tree/{product_commit}"
+                if product_repo and product_commit
+                else f"https://github.com/{product_repo}" if product_repo else "")
+        detail = (f"at commit {product_commit[:8]}" if product_commit
+                  else "the run did not record its commit")
+        tags.append({"kind": "Product repository",
+                     "name": product_repo or "the product repository", "href": href,
+                     "state": CONSULTED, "detail": detail, "reason": ""})
+    else:
+        reason = _product_absent_reason(meta)
+        if "code" in needs:
+            tags.append({"kind": "Product repository", "name": product_repo
+                         or "the product repository", "href": "", "state": NOT_CONSULTED,
+                         "detail": "", "reason": reason})
+
+    # ---- kinds a claim links explicitly: an issue, a work item, a pipeline run, a document.
+    for claim in claims:
+        detail = claim.get("detail") or {}
+        for entry in (detail.get("links") or ()):
+            if not isinstance(entry, dict):
+                continue
+            title = LINKED_KIND_TITLE.get(entry.get("kind") or "")
+            url = entry.get("url") or ""
+            if not title or not url:
+                continue                            # not linked is not a tag (AC2)
+            if any(tag["kind"] == title and tag["href"] == url for tag in tags):
+                continue
+            tags.append({"kind": title, "name": entry.get("name") or url, "href": url,
+                         "state": CONSULTED, "detail": "", "reason": ""})
+
+    # ---- the blind spot the band cannot draw: the product's routes, when the product is there
+    # but its ecosystem is one this build cannot read. It sits beside the evidence, dimmed.
+    ecosystems = meta.get("ecosystems")
+    product_eco = (ecosystems or {}).get("product") if isinstance(ecosystems, dict) else None
+    if examined and "code" in needs and isinstance(product_eco, dict) \
+            and product_eco.get("reason") and not product_eco.get("evidence"):
+        tags.append({"kind": "Product routes", "name": product_repo or "the product's routes",
+                     "href": "", "state": NOT_CONSULTED, "detail": "",
+                     "reason": product_eco["reason"]})
+
+    sentence = None
+    if not examined:
+        reason = _product_absent_reason(meta)
+        sentence = ("Assessed against test code only: the product\u2019s routes could not be "
+                    "consulted")
+        if reason:
+            sentence += f", because {reason}"
+        sentence += "."
+
+    return {"tags": tags, "recorded": recorded, "sentence": sentence,
+            "absent_note": ("A kind that is not tagged here was not linked to this case, so an "
+                            "absent tag means it was not part of the evidence.")}
+
+
+def _product_absent_reason(meta: dict) -> str:
+    """Why the product could not be consulted, from the snapshot's own record."""
+    state = _service_state(meta, kind="git_repo", role="product")
+    if state:
+        reason = (state.get("reason") or "").strip().rstrip(".")
+        if reason:
+            return reason
+        if state.get("state"):
+            return f"the product repository is {state['state']}"
+    assessment = meta.get("project_assessment")
+    if isinstance(assessment, dict) and (assessment.get("reason") or "").strip():
+        return assessment["reason"].strip().rstrip(".")
+    return "the run recorded no product repository"
+
+
 # ---------------------------------------------------------------- what happened in this run
 #
 # TESTOPS-22. A run that raised nothing and a case a person resolved are two different facts, and

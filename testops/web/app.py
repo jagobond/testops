@@ -177,6 +177,27 @@ p.provenance { margin:0 0 1rem; }
 p.provenance .fn { font-weight:600; color:var(--ink); }
 ul.context { margin:.35rem 0 0; padding-left:1.1rem; color:var(--dim); }
 ul.context li { margin:.2rem 0; }
+/* The source band (TESTOPS-73). Tags are links a reader can follow and keyboard focus can reach;
+   a source that was needed and could not be consulted carries the words "not consulted", so the
+   difference is never colour alone. */
+section.sources { margin:1rem 0 .6rem; }
+h2.sources-h { font-size:.95rem; letter-spacing:.03em; text-transform:uppercase; color:var(--dim);
+               margin:0 0 .4rem; }
+div.tags { display:flex; flex-wrap:wrap; gap:.4rem; margin:0 0 .5rem; }
+.tag { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:.22rem .7rem;
+       background:#fff; color:var(--ink); font-size:.88rem; line-height:1.4; }
+a.tag { text-decoration:none; }
+a.tag:hover { background:#f6f4f0; }
+.tag:focus { outline:2px solid var(--accent); outline-offset:2px; }
+.tag .tag-kind { font-weight:600; }
+.tag .tag-state { font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; color:var(--dim);
+                  margin-left:.2rem; }
+.tag .tag-where { color:var(--dim); font-size:.8rem; }
+.tag.unconsulted { border-style:dashed; background:#fbfaf7; color:var(--dim); }
+.tag.unconsulted .tag-state { font-weight:600; }
+.tag .tag-reason { display:block; font-size:.84rem; color:var(--dim); margin-top:.1rem; }
+p.band-note, p.test-only { margin:.2rem 0; }
+p.test-only { font-weight:600; }
 figure.snippet { margin:.7rem 0 1rem; }
 figure.snippet figcaption { font-size:.86rem; color:var(--dim); margin-bottom:.3rem; }
 pre.snippet { margin:0; background:#f3f1ec; border:1px solid var(--line); border-radius:5px;
@@ -2198,6 +2219,64 @@ def footnote(claims: list[dict]) -> list[str]:
             f'{esc("; ".join(parts))}.</p>']
 
 
+def source_band_block(band: dict) -> list[str]:
+    """The band at the top of a case page: one tag per source the case examined (TESTOPS-73).
+
+    A consulted tag is a link where the store can build one - the test file at the commit the
+    assertion was read from, the product repository at its commit, and any issue, work item,
+    pipeline run or requirements document a claim links. A source the analysis needed and could not
+    consult is a dimmed tag whose own words say "not consulted" and why, so the blind spot sits
+    beside the evidence (AC3). Tags are focusable links or notes so a keyboard reaches them, and
+    their accessible names carry the kind (AC5).
+    """
+    tags = band.get("tags") or []
+    out = ['<section class="sources" aria-labelledby="sources-heading">',
+           '<h2 class="sources-h" id="sources-heading">Sources this case examined</h2>']
+    if not tags:
+        out.append('<p class="meta">This run recorded no source it examined, so this page cannot '
+                   'say what the case rests on.</p>')
+    else:
+        out.append('<div class="tags" role="list">')
+        for tag in tags:
+            kind = esc(tag.get("kind") or "Source")
+            name = esc(tag.get("name") or "")
+            detail = esc(tag.get("detail") or "")
+            reason = esc(tag.get("reason") or "")
+            if tag.get("state") == queries.CONSULTED:
+                where = f' <span class="tag-where">{detail}</span>' if detail else ""
+                inner = (f'<span class="tag-kind">{kind}</span> '
+                         f'<span class="tag-name">{name}</span>{where} '
+                         f'<span class="tag-state">consulted</span>')
+                label = f"{tag.get('kind')}: {tag.get('name')}"
+                if detail:
+                    label += f", {tag.get('detail')}"
+                if tag.get("href"):
+                    out.append(f'<span role="listitem"><a class="tag" href="{esc(tag["href"])}" '
+                               f'aria-label="{esc(label)}">{inner}</a></span>')
+                else:
+                    out.append(f'<span role="listitem"><span class="tag" tabindex="0" '
+                               f'role="note" aria-label="{esc(label)}">{inner}</span></span>')
+                continue
+            # Not consulted: the words, the kind and the reason are all on the tag.
+            label = f"{tag.get('kind')}: {tag.get('name')}, not consulted"
+            if reason:
+                label += f": {reason}"
+            inner = (f'<span class="tag-kind">{kind}</span> '
+                     f'<span class="tag-name">{name}</span> '
+                     f'<span class="tag-state">not consulted</span>')
+            if reason:
+                inner += f'<span class="tag-reason">{reason}</span>'
+            out.append(f'<span role="listitem"><span class="tag unconsulted" tabindex="0" '
+                       f'role="note" aria-label="{esc(label)}">{inner}</span></span>')
+        out.append("</div>")
+    if band.get("sentence"):
+        out.append(f'<p class="test-only">{esc(band["sentence"])}</p>')
+    if tags:
+        out.append(f'<p class="meta band-note">{esc(band["absent_note"])}</p>')
+    out.append("</section>")
+    return out
+
+
 def stale_case_page(case_id: str, unregistered_analyser: str | None = None) -> bytes:
     """A case id the store no longer holds.
 
@@ -2266,6 +2345,11 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
                 f'{esc(state_label)}</span>'
                 f' \u00b7 Analysed {esc(age(row["created_at"]))}'
                 f'{" at " + esc(versions) if versions else ""}</p>')
+
+    # TESTOPS-73: what the case examined, before the statement. The band is built from the case's
+    # own snapshot, so a reader sees the repositories, commits and linked items - and the blind
+    # spots - at the same glance as the claim.
+    body.extend(source_band_block(queries.source_band(conn, row, claims)))
 
     # A case row can outlive its run: retention deletes them together today, but a hand-imported
     # row or a future change to that path leaves the case and not the run. The link is therefore
