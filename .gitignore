@@ -13,3 +13,7 @@ data/
 
 # Local scratch
 .tmp/
+
+# Credentials. Never committed: see ~/.hermes/credentials/README.md
+*.env
+.env
