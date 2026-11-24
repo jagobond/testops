@@ -1,6 +1,8 @@
 """The smallest web surface that lets a person verify a finding and decide on it.
 
-Two screens. Server-rendered HTML, one form, no JavaScript, nothing behind a disclosure.
+Two screens. Server-rendered HTML, one form, no JavaScript. The one disclosure is a fold: an
+over-long list is collapsed behind a stated count, never silently truncated, and every folded entry
+keeps a permalink that reveals it.
 
 The list is the way in, and every row is a link a reader would follow: a judgement in the verdict's
 own words and the scenario title, never the raw assertion fragment it used to print, and never a
@@ -1810,19 +1812,19 @@ UNPLACED_GROUP_COPY = {
 }
 
 
-def _unplaced_entry(entry: dict, ordinal: int, *, show_reason: bool = True) -> list[str]:
+def _unplaced_entry(entry: dict, *, show_reason: bool = True) -> list[str]:
     """One entry: the step's own words and patterns, under a structural anchor.
 
     The anchor is the claim id (``#unplaced-claim-<id>``), so deleting an earlier claim cannot
-    move it. The old ordinal anchor is kept on a zero-size link that redirects to the structural
-    one, so a fragment a reader cited before this change still lands on the same entry.
+    move it. There is deliberately no ordinal anchor (``#unplaced-<n>``): it was positional, so
+    pruning the first claim of a group re-rendered it onto the next claim and silently changed
+    what an old citation meant. A link that moves is worse than a link that no longer exists.
     """
     claim_id = entry["id"]
     anchor = f"unplaced-claim-{esc(str(claim_id))}"
     text = entry.get("assertion_text") or entry.get("statement") or ""
     nearest = [pattern for pattern in entry.get("nearly") or [] if pattern]
     out = [f'<li id="{anchor}">',
-           f'<a class="anchor-legacy" id="unplaced-{ordinal}" href="#{anchor}"></a>',
            f'{verdict_badge({"verdict": "unplaced"})}'
            f'<p class="claimtext">{esc(text)}</p>']
     if entry.get("group") == queries.GROUP_NO_BINDING and nearest:
@@ -1860,7 +1862,6 @@ def unplaced_block(conn, run: dict) -> list[str]:
     if len(groups) > 1:
         out.append(f"<p class=\"meta\">They fall into {len(groups)} groups; each group states "
                    f"what its steps have in common.</p>")
-    ordinal = 0
     for group in groups:
         items = group["entries"]
         title, sentence = UNPLACED_GROUP_COPY[group["key"]]
@@ -1884,8 +1885,7 @@ def unplaced_block(conn, run: dict) -> list[str]:
         hidden = items[UNPLACED_PREVIEW:]
         out.append('<ul class="unplaced">')
         for entry in shown:
-            ordinal += 1
-            out.extend(_unplaced_entry(entry, ordinal, show_reason=show_reason))
+            out.extend(_unplaced_entry(entry, show_reason=show_reason))
         out.append("</ul>")
         if hidden:
             out.append(f'<p class="meta">{len(shown)} of {len(items)} shown in this group; '
@@ -1896,8 +1896,7 @@ def unplaced_block(conn, run: dict) -> list[str]:
                        f'<summary>Show the other {len(hidden)} of {len(items)} steps in this '
                        f'group</summary><ul class="unplaced">')
             for entry in hidden:
-                ordinal += 1
-                out.extend(_unplaced_entry(entry, ordinal, show_reason=show_reason))
+                out.extend(_unplaced_entry(entry, show_reason=show_reason))
             out.append("</ul></details>")
     return out
 

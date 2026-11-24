@@ -597,22 +597,51 @@ def test_P20_unplaced_claims_are_rendered_with_the_soft_tone(first_run_html):
     """P20: a claim that could not be placed must look less settled, without a legend.
 
     P20 was skipped while unplaced claims were only a count. TESTOPS-57 gives them a section of
-    their own on the run page, so the soft badge is now rendered on a served page. This asserts
-    the section exists, that its count and its entries agree, and that every entry carries the
-    soft badge - not the alarm red a placed finding wears.
+    their own on the run page, so the soft badge is now rendered on a served page. TESTOPS-60
+    folds an over-long group into a disclosure, so this asserts the promise that survives the
+    fold: the section's stated total equals every entry it renders, **including the entries
+    inside the disclosure**, and the disclosure's own numbers agree with the rows it holds. A
+    count that agreed only with the visible rows would pass a naive check while hiding the rest.
     """
     page = first_run_html
     marker = "What this run could not place"
     assert marker in page, "the run page does not give unplaced claims a section of their own"
     section = page.split(marker, 1)[1].split("<h2", 1)[0]
-    entries = re.findall(r'<li id="unplaced-claim-\d+">', section)
-    assert entries, "the unplaced section lists no entries"
+
+    # Count the two halves separately: rows outside every disclosure, and rows inside one.
+    folded_blocks = re.findall(r"(?s)<details.*?</details>", section)
+    folded = [m for block in folded_blocks
+              for m in re.findall(r'<li id="unplaced-claim-\d+">', block)]
+    shown = re.findall(r'<li id="unplaced-claim-\d+">',
+                       re.sub(r"(?s)<details.*?</details>", "", section))
+    rendered = shown + folded
+    assert rendered, "the unplaced section lists no entries"
+    assert folded, "the run page folds nothing, so this contract never sees a disclosure"
+
     count = re.search(r"(\d+) steps? in this run (?:was|were) not assessed", text(section))
     assert count, "the unplaced section does not say how many claims it lists"
-    assert int(count.group(1)) == len(entries), (
-        f"the section says {count.group(1)} but lists {len(entries)} entries")
+    stated = int(count.group(1))
+    assert stated == len(rendered), (
+        f"the section says {stated} but renders {len(rendered)} entries "
+        f"({len(shown)} shown, {len(folded)} folded)")
+    assert stated == len(shown) + len(folded), (
+        "the stated total does not account for the entries inside the disclosure")
+
+    # The disclosure states how many rows it holds; that number is what it must actually hold.
+    fold_sentences = [int(n) for n in
+                      re.findall(r"the other (\d+) are folded below", text(section))]
+    summaries = [(int(a), int(b)) for a, b in re.findall(
+        r"Show the other (\d+) of (\d+) steps in this group", section)]
+    assert sum(fold_sentences) == len(folded), (
+        f"the fold sentences claim {sum(fold_sentences)} folded rows, but {len(folded)} are "
+        f"present")
+    assert [a for a, _ in summaries] == fold_sentences, (
+        "each disclosure's summary disagrees with the sentence above it")
+
     assert "not assessed" in text(section).lower()
-    assert "badge verdict soft" in section, "an unplaced entry does not wear the soft tone"
+    # Every entry wears the soft tone, folded or not - never the alarm red of a finding.
+    assert section.count('class="badge verdict soft"') == len(rendered), (
+        "an unplaced entry (possibly inside the disclosure) does not wear the soft tone")
     assert "badge verdict hot" not in section, "an unplaced entry wears the alarm tone"
     assert "unsupported ecosystem" not in section.lower()
     assert "could not be tied to a layer" not in section.lower()

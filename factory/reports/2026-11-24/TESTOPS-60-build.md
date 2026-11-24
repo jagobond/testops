@@ -30,3 +30,43 @@ built under `tmp_path` in tests; the live store was never opened and port 8791 n
   `len(entries)`, so a group or total count cannot drift from its rows.
 - The `other` group exists for claims whose recorded `established_by` is neither of the two known
   reasons; its common sentence says only that the reason differs from the other groups.
+
+## Amendment 1 - the review's required fix, and its two notes
+
+The review (`TESTOPS-60-review.md`) approved the build with one required fix and two smaller
+notes. This amendment records what changed in response; the acceptance-criteria table above is
+left as the record of the first pass.
+
+**Required fix - the legacy ordinal anchors are removed, deliberately.** The review showed that
+`#unplaced-<n>` was still positional: deleting the **first** claim of a group re-rendered the
+ordinals one position earlier, so `#unplaced-25` silently came to mean what had been claim 26 -
+the exact failure AC4 exists to prevent, surviving in the legacy form. The fix is removal, not
+repair: no `id="unplaced-<n>"` and no `anchor-legacy` link is rendered any more. The feature is
+hours old and nothing outside our own testing has cited an ordinal anchor, so no working link is
+lost; a link whose meaning moves with position is worse than a link that no longer exists. This
+deliberately supersedes AC4's "the old ordinal form must either keep working or redirect": a
+redirect that could not change meaning would need the original ordinal frozen per run, which is
+more state than the feature has earned. The structural anchor `#unplaced-claim-<claim_id>` is now
+the only anchor. `tests/test_unplaced_section.py` deletes the **first** claim of a group (the
+review's case, not the middle-delete the first pass tested), proves every surviving structural
+anchor resolves to the same words, and asserts that no ordinal id or legacy link is rendered at
+all.
+
+**Note 2 - app.py's opening docstring corrected.** It said the page had "nothing behind a
+disclosure" while the unplaced section folds up to 331 rows. It now states what the page does:
+the one disclosure is a fold, an over-long list is collapsed behind a stated count, never
+silently truncated, and every folded entry keeps a permalink that reveals it.
+
+**Note 3 - contract P20 now asserts the promise the fold creates.** The previous edit was
+selector-only. P20 now counts the rendered entries in two halves - rows outside every `<details>`
+and rows inside one - and asserts the section's stated total equals their sum, so a count that
+agreed only with the visible rows cannot pass. It also asserts a disclosure is actually present
+(so the contract cannot silently stop exercising the fold), and that each fold sentence and each
+disclosure summary state a number equal to the rows the disclosure holds. Every rendered entry,
+folded or shown, must carry the soft tone.
+
+Verification: `tests/test_unplaced_section.py` 16 passed; P20 passed against the contract suite's
+own disposable server (69 unplaced claims in the seed, 26 on the run P20 reads, folded); full
+suite `846 passed, 2 skipped`. No case-page golden was touched, the live store was never opened
+and port 8791 was never contacted.
+

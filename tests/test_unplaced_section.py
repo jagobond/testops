@@ -265,18 +265,19 @@ def test_the_reason_clause_is_stated_once_per_group_not_once_per_entry(tmp_path)
 
 
 # --------------------------------------------------------------------------
-# AC4 - anchors are structural and survive pruning; the old ordinal still lands
+# AC4 - anchors are structural and survive pruning; ordinals are gone
 # --------------------------------------------------------------------------
 
-def test_anchors_survive_deleting_an_earlier_claim(tmp_path):
+def test_anchors_survive_deleting_the_first_claim_of_a_group(tmp_path):
     conn, ids = _store(tmp_path, count=5)
     try:
         first, _ = app.run_response(conn, RUN)
         before = dict(_entries(_section(first)))
         assert len(before) == 5
 
-        # Prune the second-earliest claim: every later ordinal would shift by one.
-        removed = ids[1]
+        # Prune the FIRST claim of the group: with positional anchors every later ordinal would
+        # shift by one, which is exactly the failure this ticket exists to remove.
+        removed = ids[0]
         conn.execute("DELETE FROM claim WHERE id = ?", (removed,))
         conn.commit()
 
@@ -287,15 +288,18 @@ def test_anchors_survive_deleting_an_earlier_claim(tmp_path):
         conn.close()
 
     assert removed not in after
+    assert len(after) == 4
     for claim_id, words in after.items():
         assert before[claim_id] == words, (
             f"anchor #unplaced-claim-{claim_id} now resolves to different words")
 
-    # The old ordinal form still resolves, redirected at the structural anchor.
+    # The structural anchor is the only anchor: no ordinal id is rendered, because an ordinal
+    # would silently re-point at a different claim after this delete.
     for claim_id, words in after.items():
         assert f'id="unplaced-claim-{claim_id}"' in section
-    assert re.search(r'<a class="anchor-legacy" id="unplaced-1" '
-                     r'href="#unplaced-claim-\d+"></a>', section)
+    assert not re.search(r'id="unplaced-\d+"', section), (
+        "an ordinal anchor survived; it would shift with position after a prune")
+    assert "anchor-legacy" not in section
 
 
 # --------------------------------------------------------------------------
