@@ -15,10 +15,15 @@ AC5  tags are keyboard-reachable and their accessible names carry the kind
 TESTOPS-80  the product-routes tag is answered by the snapshot's surface discovery state
      (found / zero / not_assessable), never by the test-ecosystem detector; its count is the one
      that reader read; a repeats-product verdict and a "not consulted" routes tag cannot coexist.
+
+One page here is a checked-in golden: ``fixtures/source_band/case-surfaces-band.html``. It is the
+only golden whose snapshot carries a ``surfaces`` record, so it is the only one that pins the
+routes-tag sentence byte for byte (TESTOPS-80 review, note 3).
 """
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from testops.store import db
 from testops.web import app
@@ -33,6 +38,7 @@ PRODUCT_REPO = "owner/product"
 COMMIT = "a" * 40
 PRODUCT_COMMIT = "b" * 40
 PATH = "features/panel.feature"
+GOLDEN = Path(__file__).parent / "fixtures" / "source_band" / "case-surfaces-band.html"
 LINE = 12
 
 
@@ -59,28 +65,34 @@ def _meta(*, product: bool = True, needs=("code", "test_code"), links: bool = Fa
 
 
 def _case(tmp_path, *, meta: dict, links: list | None = None, analyser: str = "level_fitness",
-          verdict: str = "distinct", product: dict | None = None, store: str = "band.db"):
+          verdict: str = "distinct", product: dict | None = None, store: str = "band.db",
+          claims: int = 1):
     conn = db.connect(tmp_path / store)
     db.upsert_snapshot(conn, SNAP, PROJECT, TS, {TEST_REPO: COMMIT},
                        schema_version=2, meta=meta)
     db.start_run(conn, RUN, PROJECT, SNAP, analyser, TS)
-    claim_id = db.add_claim(
-        conn, RUN, analyser, "0.8.0", f"scenario:{PATH}#the panel is served",
-        "The test asserts the step.", verdict, 0.5, [], schema_version=2,
-        assertion_text="the panel is served", assertion_path=PATH, assertion_line=LINE,
-        assertion_commit=COMMIT, interaction_label="needs a browser", interaction_code="I4",
-        span=["ui"], sources_assessed=True, sources_missing=[], proposed_action="No change.")
+    # ``claims`` exists so a test can hold the shapes the store really permits: a case with more
+    # than one claim, and a case with none (TESTOPS-80 review). Every other test takes the default.
+    claim_ids = []
+    for index in range(claims):
+        suffix = "" if index == 0 else f" ({index})"
+        claim_ids.append(db.add_claim(
+            conn, RUN, analyser, "0.8.0", f"scenario:{PATH}#the panel is served{suffix}",
+            "The test asserts the step.", verdict, 0.5, [], schema_version=2,
+            assertion_text="the panel is served", assertion_path=PATH, assertion_line=LINE + index,
+            assertion_commit=COMMIT, interaction_label="needs a browser", interaction_code="I4",
+            span=["ui"], sources_assessed=True, sources_missing=[], proposed_action="No change."))
     detail: dict = {"links": links or []}
     if product is not None:
         detail["product"] = product
-    if links or product is not None:
-        db.add_inference(conn, claim_id, "none", "none", "hash", [], detail)
+    if claim_ids and (links or product is not None):
+        db.add_inference(conn, claim_ids[0], "none", "none", "hash", [], detail)
     conn.execute("INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at,"
                  " summary) VALUES (?,?,?,?,?,?,?)",
                  (CASE, RUN, PROJECT, analyser, SNAP, TS, "{}"))
     conn.execute("INSERT INTO finding (case_id, title, severity, fingerprint, claim_ids)"
                  " VALUES (?,?,?,?,?)",
-                 (CASE, "The panel is served", "high", "f" * 32, db.j([claim_id])))
+                 (CASE, "The panel is served", "high", "f" * 32, db.j(claim_ids)))
     conn.commit()
     page = app.case_page(conn, CASE).decode("utf-8")
     conn.close()
@@ -187,7 +199,11 @@ def test_a_case_with_a_product_does_not_claim_to_rest_on_test_code_alone(tmp_pat
 # suite could be parsed. The count is the one that reader read, not the snapshot's artefact total.
 
 def _found() -> dict:
-    """What the surface reader recorded for restfulbooker: 142 .java parsed, 25 routes."""
+    """What the surface reader recorded for restfulbooker: 142 .java parsed, 25 surfaces.
+
+    ``surfaces`` is the routes the reader resolved *plus* the engine modules it found
+    (``discover.py:301``), so the tag says the count is surfaces, never routes.
+    """
     return {"state": "found", "parsed": 142, "surfaces": 25, "reason": "",
             "languages": [{"suffix": ".java", "count": 142},
                           {"suffix": ".ts", "count": 23},
@@ -210,11 +226,16 @@ def _not_assessable() -> dict:
 
 
 def _routes_item(band: str) -> str:
-    """The one list item whose kind is Product routes, from the rendered band."""
-    match = re.search(r'<span role="listitem">(?:(?!</span></span>).)*?Product routes'
-                      r'(?:(?!</span></span>).)*</span></span>', band, re.S)
-    assert match, band
-    return match.group(0)
+    """The one list item whose kind is Product routes, from the rendered band.
+
+    Bounded by the list item the tag sits in, not by the band: a case with no claim has no Test
+    repository item before it, and a wider match would compare two different neighbours.
+    """
+    index = band.find("Product routes")
+    assert index != -1, band
+    start = band.rindex('<span role="listitem">', 0, index)
+    end = band.index("</span></span>", index) + len("</span></span>")
+    return band[start:end]
 
 
 def test_the_routes_tag_reads_the_surface_reader_and_says_what_it_parsed(tmp_path):
@@ -227,7 +248,7 @@ def test_the_routes_tag_reads_the_surface_reader_and_says_what_it_parsed(tmp_pat
                    "read (reqnroll, python-bdd, cucumber-js)")}}
     band = _band(_case(tmp_path, meta=meta))
     item = _routes_item(band)
-    assert "142 .java parsed, 25 routes" in item, band
+    assert "142 .java parsed, 25 surfaces (routes and engine modules)" in item, band
     assert "consulted" in item
     assert "not consulted" not in item
     # AC3: the reader's count, not the snapshot's artefact total.
@@ -260,6 +281,53 @@ def test_a_snapshot_with_no_surface_record_invents_no_routes_tag(tmp_path):
     assert "Product routes" not in band, band
 
 
+def _route_tags(band: str) -> int:
+    """How many Product routes tags the rendered band carries.
+
+    Counted on the tag's accessible name, which the renderer writes exactly once per tag, so a
+    duplicated tag is visible as a count of two rather than hidden by a substring match.
+    """
+    return band.count('aria-label="Product routes:')
+
+
+def test_the_routes_tag_is_emitted_once_per_case_whatever_the_claim_count(tmp_path):
+    """Zero, one and two claims render the same single tag, saying the same true thing.
+
+    The tag answers a question about the snapshot's record and the analyser's needs, not about any
+    one claim, so when its append sat inside the claim loop a case with two claims rendered it
+    twice and a case with none - whose verdict may still quote routes - rendered it never
+    (TESTOPS-80 review, concern 1). No stored case and no other test has claims != 1.
+    """
+    items = {}
+    for count in (0, 1, 2):
+        page = _case(tmp_path, meta=_meta(surfaces=_found()), claims=count,
+                     store=f"claims-{count}.db")
+        band = _band(page)
+        assert _route_tags(band) == 1, (count, band)
+        # Exactly once in words too: one tag, not a label repeating the kind.
+        assert band.count('class="tag-kind">Product routes<') == 1, (count, band)
+        item = _routes_item(band)
+        assert "142 .java parsed, 25 surfaces (routes and engine modules)" in item, (count, band)
+        assert "consulted" in item and "not consulted" not in item
+        items[count] = item
+    assert items[0] == items[1] == items[2]
+
+
+# --------------------------------------------------------------------------- TESTOPS-80 golden
+
+def test_the_routes_tag_sentence_is_pinned_byte_for_byte_by_a_golden_page(tmp_path, monkeypatch):
+    """The sentence this ticket changed, pinned as bytes as well as by page tests (note 3).
+
+    Every other checked-in golden renders a snapshot written before the ``surfaces`` record
+    existed, so the band there shows no routes tag at all: a rendering regression in this
+    sentence would be caught only by a page test. This fixture carries the record, and writes
+    no golden of its own - the page is compared with the bytes committed beside this test.
+    """
+    monkeypatch.setattr(app, "age", lambda iso: "a fixed time ago")
+    page = _case(tmp_path, meta=_meta(surfaces=_found()), store="golden.db")
+    assert page.encode("utf-8") == GOLDEN.read_bytes()
+
+
 # --------------------------------------------------------------------------- TESTOPS-80 AC2
 
 def _repeats_product_page(tmp_path, surfaces: dict, *, store: str) -> str:
@@ -273,7 +341,7 @@ def test_a_repeats_product_verdict_cannot_sit_beside_a_not_consulted_routes_tag(
     item = _routes_item(_band(page))
     assert "already declares POST /" in page
     assert "not consulted" not in item, page
-    assert "142 .java parsed, 25 routes" in item, page
+    assert "142 .java parsed, 25 surfaces (routes and engine modules)" in item, page
 
     # Conversely: where the routes were not consulted, the page says no claim repeats them.
     page = _case(tmp_path, meta=_meta(surfaces=_not_assessable()), store="b.db",

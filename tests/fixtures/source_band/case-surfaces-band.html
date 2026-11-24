@@ -1,0 +1,108 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TestOps · case-band</title><style>
+:root { --ink:#1b1f24; --dim:#5b6672; --line:#dfe3e8; --bg:#fbfbfa; --accent:#8C5E2C; --bad:#8a2b2b; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink);
+       font:16px/1.55 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+main { max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+h1 { font-size: 1.15rem; letter-spacing:.02em; text-transform:uppercase; color:var(--dim); font-weight:600; }
+h2 { font-size: 1.35rem; margin: 1.9rem 0 .35rem; }
+h2.section { font-size: 1.02rem; letter-spacing:.01em; border-bottom:1px solid var(--line);
+             padding-bottom:.3rem; margin-top:2rem; }
+a { color: var(--accent); }
+.fresh { color: var(--dim); font-size:.92rem; border-bottom:1px solid var(--line); padding-bottom:.9rem; }
+.fresh strong { color: var(--ink); font-weight:600; }
+ul.cases { list-style:none; padding:0; margin:1.5rem 0; }
+ul.cases li { border:1px solid var(--line); border-radius:6px; background:#fff; margin-bottom:.6rem; }
+ul.cases li a { display:block; padding:.85rem 1rem; text-decoration:none; color:inherit; }
+ul.cases li a:hover { background:#f6f4f0; }
+.claimtext { margin:.35rem 0 0; font-size:1rem; }
+.meta { color:var(--dim); font-size:.9rem; }
+.badge { display:inline-block; font-size:.78rem; letter-spacing:.03em; text-transform:uppercase;
+         border:1px solid var(--line); border-radius:99px; padding:.1rem .55rem; color:var(--dim); }
+.badge.hot { border-color:var(--bad); color:var(--bad); }
+/* The verdict beside the case state (TESTOPS-33): a claim that could not be placed wears a dashed
+   badge, so "Cannot tell" never looks as settled as "Checked".
+   TESTOPS-52: a verdict that asserts a problem wears the same alarm as any other warning, and a
+   verdict that asserts nothing is wrong wears neither. The tone is declared in web/tone.py. */
+.badge.verdict { border-color:var(--accent); color:var(--accent); }
+.badge.verdict.soft { border-style:dashed; border-color:var(--dim); color:var(--dim); }
+.badge.verdict.hot { border-color:var(--bad); color:var(--bad); }
+blockquote.assertion { margin:.6rem 0 .5rem; padding:.6rem .9rem; background:#fff;
+                       border-left:3px solid var(--accent); font-size:1.12rem; }
+.code { font-family: ui-monospace, Consolas, monospace; font-size:.8rem; color:var(--dim); }
+ul.ev { margin:.35rem 0 0; padding-left:1.1rem; }
+ul.ev li { margin:.2rem 0; }
+.footnote { margin-top:2.2rem; border-top:1px solid var(--line); padding-top:.7rem; }
+form.decide { margin-top:2rem; border-top:1px solid var(--line); padding-top:1.2rem; }
+form.decide button { font:inherit; padding:.5rem .9rem; border-radius:5px; border:1px solid var(--line);
+                     background:#fff; cursor:pointer; margin:.25rem .35rem .25rem 0; }
+form.decide button.term { border-color:var(--bad); color:var(--bad); }
+form.decide input[type=text] { font:inherit; padding:.45rem .6rem; border:1px solid var(--line);
+                               border-radius:5px; width:min(28rem,100%); }
+.warn { color: var(--bad); font-size:.9rem; }
+.quiet { color:var(--dim); }
+.scan { margin:1.15rem 0 1rem; padding:.85rem 1rem .9rem; background:#fff;
+        border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:6px; }
+p.judgement { margin:0 0 .5rem; }
+p.judgement strong.verdict { font-size:1.32rem; font-weight:700; line-height:1.25; }
+/* TESTOPS-52: the headline wears the verdict's declared tone, not one alarm for everything.
+   Alarm red is for a verdict that asserts a problem; a conclusion the tool could not reach is
+   dim and dashed; "checked, nothing wrong" is the ordinary ink. */
+p.judgement strong.verdict.hot { color:var(--bad); }
+p.judgement strong.verdict.soft { color:var(--dim);
+                                   border-bottom:1px dashed var(--dim); padding-bottom:.05rem; }
+p.wrong { margin:0 0 .85rem; font-size:1.06rem; line-height:1.6; }
+/* The font puts more of its line box above the baseline than below, so equal padding leaves the
+   descenders closer to the box's bottom edge. The half-leading is paid on the bottom instead, so
+   the space a reader sees above and below the text is the same (AC11). */
+p.action { margin:0; padding:.51rem .8rem .69rem; background:#f6f4f0; border-radius:5px;
+           font-weight:600; line-height:1.5; }
+p.action .act { display:inline-block; margin-right:.55rem; font-size:.72rem; font-weight:700;
+                letter-spacing:.09em; text-transform:uppercase; color:var(--accent); }
+/* A code span ends where its identifier ends: the padding is cancelled by an equal negative margin,
+   so a comma written against the span sits against the word it follows, not a gap away (AC10). */
+code.ident { font-family: ui-monospace, Consolas, monospace; font-size:.9em; background:#f3f1ec;
+             padding:.05em .25em; margin:0 -.25em; border-radius:3px; white-space:nowrap; }
+p.provenance { margin:0 0 1rem; }
+p.provenance .fn { font-weight:600; color:var(--ink); }
+ul.context { margin:.35rem 0 0; padding-left:1.1rem; color:var(--dim); }
+ul.context li { margin:.2rem 0; }
+/* The source band (TESTOPS-73). Tags are links a reader can follow and keyboard focus can reach;
+   a source that was needed and could not be consulted carries the words "not consulted", so the
+   difference is never colour alone. */
+section.sources { margin:1rem 0 .6rem; }
+h2.sources-h { font-size:.95rem; letter-spacing:.03em; text-transform:uppercase; color:var(--dim);
+               margin:0 0 .4rem; }
+div.tags { display:flex; flex-wrap:wrap; gap:.4rem; margin:0 0 .5rem; }
+.tag { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:.22rem .7rem;
+       background:#fff; color:var(--ink); font-size:.88rem; line-height:1.4; }
+a.tag { text-decoration:none; }
+a.tag:hover { background:#f6f4f0; }
+.tag:focus { outline:2px solid var(--accent); outline-offset:2px; }
+.tag .tag-kind { font-weight:600; }
+.tag .tag-state { font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; color:var(--dim);
+                  margin-left:.2rem; }
+.tag .tag-where { color:var(--dim); font-size:.8rem; }
+.tag.unconsulted { border-style:dashed; background:#fbfaf7; color:var(--dim); }
+.tag.unconsulted .tag-state { font-weight:600; }
+.tag .tag-reason { display:block; font-size:.84rem; color:var(--dim); margin-top:.1rem; }
+p.band-note, p.test-only { margin:.2rem 0; }
+p.test-only { font-weight:600; }
+figure.snippet { margin:.7rem 0 1rem; }
+figure.snippet figcaption { font-size:.86rem; color:var(--dim); margin-bottom:.3rem; }
+pre.snippet { margin:0; background:#f3f1ec; border:1px solid var(--line); border-radius:5px;
+              padding:.55rem .7rem; overflow-x:auto; font-size:.82rem; line-height:1.45; }
+pre.snippet code { font-family: ui-monospace, Consolas, monospace; }
+pre.snippet .sline { display:block; white-space:pre; }
+pre.snippet .ln { display:inline-block; width:2.6rem; color:var(--dim); user-select:none; }
+pre.snippet .sline.hit { background:#f6e7c8; }
+pre.snippet mark.hit { background:transparent; color:inherit; font-weight:600; }
+aside.xref { margin:.2rem 0 1rem; padding:.55rem .85rem .6rem; background:#f6f4f0;
+             border-radius:5px; font-size:.94rem; }
+aside.xref p { margin:.15rem 0; }
+nav.site { margin-top:3rem; border-top:1px solid var(--line); padding-top:.8rem;
+           font-size:.92rem; color:var(--dim); }
+</style></head>
+<body><main><p class="meta"><a href="/">← all cases</a> · <a href="/runs">all runs</a></p><h1>team · Level fitness</h1><p class="meta"><span class="badge hot">Open</span> · Analysed a fixed time ago at tests@aaaaaaaa</p><section class="sources" aria-labelledby="sources-heading"><h2 class="sources-h" id="sources-heading">Sources this case examined</h2><div class="tags" role="list"><span role="listitem"><a class="tag" href="https://github.com/owner/tests/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/features/panel.feature#L12" aria-label="Test repository: owner/tests, features/panel.feature:12"><span class="tag-kind">Test repository</span> <span class="tag-name">owner/tests</span> <span class="tag-where">features/panel.feature:12</span> <span class="tag-state">consulted</span></a></span><span role="listitem"><a class="tag" href="https://github.com/owner/product/tree/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" aria-label="Product repository: owner/product, at commit bbbbbbbb"><span class="tag-kind">Product repository</span> <span class="tag-name">owner/product</span> <span class="tag-where">at commit bbbbbbbb</span> <span class="tag-state">consulted</span></a></span><span role="listitem"><span class="tag" tabindex="0" role="note" aria-label="Product routes: owner/product, 142 .java parsed, 25 surfaces (routes and engine modules)"><span class="tag-kind">Product routes</span> <span class="tag-name">owner/product</span> <span class="tag-where">142 .java parsed, 25 surfaces (routes and engine modules)</span> <span class="tag-state">consulted</span></span></span></div><p class="meta band-note">A kind that is not tagged here was not linked to this case, so an absent tag means it was not part of the evidence.</p></section><p class="meta">Raised by the run <a href="/run/run-band">run-band</a> <span class="quiet">— what that run analysed, and what it could not consult.</span></p><h2 class="section">1. What is asserted, and what settles it</h2><section class="scan"><p class="judgement"><strong class="verdict">Checked</strong></p><p class="wrong">The test asserts the step <code class="ident">Then the panel is served</code>, and nothing short of a browser settles it.</p><p class="action"><span class="act">What to do</span> No change.</p></section><p class="meta provenance"><span class="fn">Where this comes from:</span> <span class="code">features/panel.feature:12</span> at commit <span class="code">aaaaaaaa</span>, in the scenario “the panel is served” — the test author’s own name for the scenario, not a requirement; nothing here was checked against one. This run did not record which repository the file lives in, so there is no link to open.</p><h2 class="section">2. The step that is asserted</h2><p class="quiet">The source was recorded but its content is not in this store: <span class="code">features/panel.feature:12</span>.</p><p class="quiet">This run holds no observations, so the source above is the only evidence there is — and the emptiness here is not a sign the claim is clean. Its snapshot holds no artefacts either, so nothing was collected.</p><p class="quiet">No step definition in this run binds the asserted step, so there is no body to show.</p><h2 class="section">3. The other steps in this scenario, for context</h2><p class="quiet">This run recorded no other step in this scenario.</p><h2 class="section">4. What could not be checked</h2><p>Every source needed for this claim was available.</p><h2 class="section">5. Decision</h2><form class="decide" method="post" action="/case/case-band/state"><p><strong>Decide this case</strong> — 1 finding rides on this decision, and it applies to this case only.</p><p><input type="text" name="note" placeholder="Why? (optional, shown next time)"></p><p><button name="state" value="needs_fix">Needs a fix</button> <button class="term" name="state" value="resolved">Resolved — stop reporting</button> <button class="term" name="state" value="false_positive">Not a real finding — stop reporting</button></p><p class="warn">Resolved and “not a real finding” hide this evidence from future runs, for this case only. You can reopen the case later; reopening deletes the suppression and makes it report again.</p></form><p class="quiet">A decision covers one assertion in one scenario: the same interaction, words, and count of identical assertions, in any commit and with any test data; removing an identical assertion can let an earlier decision cover again.</p><p class="code footnote">Debugging shorthand, not part of the finding: interaction I4; verdict distinct.</p><nav class="site" aria-label="All pages"><a href="/">← all cases</a> · <a href="/runs">all runs</a> · <a href="/config">configure projects and services</a></nav></main></body></html>
