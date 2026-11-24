@@ -77,6 +77,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-59 | A token pasted inside a sentence is stored; `session-token` is wrongly refused | F1 | done | From the T56 review: scan for credential shapes at any position (not just prefix), give every prefix a real body floor, and make the identifier boundary state itself |
 | TESTOPS-60 | The unplaced section is a 93KB wall at 220 entries, and its anchors are positional | F1 | ready | From the T57 review: group by reason, disclose or cap with an honest count, state the reason once, and anchor on the claim id |
 | TESTOPS-61 | The grammatical rule reads the first word and the last part only | F1 | ready | From the T59 review: `this-is-not-a-password` refused, `acme-their-password` accepted; `github_pat_` truncation goes green silently; drop the vendor appeal |
+| TESTOPS-62 | The clause exemption fires on a word, not a clause | F1 | ready | From the T61 review: `my-password-is-here`, `has-my-token`, `acme-no-password` all accepted. Require a predication whose complement is the credential word |
 
 |----|-------|---------|--------|------|
 

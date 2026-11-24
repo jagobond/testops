@@ -2,7 +2,7 @@
 id: TESTOPS-61
 title: The grammatical rule reads the first word and the last part, and nothing in between
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-59
 ---
