@@ -58,3 +58,77 @@ the copied store has a repeats-product sentence next to a "not consulted" Produc
 4. **The ecosystem record is not deleted.** It still says which ecosystem each repository was read
    as (P11, and TESTOPS-42A's evidence), but only beside the test suite it can describe; the band no
    longer uses it to answer a question about the product's routes.
+
+## Amendment — review of 2026-11-24 (`factory/reports/2026-11-24/TESTOPS-80-review.md`)
+
+Review verdict was **changes requested**: substance right, one real defect (its concern 1), one
+wording fault (concern 2), one coverage gap (concern 3). All three are addressed below; the report
+above is left as it was written.
+
+### Fix 1 — the routes tag is emitted once per case (review defect)
+
+The append block sat **inside `for claim in claims:`** (`testops/queries.py`), although it reads only
+`meta`, `examined`, `needs` and `product_repo`. A case with two claims rendered the tag twice; a case
+with zero claims rendered no tag at all while its verdict could still quote routes. No stored case and
+no test had `claims != 1`, so the suite was green by coincidence of shape.
+
+`source_band()` now builds the routes tag **before** the claims loop, at function-body indentation, and
+the comment says why it must stay there. Pinned by
+`test_the_routes_tag_is_emitted_once_per_case_whatever_the_claim_count`, which renders the same
+snapshot with **zero, one and two** claims and asserts, for each, that the band carries exactly one
+`aria-label="Product routes:` and exactly one `tag-kind">Product routes<`, that the tag is consulted,
+and that the three rendered tags are identical — one fact, one tag, whatever the claim count. The test
+helper `_case()` gained a `claims=` parameter for this (default 1, so every other test is unchanged);
+it writes one finding whose `claim_ids` holds all of them, or none.
+
+### Fix 2 — the number is called what it is: surfaces (review concern 2)
+
+`surfaces` in the record is the routes the reader resolved **plus** the engine modules it found
+(`surfaces/discover.py:301`), so saying `47 routes` for the CotW product told a reader that modules were
+routes. `product_routes_tag()` now says what the number counts:
+
+    found:  142 .java parsed, 25 surfaces (routes and engine modules)      consulted
+    zero:   142 .java parsed, no routes found                             consulted
+
+The choice between the review's two options was made in favour of **saying what the number is**, not
+of carrying the split in the record: the record is written at run time, so a new field would leave the
+existing records (26 snapshots in this store, every golden fixture) still reading as routes, and the
+wording fix applies to every record ever written. The ticket's illustrative sentence
+(`factory/tickets/TESTOPS-80.md`, AC1: "142 .java parsed, 25 routes") is therefore **deliberately not
+matched word for word** — it is the sentence the review found untruthful on CotW. `zero` is unchanged:
+with no surfaces there are no routes either, so "no routes found" is exact. Pinned by the AC1 and AC2
+page tests and by the golden below.
+
+### Concern 3 — one golden whose fixture carries a `surfaces` record
+
+Added: **`tests/fixtures/source_band/case-surfaces-band.html`** (12,319 bytes), rendered from the
+`_found()` record (142 .java parsed, 25 surfaces) by the same `_case()` helper the page tests use, with
+`app.age` frozen. It is pinned by
+`test_the_routes_tag_sentence_is_pinned_byte_for_byte_by_a_golden_page`, which renders the page again
+and compares the bytes.
+
+What changed: **no existing golden changed** — `git diff origin/main...HEAD -- tests/fixtures/projects_services/`
+stays empty, because those fixture snapshots predate the `surfaces` record and the band on them renders
+no routes tag. The new golden is the first, and only, checked-in page whose band contains the
+routes-tag sentence, so a rendering regression in exactly that sentence now fails a byte comparison as
+well as a page test. Regeneration, if ever needed, is a deliberate act: render `_case(tmp_path,
+meta=_meta(surfaces=_found()), store="golden.db")` with `app.age` frozen to "a fixed time ago" and
+write the bytes to that path — never overwrite it silently from a test run.
+
+### Re-run after the amendment
+
+- Full suite, from the project `.venv` with `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV`/`CONDA_PREFIX`
+  stripped and `PYTHONNOUSERSITE=1`: **1235 passed, 2 skipped** (1233 before the amendment; the two new
+  tests are the three-shape test and the golden).
+- Contracts: **37 passed, 2 skipped**.
+- The real case, re-rendered on a **copied** store in scratch and served on an **ephemeral free port**
+  (8791 and the live store never approached): `case-restfulbooker-levels-20261124T114627-05` still says
+
+      142 .java parsed, 25 surfaces (routes and engine modules)   consulted
+
+  with `169` and `reqnroll` absent from the band and the verdict sentence unchanged. A sweep of all
+  **221** case pages in the copied store: 20 render a routes tag, **none renders two**, and no page
+  pairs a repeats-product verdict with a not-consulted routes tag.
+- CotW `case-cotw-levels-20261122T204947-01/02` (snapshot `cotw-levels-20261122-a3f19853-r11`, the
+  case the review names) now renders `45 .py parsed, 47 surfaces (routes and engine modules)` — the
+  number unchanged, the noun honest.
