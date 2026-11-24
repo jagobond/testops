@@ -2,7 +2,7 @@
 id: TESTOPS-69
 title: The small residuals the credential and guard threads left behind
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-67, TESTOPS-68
 ---
