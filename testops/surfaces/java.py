@@ -97,10 +97,19 @@ class Reading:
     interfaces: tuple[str, ...] = ()
 
 
-# Why a mapping is unread. Fixed wording, grouped on the run page (TESTOPS-74 AC3).
+# Why a mapping is unread. Fixed wording, grouped on the run page (TESTOPS-74 AC3). Each sentence
+# names the thing that is actually missing, with the noun for how it was inherited (TESTOPS-77 AC2):
+# a page reader must be able to check the reason against the type they are looking for, and an
+# interface is never called a superclass. No ticket id or criterion number belongs in these strings:
+# a stranger reads the page and acts on the sentence, not on our backlog (TESTOPS-77 AC3).
 REASON_PATH_CONSTANT = "path is a constant"
 REASON_CLASS_PATH_CONSTANT = "class prefix is a constant"
 REASON_PREFIX_NOT_READ = "class prefix is inherited and its superclass was not read"
+REASON_INTERFACE_NOT_READ = "class prefix is inherited and its interface was not read"
+REASON_TYPE_AMBIGUOUS = "class prefix is inherited and the type name is held more than once"
+REASON_PREFIX_SOURCES_UNREAD = ("class prefix is inherited and more than one type it comes from "
+                                "was not read")
+REASON_PREFIX_MULTIPLE = "class prefix is inherited through more than one type"
 
 
 @dataclass(frozen=True)
