@@ -91,6 +91,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-73 | The case page names what it examined: sources as linked tags | F1 | ready | Put examined sources (test repo at commit, product repo, Jira/ADO item, pipeline run) up front as linked tags; show unconsulted sources and the test-only case explicitly |
 | TESTOPS-74 | The Java reader drops an inherited prefix and invents a route from a constant | F1 | ready | From the T70 review: parent `@RequestMapping` prefix lost, `@GetMapping(Paths.BOOKING)` becomes `GET /`; also "items" undefined in the assessment sentence |
 | TESTOPS-75 | Two sentences and one regex: polish from the residuals review | F1 | ready | A guard message cites a ticket id; `example-<word>` counts as a placeholder; the loud direction's ~72s cost is undocumented |
+| TESTOPS-76 | The source band says "consulted" where it means "read" | F1 | ready | From the T73 review: product tag cannot distinguish read-from-used; test-only sentence asserts blind spots the case never had; absence line untruthful until links are populated |
 
 |----|-------|---------|--------|------|
 

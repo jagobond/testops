@@ -2,7 +2,7 @@
 id: TESTOPS-73
 title: The case page names what it examined - sources as linked tags, up front
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-70
 ---
