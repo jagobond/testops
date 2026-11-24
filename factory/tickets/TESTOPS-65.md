@@ -2,7 +2,7 @@
 id: TESTOPS-65
 title: The vocabulary is a closed list, and the split decides the answer
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-63
 ---
