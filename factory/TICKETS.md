@@ -109,6 +109,12 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-91 | The reply that is 90 percent of an answer is thrown away instead of repaired | F2 | in progress | From the T90 review: 3 of 10 real replies carry prose but no citations, are classified malformed, and never reach the repair round built for exactly that shape |
 | TESTOPS-92 | The switch says on and the reader typed true | F2 | in progress | `?agent=true` renders the agent-off page silently; accept on/true/1/yes, and say so when a value is not understood |
 | TESTOPS-93 | The narrator runs as a Foundry agent, and the page can say which route served it | F2 | in progress | `?agent=foundry` calls the hosted agent `testops-narrator` (verified live); the citation guard stays ours; ledger records route, tokens, wall time |
+| TESTOPS-94 | The platform already offers a token, and the app never asked for it | F2 | queued | IDENTITY_ENDPOINT + IDENTITY_HEADER works in the hosted agent runtime; try it before the stored key and delete the key if it serves |
+| TESTOPS-95 | A blind gold set, so recall is a number instead of an opinion | F3 | queued | 40 assertions labelled by Harry/Bobby with no tool verdict in sight; precision and recall with intervals on /recall |
+| TESTOPS-96 | A model as a recall probe, not a judge | F3 | queued | Ask a model how each `distinct` case could be wrong, adjudicate the hits, publish the blind-spot table by kind |
+| TESTOPS-97 | The proposal stage - an agent that may suggest, never decide | F3 | queued | Candidates stored with full provenance, opt-in per run, incapable of rendering as a finding |
+| TESTOPS-98 | The gate - what a candidate must prove before it becomes a finding | F3 | queued | A deterministic gate per candidate kind, acceptance rate per kind on /agent-report, proposals-off byte-identical |
+| TESTOPS-99 | Price a verified finding, then decide | F3 | queued | Cost per verified finding against a human baseline, with every price marked verified or assumed |
 
 |----|-------|---------|--------|------|
 
