@@ -230,8 +230,8 @@ def test_a_partially_read_kind_states_both_what_was_read_and_what_was_skipped(mo
 
 def test_the_skipped_section_never_reads_as_a_read_count(monkeypatch, tmp_path):
     """AC3: "read 0" and "skipped 142" cannot be confused - different headings, different words."""
-    skipped = (github.Skipped(github.UNSUPPORTED, ".java",
-                              tuple(f"src/File{number:03d}.java" for number in range(3))),)
+    skipped = (github.Skipped(github.UNSUPPORTED, ".kt",
+                              tuple(f"src/File{number:03d}.kt" for number in range(3))),)
     result, conn = _levels_run(monkeypatch, tmp_path,
                                product_files={"src/product.py": ("sha:product", "source")},
                                product_skipped=skipped)
@@ -243,7 +243,7 @@ def test_the_skipped_section_never_reads_as_a_read_count(monkeypatch, tmp_path):
     markup = body.decode("utf-8")
     skip_part = markup.split("Files this run could not read</h2>", 1)[1]
 
-    assert "<strong>3 .java</strong>" in skip_part
+    assert "<strong>3 .kt</strong>" in skip_part
     assert "could not read" in _text(skip_part) or "did not fetch" in _text(skip_part)
     assert not re.search(r"\bit read\b", _text(skip_part)), \
         "the skipped section uses the read section's words"

@@ -6,10 +6,15 @@ real, and would let the analyser "find" surfaces it never had to look for.
 v0.2 adds the thing v0.1 lacked: **claims**. Without them, "a cheaper surface exists" is true for almost
 every scenario in any product, which is how a precision of 0.118 happened.
 
-TESTOPS-41. The reader parses Python. Against a Java product it used to return ``[]``, and the run
-printed ``"surfaces": 0`` - a zero produced by a reader that could not read, reported like a zero
+TESTOPS-41. The reader parsed Python only. Against a Java product it used to return ``[]``, and the
+run printed ``"surfaces": 0`` - a zero produced by a reader that could not read, reported like a zero
 produced by one that read and found nothing. The two are now different values, and the reason travels
 with the second of them: which languages the repository holds, and how many files of each.
+
+TESTOPS-70. A Java product is no longer one of those absent languages. ``.java`` is parsed by
+:mod:`testops.surfaces.java` - lexed first, then read for Spring MVC mappings - so a repository whose
+routes were read is ``found``, one whose Java declares no route is ``zero``, and ``not_assessable``
+is now reserved for a repository holding nothing these readers can parse.
 
 The languages this reader can parse are :data:`LANGUAGES`, which is data. Adding one widens the
 reader; it does not make a repository it cannot parse look empty.
@@ -21,10 +26,12 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 
+from . import java
+
 ROUTE = re.compile(r"""["'](/[a-zA-Z0-9_\-/]*)["']""")
 
-# suffix -> language, for the reader below. Only Python has a parser here.
-LANGUAGES = {".py": "Python"}
+# suffix -> language, for the readers below.
+LANGUAGES = {".py": "Python", ".java": "Java"}
 
 # What the discovery can say about a product repository. These three never share wording.
 FOUND = "found"
@@ -86,13 +93,23 @@ def _languages(files: dict[str, str]) -> tuple[tuple[str, int], ...]:
     return tuple(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
 
 
+def _reader() -> str:
+    """The reader's languages, said in a sentence: ``Python (.py) and Java (.java)``."""
+    named = [f"{name} ({suffix})" for suffix, name in LANGUAGES.items()]
+    if len(named) < 2:
+        return "".join(named)
+    return ", ".join(named[:-1]) + " and " + named[-1]
+
+
 def discover(files: dict[str, str]) -> Discovery:
     """files: path -> text for the product repo. Returns the surfaces, and what it could read."""
     routes: dict[str, Surface] = {}
     modules: list[Surface] = []
-    parsed = [path for path in files if path.endswith(".py")]
+    python_files = [path for path in files if path.endswith(".py")]
+    java_files = [path for path in files if path.endswith(".java")]
+    parsed = len(python_files)
 
-    for path in parsed:
+    for path in python_files:
         text = files[path]
         try:
             tree = ast.parse(text)
@@ -130,9 +147,28 @@ def discover(files: dict[str, str]) -> Discovery:
                 modules.append(Surface(id=f"engine:{path}", layer="engine", target=path,
                                        claims=claims[:8], source=path))
 
+    # Spring MVC: a route is what a mapping annotation says, prefixed by its class's @RequestMapping.
+    # Two methods that map the same route are two surfaces - the duplicate is a fact worth showing -
+    # so the id carries the source and the method, and never collapses two declarations into one.
+    for path in sorted(java_files):
+        read = java.routes(files[path], path)
+        if read is None:
+            continue                       # not lexed as Java; not counted as a file this read
+        parsed += 1
+        for declared in read:
+            target = f"{declared.verb} {declared.path}"
+            sid = f"api:{target}@{path}:{declared.method}"
+            if sid in routes:
+                number = 2
+                while f"{sid}#{number}" in routes:
+                    number += 1
+                sid = f"{sid}#{number}"
+            routes[sid] = Surface(id=sid, layer="api", target=target,
+                                  claims=list(declared.claims), source=path)
+
     surfaces = tuple(sorted(routes.values(), key=lambda s: s.id) + modules)
     languages = _languages(files)
-    reader = ", ".join(f"{name} ({suffix})" for suffix, name in LANGUAGES.items())
+    reader = _reader()
     if not parsed:
         # Nothing here this reader could parse. Say what was there, not "0 surfaces".
         if not files:
@@ -144,6 +180,6 @@ def discover(files: dict[str, str]) -> Discovery:
                       f"file it can read: {held}" + (", ..." if len(languages) > 4 else ""))
         return Discovery((), NOT_ASSESSABLE, reason, languages, 0)
     if not surfaces:
-        return Discovery((), ZERO, "", languages, len(parsed))
-    return Discovery(surfaces, FOUND, "", languages, len(parsed))
+        return Discovery((), ZERO, "", languages, parsed)
+    return Discovery(surfaces, FOUND, "", languages, parsed)
 
