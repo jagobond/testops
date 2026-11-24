@@ -1,0 +1,35 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-60 - the unplaced section shown grouped and folded so it
+is readable at hundreds of entries, with anchors that survive pruning. The risk this ticket creates is that folding hides
+the thing a cited link points at, and that a "count" and a "folded" number stop agreeing once groups exist.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t60 (branch `factory/testops-60-unplaced-volume`). Only here.
+Ticket: factory/tickets/TESTOPS-60.md ; Build: factory/reports/2026-11-24/TESTOPS-60-build.md
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Never write to the live store or contact port 8791. Copy `data/`, serve on a free port.
+- **Read it at real volume.** Render the restfulbooker run (26 unplaced) and a store you build with 351. Quote what a
+  reader sees before scrolling: headings, counts, the first entry. Judge whether the shape of the failure is legible in
+  five seconds. Then judge the fold: is 20 per group the right preview, and does the "N of M shown, other K folded"
+  sentence agree with the actual number of rows rendered in each group - count them yourself in the HTML.
+- **Anchors into folded content - the sharp one.** Take an anchor for an entry that sits in the collapsed `<details>` and
+  open it as a reader would (`/run/<id>#unplaced-claim-<id>`). Does the browser land somewhere with nothing visible, and
+  does the page do anything (e.g. `<details open>` when a fragment targets its contents) to reveal it? A permalink that
+  lands on a closed drawer is a citable link that cites nothing. Report exactly what happens, and what the page would need
+  to do about it. Also confirm the legacy `#unplaced-<n>` anchor lands on the right entry.
+- **AC4 pruning proof:** reproduce it yourself - delete a claim from a copy, re-render, and check three surviving anchors
+  still point at the same words. Then try a harder case: delete the FIRST claim in a group and confirm the legacy ordinal
+  anchors of later entries did not silently shift to mean different claims (that is the failure the change exists to prevent).
+- **Counts:** at 0, 1, threshold-1, threshold, threshold+1 and 500, verify total-sentence count == rendered rows (including
+  folded) and each group's count == its rows. Report the table you measured. Watch the plural grammar at 1.
+- **Grouping honesty:** the three groups are no-binding-match / no-patterns / other. Check the "other" group's common
+  sentence does not pretend to explain a reason it does not know, and that a genuinely mixed group is handled without
+  inventing a shared cause.
+- **P20 was edited** (the selector followed the new structural id). Diff it against origin/main and judge whether the
+  promise still holds or whether the assertion got easier - it must still fail if the section is dropped, miscounted or
+  re-toned.
+- **Suite:** full suite green; case-page goldens byte-identical.
+- Write exactly one file: factory/reports/2026-11-24/TESTOPS-60-review.md with: ## Verdict; ## At 26 and at 351, read cold;
+  ## The fold, counted; ## Anchors into folded content; ## Pruning proof; ## Counts table; ## Grouping honesty; ## P20,
+  judged; ## Three sharpest concerns.
+- Reply with the verdict and a summary under 250 words.
