@@ -71,6 +71,17 @@ _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 #
 # Credential words are matched singular and plural alike, so `passwords-list` and `password-list` are
 # decided by the same rule instead of by an accident of spelling (TESTOPS-59 AC3).
+#
+# `key` is deliberately not in this vocabulary (TESTOPS-63). It is the one credential word whose
+# reading is decided by *qualification* rather than by membership: `api-key`, `signing-key` and
+# `encryption-key` name a credential, while `keyboard`, `primary-key`, `key-metrics` and a bare `key`
+# name a part of a keyboard, an index, a measurement or a configuration slot. The rule is stated once:
+# a `key`/`keys` part is a credential word when another part stands before it in the same name
+# (qualified, `the-signing-key`) or when a determiner/possessive does (bare in the instance position,
+# `my-key`) - never when it stands alone or as the only word. That test is applied in the two rules
+# where a name is a *position* rather than a bare word: the instance rule below (`_KEY_WORD`) and the
+# pair's name when a determiner qualifies it (`_DETERMINER_KEY_PAIR`). It is not applied to a settings
+# field name, where `board_keys` is exactly the field the refusal message says settings may hold.
 _CREDENTIAL_NAME = (r"(?:passwords?|passwd|pwd|tokens?|api[ _-]?keys?|apikeys?|secrets?|bearer|"
                     r"authorizations?|private[ _-]?keys?|access[ _-]?keys?|client[ _-]?secrets?)")
 # The pair's name is followed by `=` or `:` and then something - the shape a secret is pasted in.
@@ -239,6 +250,15 @@ _NEGATORS = frozenset({"not", "never", "no"})
 # satisfy both tests (TESTOPS-62 AC3).
 _PREDICATE_HEADS = (_FINITE_VERBS | _NEGATORS) - _DETERMINERS
 _CREDENTIAL_WORD = re.compile(rf"(?i)^{_CREDENTIAL_NAME}$")
+# TESTOPS-63. The one word whose reading is decided by qualification (see the vocabulary note above):
+# `key`/`keys` is a credential head only when a part or a determiner stands before it in the name.
+_KEY_WORD = re.compile(r"(?i)^keys?$")
+# The same qualification in the pair branch: a pair whose *name* is a determiner plus `key`
+# (`my-key=hunter2`, `the_keys: abc`) is a credential name, while `sort_keys=True` - the name a
+# setting really has - is not. Only a hyphen or an underscore joins the two: with a space allowed,
+# the ordinary sentence "the key: it is in the vault" would be read as a pair.
+_DETERMINER_KEY_PAIR = re.compile(
+    rf"(?i)(?<![A-Za-z0-9])(?:{'|'.join(sorted(_DETERMINERS))})[_-]keys?[ \t]*[:=][ \t]*[^\s,;]")
 
 
 def _is_predication(lowered: list[str], credential_index: int) -> bool:
@@ -310,19 +330,35 @@ def _names_a_credential(parts: list[str]) -> bool:
     and `vault-token` are accepted by the same reason, that the compound names a kind of token and
     carries no determiner.
 
+    Old-style labels that carry no determiner (`session-token`, `vault-token`) are compound nouns
+    naming a kind of thing and are accepted. TESTOPS-63 adds `key`, the one credential word whose
+    reading depends on qualification: `my-key`, `their-key`, `the-signing-key` and
+    `the-api-key-is-xyz` are screened by the same branches, with the same reason, as `my-password`.
+    In the other direction, `primary-key`, `foreign-key`, `key-metrics`, `sorting-keys` and
+    `key-value-store` name a field, a measurement or a collection and are accepted; and `keyboard`,
+    `keynote`, `keycloak`, `keystore` and `monkey` are different words entirely, so no rule here
+    can see them. `key` is a credential word only in this rule, for the reason given at the
+    vocabulary itself: a pair name and a settings field name are honestly `sort_keys=` and
+    `board_keys`.
+
     Residual risk, stated rather than hidden: a compound whose head is a credential word but which
     carries no determiner (`prod-db-password`) is accepted as a type name, and a name whose only
     determiner is inside a predication about the credential word (`this-is-my-password`) is accepted
     because it states something rather than labelling a credential. Both are labels or jokes; a
     pasted credential is caught by rules 1, 2, 4 and 5 wherever it sits in the value.
     """
-    credential = [i for i, part in enumerate(parts) if _CREDENTIAL_WORD.fullmatch(part)]
+    lowered = [part.lower() for part in parts]
+    strong = [i for i, part in enumerate(parts) if _CREDENTIAL_WORD.fullmatch(part)]
+    # TESTOPS-63: `key` is a credential word in this rule only (see the vocabulary note), so it joins
+    # the head set here and nowhere else. It is not a credential word on its own - a lone `key` is a
+    # configuration slot name, not an instance label - which is why `strong` decides the one-word case.
+    credential = sorted(strong + [i for i, part in enumerate(parts)
+                                  if _KEY_WORD.fullmatch(part)])
     if not credential:
         return False
     if len(parts) == 1:
-        return True                                   # `password` on its own names the thing
+        return bool(strong)                           # `password` names the thing; `key` is a slot name
     head = credential[-1]
-    lowered = [part.lower() for part in parts]
     if not any(part in _DETERMINERS for part in lowered):
         return False                                  # a kind name: `session-token`, `vault-token`
     # TESTOPS-62: a word in the name is not a clause. A verb or negator anywhere makes the name a
@@ -392,6 +428,11 @@ def _looks_like_secret(value: str) -> str | None:
     if pair:
         return (f"it reads as a credential: the name {pair.group(1)!r} is followed by '=' or ':' "
                 f"and a value")
+    # TESTOPS-63: the same shape for the one word the pair vocabulary cannot carry alone - a `key`
+    # named with a determiner (`my-key=hunter2`). `sort_keys=True` and `board_keys` stay configuration.
+    if _DETERMINER_KEY_PAIR.search(plain):
+        return ("it reads as a credential: a key named with a determiner/possessive is followed by "
+                "'=' or ':' and a value")
     # 2. Issued-token shapes, searched anywhere in the value (TESTOPS-59 AC1): a PEM block, a JWT
     #    and a complete authorization header pasted into a longer string are still secrets.
     if _PEM_BLOCK.search(plain):
