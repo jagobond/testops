@@ -77,3 +77,65 @@ misses on banner phrases.
   the noun rather than counted on the weaker word. That is the conservative direction AC2 asks for.
 - **The stored run pages are untouched.** `data/testops.db` still holds earlier runs; replay
   re-derives the claims for this report but writes no artefact.
+
+## Amendment — the review of 2026-11-24 returned this build
+
+Review: `factory/reports/2026-11-24/TESTOPS-82-review.md`, section *Copy passing as entity,
+attacked*, plus its three sharpest concerns. The review was right, and this amendment is the one
+more pass it asked for. `level_fitness` 0.14 → **0.15**. No store schema change.
+
+The review found that the second mark was a **one-way gate**: it looked only in front of the run and
+only at the closed `_DISPLAY_VERBS` list. So copy walked through as an entity whenever the sentence
+carried an intent verb elsewhere, and worse, escalated to a **false finding** — `a "Welcome" message
+is created` accused `POST /message`, `the response contains "Booking" once it is created` accused
+`POST /booking`. A false accusation is the one outcome this tool must never produce.
+
+| review concern | what changed |
+|---|---|
+| 1. copy is over-accepted and can become a false finding | `_quoted_copy_runs()` now reads **after** the run: a quoted word followed by a noun the product itself names (`a "Welcome" MESSAGE`) modifies that noun and is copy or a value; a verb that takes a caption as its object in front (`contains`, `returns`, `includes`, …) is the same case; an intent or existence verb immediately after the quotes (`a "booking" is created`, `the "booking" exists`, `the "booking" is shown`) says the quotes named the subject and the gate stays open. A claim that quotes display copy at all is refused as `quoted_copy` — it can never be a repeat. |
+| 2. punctuation inside a one-word run | a trailing period, comma, bracket or ellipsis inside the run (`"Saved."`, `"Booking."`, `"Booking,"`, `"Booking)"`, `"Booking..."`) is the banner mark it is; the run is copy. |
+| 3. two quoted runs, the rarest word wins and can accuse the wrong surface | `_quoted_subject_runs()` names the run the sentence is about — the one an intent/existence verb follows, else the first run — and records it. Where the sentence genuinely names both (a compound subject, one run either side of the verb, two clauses with their own verbs) the record names **both** runs and refuses with `near_miss_kind: "ambiguous_quotes"` instead of letting the rarity tie-break invent a subject. |
+
+The third concern in the review's list — a passive whose auxiliary collides with a display verb
+(`a "room" gets booked` reading `get`) — is **not** in this ticket's required fixes and is unchanged
+here; it is named for the next ticket rather than half-fixed inside this one.
+
+Two supporting changes keep the record honest where it is counted: `testops/queries.py` counts a
+`quoted_copy` refusal in the display-copy total (it is the same reader-facing case) and gives
+`ambiguous_quotes` its own total; `testops/web/app.py` names that fourth total only when a run holds
+one, so no page that holds none changes by a byte.
+
+### Pinned (six new tests, `tests/test_product_evidence.py` 31 → 37)
+
+| test | pins |
+|---|---|
+| `test_a_quoted_word_modifying_a_product_noun_is_copy_not_the_subject` | `a "Welcome" message is created` → `quoted_copy`, word `message`, the act agreeing and still not evidence; `contains "Booking"` → `display_copy` |
+| `test_a_verb_after_the_quotes_means_the_quotes_named_the_subject` | `a "booking" is created` still repeats `POST /booking`; `the "booking" is shown` / `exists` keep `booking` as the subject |
+| `test_punctuation_inside_a_one_word_run_is_the_banner_mark_it_is` | all five trailing-punctuation forms are copy; an unpunctuated quoted entity is not |
+| `test_with_two_quoted_runs_the_record_names_the_sentences_subject` | `the "booking" is shown in the "message" panel` → `booking`, `GET /booking/{id}` (never `GET /message`); `search for "room" in the "list" view` → `room` |
+| `test_two_quoted_runs_the_sentence_does_not_choose_between_are_named_and_refused` | compound subject, run either side of the verb, two clauses → `ambiguous_quotes`, both runs named, state `zero` |
+| `test_a_quoted_display_string_can_never_become_a_repeat_finding` | **the failure it prevents**: every assertion reproducing a caption in quotes is asserted never to reach `PRODUCT_FOUND` |
+
+### No weakening — the five original probes, the corpus and the goldens
+
+- **The five original probes keep their verdicts**: `the "booking" record is shown` → `review`,
+  `a "booking" is created` → `repeats_product` (`POST /booking`), `the "booking" exists` →
+  `distinct` / `no_intent`, `search for "room" returns results` → `distinct` / `no_intent`,
+  `verify the "room" type appears in the list` → `repeats_product` (`GET /room/{id}`, word `room`).
+  All five pinned by the existing tests, unchanged.
+- **Corpus, rebuilt offline twice** from `restfulbooker-levels-20261124-fe8537db-r2` (store copied
+  to a scratch directory; no network, no live store, no port 8791): once from the TESTOPS-82 head
+  `c8973fc` in a temporary detached worktree, once from this tree. Keyed on (scenario, assertion
+  text, line): **43 claims in both, 0 verdicts moved**, and **0 near-miss kinds, matched words or
+  routes differ**. After: **1 `repeats_product`**, **12 near misses (8 `display_copy` / 4
+  `no_intent`)**, 12 `distinct`, 4 `review`, 26 `unplaced`. The one repeat is still the room-creation
+  claim (`New '<room_type>' … will be created` → `POST /`, word `room`); the eight `message` claims
+  keep their display-copy refusals. The only field that differs on any claim is the new
+  `quotes_ambiguous` (absent → `False`).
+- **Suites, from the project `.venv` with the environment stripped and `PYTHONNOUSERSITE=1`**:
+  full suite **1258 passed, 2 skipped** (177.8 s); contracts alone **37 passed, 2 skipped** (12.2 s).
+  `tests/test_product_evidence.py` alone: **37 passed**.
+- **Goldens: 14 pages, all byte-identical** — `index.html`, `runs.html`, `case-page-01.html` …
+  `case-page-12.html`. No fixture changed on disk (`git status` shows only the analyser, the web
+  render helper and the test file).
+

@@ -638,6 +638,18 @@ def near_miss_sentence(product: dict) -> str:
                 f'product already does this.')
     no_intent = (product.get("near_miss_kind") == "no_intent"
                  or not product.get("assertion_verb"))
+    if product.get("near_miss_kind") == "quoted_copy":
+        shown = esc(product.get("display_text") or "")
+        return (f'it declares <span class="code">{route}</span>, which shares the word '
+                f'\u201c{word}\u201d, but the assertion quotes display copy \u201c{shown}\u201d '
+                f'\u2014 text a person is shown rather than the subject of the check \u2014 so the '
+                f'shared word says nothing about whether the product publishes what the check is '
+                f'about.')
+    if product.get("near_miss_kind") == "ambiguous_quotes":
+        named = " and ".join(f'\u201c{esc(run)}\u201d' for run in (product.get("quoted_runs") or []))
+        return (f'it declares <span class="code">{route}</span>, but the assertion quotes two things '
+                f'\u2014 {named} \u2014 and nothing in the sentence says which one the check is '
+                f'about, so no shared word is counted as a repeat.')
     if no_intent:
         return (f'it declares <span class="code">{route}</span>, which shares the word '
                 f'\u201c{word}\u201d, but the assertion names no act this rule recognises (none '
@@ -2114,12 +2126,16 @@ def product_block(conn, run: dict) -> list[str]:
     # the product was read, a noun was shared, and the rule refused to call that evidence.
     refused = evidence["near_miss"]
     if refused:
+        # A fourth kind is named only when a run actually holds one, so no page says "ambiguous
+        # quotes 0" (TESTOPS-82 amendment).
+        ambiguous = evidence.get("near_miss_ambiguous_quotes") or 0
+        more = f' / ambiguous quotes {ambiguous}' if ambiguous else ""
         out.append(f'<p class="meta">{refused} claim{"s" if refused != 1 else ""} '
                    f'share{"s" if refused == 1 else ""} a noun with a product route but '
                    f'{"was" if refused == 1 else "were"} not counted (verb differs '
                    f'{evidence["near_miss_verb_differs"]} / no intent '
                    f'{evidence["near_miss_no_intent"]} / display copy '
-                   f'{evidence["near_miss_display_copy"]}). '
+                   f'{evidence["near_miss_display_copy"]}{more}). '
                    f'They are <a href="#product-refused">listed below</a>.</p>')
     return out
 

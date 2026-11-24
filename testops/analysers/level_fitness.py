@@ -1,4 +1,29 @@
-"""Level fitness v0.14 - one claim per assertion, in words a reader can act on.
+"""Level fitness v0.15 - one claim per assertion, in words a reader can act on.
+
+v0.15 is TESTOPS-82's review response: the second mark is read in both directions.
+
+  * **the rule reads after the run as well as before.** v0.14 only looked in front of the quotes and
+    only at a closed verb list, so a caption walked through as the subject whenever the sentence
+    carried an intent verb elsewhere - ``a "Welcome" message is created`` accused ``POST /message``
+    and ``the response contains "Booking" once it is created`` accused ``POST /booking``. A quoted
+    word followed by a noun the product itself names (``a "Welcome" MESSAGE``, the banner case
+    ``"Booking Successful" BANNER``) modifies that noun: it is copy or a value, never the subject.
+    An intent or existence verb immediately after the quotes (``a "booking" is created``, ``the
+    "booking" exists``, ``the "booking" is shown``) says the quotes named the subject, so the gate
+    passes in both directions;
+  * **punctuation inside a one-word run is the banner mark it is.** ``"Saved."``, ``"Booking."``,
+    ``"Booking,"``, ``"Booking)"``, ``"Booking..."`` are captions - text a person reads - and were
+    previously accepted as entities;
+  * **two quoted runs: the sentence's subject is named, not the rarest word.** ``the "booking" is
+    shown in the "message" panel`` used to record a repeat on ``GET /message`` because ``message``
+    was rarer. The record now names the run an intent or existence verb governs, or the first run
+    when none does, and where the sentence genuinely names both (a compound subject, a run either
+    side of the verb, two clauses with their own verbs) it names both and refuses
+    (``near_miss_kind: "ambiguous_quotes"``);
+  * **a quoted caption can never be a repeat.** A claim that reproduces display copy in quotes is
+    about what a person is shown; whatever else it shares with the product it is refused
+    (``near_miss_kind: "quoted_copy"``). A false accusation is the one outcome the tool must never
+    produce.
 
 v0.14 is TESTOPS-82: quoting is not by itself a signal of copy.
 
@@ -272,7 +297,7 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.14"
+version = "0.15"
 uses_model = False
 
 # What this analyser's verdict rests on, and what it would like to check itself against but does
@@ -565,6 +590,39 @@ _DISPLAY_VERBS = frozenset({"get", "gets", "getting", "got", "see", "sees", "saw
                             "rendered", "rendering", "read", "reads", "reading", "receive",
                             "receives", "received", "receiving", "say", "says", "said", "saying"})
 
+# The words that, standing immediately *after* a quoted run, say the run named the subject rather
+# than reproduced a caption: an intent verb (``a "booking" is created``) or a verb of existence or
+# appearance (``the "booking" exists``, ``the "booking" is shown``). The rule reads in both
+# directions (TESTOPS-82 amendment, review concern 1): a verb of this kind after the quotes means
+# the quotes are what the sentence is about, whatever verb stands in front of them.
+_FOLLOWING_SUBJECT_VERBS = (frozenset(_INTENT_FORMS) - frozenset({
+    # Intent forms that are also ordinary nouns. Standing immediately after a quoted word they
+    # usually name the noun - ``the "list" VIEW``, ``the "room" list`` - so on their own they do not
+    # say the quotes were the sentence's subject.
+    "list", "lists", "view", "views", "new", "display", "update", "change", "delete",
+})) | frozenset({
+    "is", "are", "was", "were", "be", "been", "being", "will", "has", "have", "had", "gets",
+    "got", "exists", "exist", "existed", "existing", "appears", "appear", "appeared",
+    "appearing", "remains", "remain", "remained", "returns", "return", "returned", "contains",
+    "contain", "contained", "includes", "include", "included", "holds", "hold", "held"})
+
+# Verbs that take the quoted text as their object - a caption the assertion reproduces, or a value
+# the product hands back (``the response contains "Booking"``). A quoted run standing immediately
+# behind one of these is copy or a value, never the subject (TESTOPS-82 amendment, review concern 1).
+# This set widens only the *quoted-run* mark: the unquoted banner-phrase rule keeps ``_DISPLAY_VERBS``
+# so the eight real-corpus refusals keep their ground.
+_VALUE_VERBS = _DISPLAY_VERBS | frozenset({"contains", "contain", "contained", "includes",
+                                           "include", "included", "holds", "hold", "held",
+                                           "carries", "carry", "carried", "returns", "return",
+                                           "returned", "prints", "print", "printed", "outputs",
+                                           "output", "writes", "write", "wrote", "logs", "log",
+                                           "logged"})
+
+# The words that can only join two quoted runs into one noun phrase. When everything between two
+# runs is one of these, the sentence names both runs as one subject and the record cannot pick one.
+_CONNECTIVES = frozenset({"and", "or", "nor", "plus", "the", "a", "an", "this", "that", "these",
+                          "those", "its", "their", "both", "&"})
+
 
 # Where a banner phrase stops. These are connectives, determiners and auxiliaries - words that
 # cannot be part of a banner's own text - and not prepositions: "Thanks for getting in touch" has
@@ -599,13 +657,24 @@ def _quoted_runs(text: str) -> list[tuple[int, int]]:
             if not _is_slot(match.group(0)[1:-1])]
 
 
-def _quoted_copy_runs(text: str) -> list[tuple[int, int]]:
-    """The quoted runs that carry a second mark of display copy (TESTOPS-82, AC1).
+def _quoted_copy_runs(text: str, domain_words: frozenset[str] = frozenset()
+                      ) -> list[tuple[int, int]]:
+    """The quoted runs that carry a mark of display copy (TESTOPS-82, AC1 + amendment).
 
     Quoting a noun is how well-written Gherkin names its subject, so the quotes alone say nothing.
-    Copy is a quoted run that holds more than one word, stands behind a display verb, or carries
-    banner punctuation (``!``) inside it. A single quoted word with none of those marks is the
-    assertion naming its subject, and stays a candidate shared word.
+    Copy needs a mark, and the marks are read on both sides of the run (review concern 1):
+
+      * the run holds more than one word (``"Booking created"``);
+      * banner punctuation sits inside it - ``!`` anywhere, or a trailing period, comma or bracket
+        (``"Saved."``, ``"Booking."``) - which is the typography of a caption, not an entity;
+      * a verb that takes a caption or a value as its object stands immediately in front of it
+        (``shows``, ``sees``, ``contains``, ``returns``...);
+      * the word after the quotes is a noun the product itself names (``a "Welcome" MESSAGE``,
+        ``the "Booking Successful" BANNER``): the quoted text modifies that noun and is copy or a
+        value, not the subject.
+
+    Nothing else is copy. In particular an intent or existence verb immediately after the quotes
+    (``a "booking" is created``, ``the "booking" exists``) says the quotes named the subject.
     """
     tokens = [(match.group(0), match.start(), match.end())
               for match in _WORD_TOKEN.finditer(text)]
@@ -616,36 +685,95 @@ def _quoted_copy_runs(text: str) -> list[tuple[int, int]]:
             continue
         start, end = match.start() + 1, match.end() - 1
         inside = [token for token in tokens if start <= token[1] and token[2] <= end]
+        stripped = content.strip()
         if len(inside) > 1 or "!" in content:
             runs.append((start, end))
             continue
-        # A display verb immediately in front of the opening quote introduces the run as copy.
-        before = [token for token in tokens if token[2] <= match.start()]
-        if before and before[-1][0].lower() in _DISPLAY_VERBS:
+        # Punctuation written inside a one-word run is the banner mark it is: a person reads
+        # "Saved." as a caption, and an entity is never quoted with its full stop.
+        if stripped.endswith((".", ",", ")", "]", "}", "\u2026")):
+            runs.append((start, end))
+            continue
+        after = next((token for token in tokens if token[1] >= match.end()), None)
+        if after is not None and after[0].lower() in _FOLLOWING_SUBJECT_VERBS:
+            # An intent or existence verb right after the quotes: the quotes named the subject.
+            continue
+        before = next((token for token in reversed(tokens) if token[2] <= match.start()), None)
+        if before is not None and before[0].lower() in _VALUE_VERBS:
+            runs.append((start, end))
+            continue
+        if after is not None and after[0].lower() in domain_words:
+            # The quoted word modifies a noun the product carries, so it is that noun's copy or
+            # value - never the subject the check is about.
             runs.append((start, end))
     return runs
 
 
-def _quoted_subject_words(text: str) -> frozenset[str]:
+def _quoted_subject_runs(text: str, domain_words: frozenset[str] = frozenset()
+                         ) -> tuple[list[tuple[int, int]], bool]:
+    """The quoted run(s) naming the sentence's subject, and whether the choice is ambiguous.
+
+    With one non-copy run the answer is that run. With two or more, the subject is the run an intent
+    or existence verb governs - the run the verb follows (``the "booking" is shown in the "message"
+    panel``) - and when no run is governed it is the first run (``search for "room" in the "list"
+    view``). Where the sentence genuinely names both runs as one thing (a compound subject joined by
+    ``and``), gives each its own verb, or puts one either side of the sentence's verb, there is no
+    subject to name: the second element of the result is ``True`` and the caller must refuse,
+    naming both runs, rather than let the rarity tie-break invent one (review concern 3).
+    """
+    copy_runs = _quoted_copy_runs(text, domain_words)
+    runs = [(start, end) for start, end in _quoted_runs(text)
+            if not any(copy_start <= start and end <= copy_end
+                       for copy_start, copy_end in copy_runs)]
+    if len(runs) <= 1:
+        return runs, False
+    tokens = [(match.group(0), match.start(), match.end())
+              for match in _WORD_TOKEN.finditer(text)]
+
+    def following(run: tuple[int, int]) -> str:
+        token = next((token for token in tokens if token[1] >= run[1]), None)
+        return token[0].lower() if token is not None else ""
+
+    governed = [run for run in runs if following(run) in _FOLLOWING_SUBJECT_VERBS]
+    if len(governed) > 1:
+        # Each run is the subject of its own clause: two claims, and one record cannot be both.
+        return runs, True
+    if len(governed) == 1:
+        subject = governed[0]
+        for earlier in [run for run in runs if run[1] <= subject[0]]:
+            between = [token[0].lower() for token in tokens
+                       if earlier[1] <= token[1] and token[2] <= subject[0]]
+            if all(word in _CONNECTIVES for word in between):
+                # "the "booking" and the "message" are created" - one verb, two subjects.
+                return [earlier, subject], True
+        return [subject], False
+    verbs = [token[1] for token in tokens
+             if token[0].lower() in _FOLLOWING_SUBJECT_VERBS or token[0].lower() in _DISPLAY_VERBS]
+    if verbs and len({run[0] < min(verbs) for run in runs}) > 1:
+        # One run before the sentence's verb and one after it: the sentence names two things and
+        # nothing says which one the check is about.
+        return runs, True
+    return [runs[0]], False
+
+
+def _quoted_subject_words(text: str, domain_words: frozenset[str] = frozenset()) -> frozenset[str]:
     """The words a quoted run names as the assertion's subject, not as copy (TESTOPS-82, AC2).
 
     ``verify the "room" type appears in the list`` names ``room``; ``list`` is incidental. When one
     of these words is also carried by the product, it is the noun the record must use - a weaker
     word outside the run may never justify the match.
     """
-    copy_runs = _display_runs(text)
+    runs, _ambiguous = _quoted_subject_runs(text, domain_words)
     words: set[str] = set()
-    for start, stop in _quoted_runs(text):
-        if any(run_start <= start and stop <= run_end for run_start, run_end in copy_runs):
-            continue
+    for start, stop in runs:
         for match in _WORD_TOKEN.finditer(text, start, stop):
             words.add(match.group(0).lower())
     return frozenset(words)
 
 
-def _display_runs(text: str) -> list[tuple[int, int]]:
+def _display_runs(text: str, domain_words: frozenset[str] = frozenset()) -> list[tuple[int, int]]:
     """The character spans of the assertion's display copy and banner phrases (TESTOPS-79/82)."""
-    runs = list(_quoted_copy_runs(text))
+    runs = list(_quoted_copy_runs(text, domain_words))
     # Every quoted literal bounds a banner phrase, copy or not: a title cannot swallow a quote.
     quoted_spans = _quoted_runs(text)
     tokens = [(match.group(0), match.start(), match.end())
@@ -675,14 +803,17 @@ def _display_runs(text: str) -> list[tuple[int, int]]:
     return runs
 
 
-def _display_copy(assertion: str) -> dict[str, str]:
+def _display_copy(assertion: str, domain_words: frozenset[str] = frozenset()) -> dict[str, str]:
     """``word -> the display copy it occurs in``, for words that occur *only* there (TESTOPS-79).
 
     A word with even one occurrence outside display copy is absent: the assertion names it as its
     subject somewhere, and that occurrence is the one the product may be evidence about.
+
+    ``domain_words`` is what the product itself names, and only ever tightens the quoted-run test
+    (TESTOPS-82 amendment): a quoted word modifying one of the product's nouns is copy.
     """
     text = assertion or ""
-    runs = _display_runs(text)
+    runs = _display_runs(text, domain_words)
     display: dict[str, str] = {}
     outside: set[str] = set()
     for match in _WORD_TOKEN.finditer(text):
@@ -837,13 +968,22 @@ def product_match(assertion: str, surfaces) -> dict | None:
     TESTOPS-82: a word inside a single quoted run is the assertion naming its subject, and such a
     word ranks above any word outside it. ``verify the "room" type appears in the list`` must record
     ``room``; ``list`` may never be the word a match is justified with.
+
+    TESTOPS-82 amendment (review concerns 1-3): with two quoted runs only the run the sentence is
+    about is a subject - the run an intent or existence verb governs, or the first run when none
+    does - and where the choice is genuinely ambiguous the record says so (``quotes_ambiguous``) and
+    names both runs, so the caller refuses rather than accusing an incidental surface. The record
+    also carries the quoted copy the assertion reproduces (``quoted_copy``): a claim that quotes a
+    caption is about what a person is shown and can never be a repeat.
     """
-    display = _display_copy(assertion)
+    readings = [_surface_reading(surface) for surface in surfaces or ()]
+    domain_words = frozenset(word for reading in readings for word in reading[5])
+    display = _display_copy(assertion, domain_words)
     display_words = frozenset(display)
-    subject_words = _quoted_subject_words(assertion)
+    subject_runs, quotes_ambiguous = _quoted_subject_runs(assertion, domain_words)
+    subject_words = _quoted_subject_words(assertion, domain_words)
     assertion_words = _product_meaningful(assertion, skip=display_words)
 
-    readings = [_surface_reading(surface) for surface in surfaces or ()]
     if not readings or not (assertion_words or display_words):
         return None
     total = len(readings)
@@ -908,6 +1048,15 @@ def product_match(assertion: str, surfaces) -> dict | None:
             # (TESTOPS-82). The refusal can then say which case it is instead of blaming the
             # quoting.
             "word_quoted": word in subject_words,
+            # Two quoted runs and no way to tell which one the sentence is about: the record names
+            # both and the caller refuses (TESTOPS-82 amendment, review concern 3).
+            "quotes_ambiguous": quotes_ambiguous,
+            "quoted_runs": [assertion[start:stop].strip() for start, stop in subject_runs],
+            # The quoted copy the assertion reproduces, if any. A claim that quotes a caption is
+            # about what a person is shown, so no shared word may make it a repeat (review
+            # concern 1: copy must never escalate into a false finding).
+            "quoted_copy": [assertion[start:stop].strip()
+                            for start, stop in _quoted_copy_runs(assertion, domain_words)],
             "verb_agrees": (intent is not None
                             and not (intent_methods and method and method not in intent_methods))}
 
@@ -954,7 +1103,10 @@ def _product_record(interaction: str, assertion: str, surfaces, state: str, reas
               "near_miss_kind": None, "intent_known": None,
               # The display copy a refused word sat in, so the page can quote it (TESTOPS-79), and
               # whether the word is the assertion's quoted subject rather than copy (TESTOPS-82).
-              "display_text": "", "word_quoted": False}
+              "display_text": "", "word_quoted": False,
+              # Two quoted runs the sentence does not choose between, and the copy the assertion
+              # quotes at all (TESTOPS-82 amendment, review concerns 1 and 3).
+              "quotes_ambiguous": False, "quoted_runs": [], "quoted_copy": []}
     if not placed or interaction == "U":
         record["reason"] = ("nothing placed this claim, so nothing is known about what would settle "
                             "it and the product is not evidence about it")
@@ -1006,6 +1158,37 @@ def _product_record(interaction: str, assertion: str, surfaces, state: str, reas
                             f'is shown rather than the subject of the check - so it is not counted '
                             f'as a repeat. Name the thing the assertion checks rather than the copy '
                             f'it is shown in, or check this one by hand')
+        return record
+    if match["quotes_ambiguous"]:
+        # Two quoted runs and nothing in the sentence says which one the check is about. Naming
+        # either would let the rarity tie-break accuse an incidental surface, so the record names
+        # both and refuses (TESTOPS-82 amendment, review concern 3).
+        record["state"] = PRODUCT_ZERO
+        record["near_miss"] = True
+        record["near_miss_kind"] = "ambiguous_quotes"
+        record["word"] = None
+        named = " and ".join(f'"{run}"' for run in match["quoted_runs"])
+        record["reason"] = (f'the product declares {match["route"]}, but the assertion quotes two '
+                            f'things - {named} - and nothing in the sentence says which one the '
+                            f'check is about, so no shared word is counted as a repeat. Name the '
+                            f'one thing the check is about, or check this one by hand')
+        return record
+    if match["quoted_copy"]:
+        # The assertion quotes a caption. Whatever it shares with the product, the claim is about
+        # what a person is shown rather than about the product's behaviour, so a shared word can
+        # never make it a repeat (TESTOPS-82 amendment, review concern 1: copy never accuses).
+        record["state"] = PRODUCT_ZERO
+        record["near_miss"] = True
+        record["near_miss_kind"] = "quoted_copy"
+        record["display_text"] = match["quoted_copy"][0]
+        own = f', whose own claim is "{match["claim"]}"' if match["claim"] else ""
+        record["reason"] = (f'the product declares {match["route"]}{own}, and it shares the word '
+                            f'"{match["word"]}" with the assertion, but the assertion quotes '
+                            f'display copy "{match["display_text"]}" - text a person is shown '
+                            f'rather than the subject of the check - so a shared word says nothing '
+                            f'about whether the product publishes what the check is about, and it '
+                            f'is not counted as a repeat. Name the thing the assertion checks '
+                            f'rather than the copy it is shown in, or check this one by hand')
         return record
     if not match["verb_agrees"]:
         # The nearest surface names the same noun without settling the assertion - a GET route for

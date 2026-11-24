@@ -344,6 +344,7 @@ def product_evidence(conn, run_id: str) -> dict:
              FROM claim c WHERE c.run_id = ? ORDER BY c.id""", (run_id,)).fetchall()
     recorded = repeats = unconsulted = examined = 0
     near_miss = near_miss_verb_differs = near_miss_no_intent = near_miss_display_copy = 0
+    near_miss_ambiguous_quotes = 0
     for row in rows:
         detail = _json(row["output"]) if row["output"] else {}
         product = detail.get("product") if isinstance(detail, dict) else None
@@ -356,8 +357,12 @@ def product_evidence(conn, run_id: str) -> dict:
             unconsulted += 1
         elif product.get("near_miss"):
             near_miss += 1
-            if product.get("near_miss_kind") == "display_copy":
+            if product.get("near_miss_kind") in ("display_copy", "quoted_copy"):
                 near_miss_display_copy += 1
+            elif product.get("near_miss_kind") == "ambiguous_quotes":
+                # The record named two quoted runs and refused to choose between them
+                # (TESTOPS-82 amendment): a refusal of its own kind, not a verb disagreement.
+                near_miss_ambiguous_quotes += 1
             elif (product.get("near_miss_kind") == "no_intent"
                   or not product.get("assertion_verb")):
                 near_miss_no_intent += 1
@@ -369,7 +374,8 @@ def product_evidence(conn, run_id: str) -> dict:
             "unconsulted": unconsulted, "matched": examined,
             "near_miss": near_miss, "near_miss_verb_differs": near_miss_verb_differs,
             "near_miss_no_intent": near_miss_no_intent,
-            "near_miss_display_copy": near_miss_display_copy}
+            "near_miss_display_copy": near_miss_display_copy,
+            "near_miss_ambiguous_quotes": near_miss_ambiguous_quotes}
 
 
 def near_miss_claims(conn, run_id: str, scenarios: set[str] | None = None) -> list[dict]:
