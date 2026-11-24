@@ -2,9 +2,14 @@
 
 Two global obligations here:
 
-  * AC10 of an earlier ticket: a session-scoped guard digests the repository before the first test
-    and compares it after the last one, so a write by *any* test fails the run regardless of file
-    or collection order.
+  * AC10 of an earlier ticket, sharpened by TESTOPS-64: a session-scoped guard digests the repository
+    before the first test and compares it after the last one, so a write by *any* test fails the run
+    regardless of file or collection order. A difference is only a write if no commit made during the
+    run accounts for it: the baseline records ``HEAD`` and the index as well as the digest, and a path
+    whose blob differs between the two commits is reported as *changed by a commit* rather than
+    blamed on the suite. Everything a commit cannot explain - including every untracked addition -
+    still fails and still names the path. What it cannot attribute is stated in ``support``'s
+    docstring: a commit and a test write to the same path in the same run is attributed to the commit.
   * TESTOPS-35 AC3: the suite cannot open a product store for writing. The guard refuses the
     connection itself, so a fixture script that reaches for ``data/testops.db`` fails at the line
     that reached for it rather than being noticed, if at all, by a digest an hour later. The only
@@ -14,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from support import (ROOT, install_store_guard, repository_snapshot, snapshot_difference)
+from support import ROOT, guard_baseline, guard_report, install_store_guard
 from wheel_build import build_wheel_for_session
 
 
@@ -28,17 +33,26 @@ def store_guard():
 
 @pytest.fixture(scope="session", autouse=True)
 def repo_guard():
-    """Session-wide guard against writes to the repository or to ``data/``."""
-    before = repository_snapshot()
+    """Session-wide guard against writes to the repository or to ``data/``.
+
+    Yields the baseline (digest, ``HEAD``, index); ``support.guard_report`` turns it into a report
+    that separates changes a commit accounts for from unexplained ones.
+    """
+    baseline = guard_baseline()
     # TESTOPS-49: a walk that found no files would make the comparison below vacuously empty, so
     # the snapshot is refused when it is empty and the directory it walked is named.
-    assert before, (
+    assert baseline.snapshot, (
         f"the repository walk of {ROOT} found no files at all; the write guard would compare "
         "nothing with nothing and pass vacuously"
     )
-    yield before
-    difference = snapshot_difference(before, repository_snapshot())
-    assert not any(difference.values()), f"a test wrote into the repository: {difference}"
+    yield baseline
+    report = guard_report(baseline)
+    # TESTOPS-64 AC4: the report says which class each change fell into, with counts, whether or not
+    # it fails - a reader never has to infer the outcome from a pass. pytest shows this on failure
+    # and under -s.
+    for line in report.summary():
+        print(line)
+    assert not report.failures, report.failure_message()
 
 
 @pytest.fixture(scope="session")
