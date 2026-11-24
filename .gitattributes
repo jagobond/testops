@@ -12,3 +12,7 @@ tests/fixtures/projects_services/*.html -text
 # The same rule for the source band's golden (TESTOPS-80 review, note 3): a byte comparison of a
 # page the build renders with LF must not measure the checkout.
 tests/fixtures/source_band/*.html -text
+# And the same for the product-line golden (TESTOPS-85): it is the only page witnessing the
+# "could not be located" state, and a CRLF checkout made the byte comparison measure the
+# checkout rather than the render.
+tests/fixtures/product_line/*.html -text
