@@ -29,11 +29,15 @@ Read the verdict aloud: **"Checked, but the product already exposes this."** The
 The point to say out loud: **the tool shows both sides of its own argument.** You do not have to take the verdict on faith;
 the page is the evidence.
 
-## 3. The same case, with the agent on (2 min)
+## 3. The same case, two agents (2 min)
 
-Add `?agent=on`.
+Add `?agent=foundry` and the explanation is written by the **hosted Foundry agent** `testops-narrator`, which calls
+`deepseek-flash` with its own managed identity. The block says so: *written by the Foundry hosted agent*, and
+*served by: foundry-hosted-agent*.
 
-- The block is **labelled**: written by `deepseek-flash`, from the stored record, "commentary, not evidence".
+Add `?agent=on` and the same block is written by this build's own model call.
+
+- The block is **labelled**: written by the model (or the agent) from the stored record, "commentary, not evidence".
 - The verdict above it is **byte-identical** to the agent-off page. That is enforced by a test over all 275 real pages.
 - The explanation names what the finding means and what to do about it in plain English.
 
@@ -45,6 +49,7 @@ which is the next slide's point, not a secret.
 
 `/agent-report`
 
+- The routes side by side: the model route and the hosted agent, with calls, tokens and failures by kind.
 - Views, explanations, **rejected**, failed, cache hits, tokens - broken down **by state**, so a cached page is not counted
   as an explanation's value and a failure is not counted as a loss.
 - Tokens are the provider's own usage figures. **No price is invented on the page**; cost is measured in tokens, and a price
