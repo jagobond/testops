@@ -99,6 +99,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-81 | A bare POST / is not a route a reader can act on - name the service | F1 | ready | Three services each declare POST /; a reader told to "call POST /" cannot, and two routes from different modules render identically |
 | TESTOPS-82 | A quoted entity is not display copy - copy needs a second mark | F1 | ready | From the T79 review: four quoted-entity assertions are refused and one is accused on the incidental word `list`; quoting is not a signal of copy |
 | TESTOPS-83 | The case page quotes its evidence but never shows the code | F1 | ready | No snippet of the test assertion or the product handler it is compared with; a reader must leave the page to check the tool's own claim |
+| TESTOPS-84 | When the code block cannot delimit a declaration it renders as if it were complete | F1 | ready | From the T83 review: an unclosed body shows no ellipsis and no count, so a partial declaration looks whole; the caption also blames the line cap for a cut the cap did not make |
 
 |----|-------|---------|--------|------|
 

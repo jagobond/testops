@@ -2,7 +2,7 @@
 id: TESTOPS-83
 title: The case page quotes its evidence but never shows the code
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-73
 ---
