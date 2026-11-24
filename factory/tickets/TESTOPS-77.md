@@ -2,7 +2,7 @@
 id: TESTOPS-77
 title: The Java reader refuses for the right reason - two false reasons left
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-74
 ---
