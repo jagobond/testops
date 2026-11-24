@@ -87,6 +87,8 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-69 | The small residuals the credential and guard threads left behind | F1 | ready | Six stated seams collected: tab boundary, inline-password shapes, "0 unreadable", committed build artefacts, name-based pruning, positional prose |
 | TESTOPS-70 | A Java product reader: Spring routes and their claims | F1 | ready | The tool reads Python products only, so a Java corpus is judged on tests alone. Parse `.java`, extract Spring routes + claims, keep the three zero-states distinct |
 | TESTOPS-71 | The guard goes quiet when git is down, and the URL rule cannot read a placeholder | F1 | ready | From the T69 review: unreadable git falls back to name-based pruning; `git readable` can lie; `?token=${TOKEN}` refused while `YOUR_KEY_HERE` counts as a secret |
+| TESTOPS-72 | The product is evidence: is this test repeating the developer's work? | F1 | ready | Surfaces are discovered and never used. Match a browser claim to a product route by a meaningful word, record the evidence, publish `repeats product` - with a flip test proving the product alone changes the verdict |
+| TESTOPS-73 | The case page names what it examined: sources as linked tags | F1 | ready | Put examined sources (test repo at commit, product repo, Jira/ADO item, pipeline run) up front as linked tags; show unconsulted sources and the test-only case explicitly |
 
 |----|-------|---------|--------|------|
 
