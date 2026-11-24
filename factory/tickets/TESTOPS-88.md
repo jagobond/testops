@@ -2,7 +2,7 @@
 id: TESTOPS-88
 title: A Foundry agent that explains a case, measured against the same case without it
 feature: F2
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-85
 ---
