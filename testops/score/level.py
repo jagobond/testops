@@ -23,7 +23,10 @@ def _norm_feature(path: str) -> str:
 # narrowest interaction is "distinct"; one that re-proves a narrower claim through a wide interaction is a
 # "review" candidate. Nothing in the old vocabulary maps to deletion.
 VERDICT_MAP = {"optimal": "distinct", "necessary": "distinct", "overbuilt": "review",
-               "distinct": "distinct", "review": "review", "unplaced": "unplaced"}
+               "distinct": "distinct", "review": "review", "unplaced": "unplaced",
+               # A claim the product already publishes is at the right level - the browser is the
+               # waste, and the level verdict itself is `distinct` (TESTOPS-72).
+               "repeats_product": "distinct"}
 
 
 def score(claims: list, key: list[dict]) -> dict:

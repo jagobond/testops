@@ -198,6 +198,10 @@ def rebuild(conn, snapshot_id: str) -> tuple[list, dict, Snapshot]:
             sources_missing=snap.sources_missing, assessment=snap.assessment,
             commit=snap.test_commit, support_index=snap.support_index,
             extractor=extractor, unmatched=unmatched,
+            # A rebuild reads the product's surfaces from the snapshot's own blobs, so it reaches
+            # the same product verdicts the run did - or the same "could not be consulted"
+            # (TESTOPS-72). The state is re-derived, never remembered.
+            product_state=discovery.state, product_reason=discovery.reason,
         )
     stats = {"features": len(features), "bindings": len(bindings),
              "scenarios": sum(len(f.scenarios) for f in features),

@@ -1,4 +1,33 @@
-"""Level fitness v0.10.3 - one claim per assertion, in words a reader can act on.
+"""Level fitness v0.11 - one claim per assertion, in words a reader can act on.
+
+v0.11 is TESTOPS-72: the product becomes evidence, and ``surfaces`` stops being a parameter nobody
+reads.
+
+  * a claim is ``repeats_product`` when **all** of these hold, and each is recorded on the claim in
+    ``detail["product"]``: the claim needs a browser (``I3``/``I4``, the expensive instrument, and a
+    browser actually ran, so the verdict would otherwise be ``distinct``); a product surface's route
+    or claim shares a *meaningful* word with the assertion - not a word from the stop list of
+    generic testing words, and not a word that appears in more than half of the product's surfaces,
+    because a word that common is the noun the whole repository is about and not evidence; and the
+    matched surface id, the matched route, the matched word and the surface's own claim travel with
+    the verdict, so the page can show *why*. A verdict with no quotable evidence is not published;
+  * the product is consulted, not assumed. A browser claim is only ever ``repeats_product`` when the
+    product was read and a surface matched. When the product could not be read (no product
+    repository, a reader that parses nothing it holds) the claim says so - ``not_assessable`` - and
+    keeps its own verdict, the same distinction ``sources_missing`` already makes. A claim that does
+    not need a browser records ``none``: the product is not evidence about it either way. Nothing is
+    silent, and a product nobody read is never a zero;
+  * a claim that needs a browser but ran without one (``gap``) is not ``repeats_product``: nothing
+    was spent, so nothing is being repeated. The match is still recorded, because it tells a reader
+    where the check belongs;
+  * the statement and the action say what a reader can act on: the product already publishes this at
+    a route, so a browser check re-verifies the developer's work rather than deciding anything the
+    API does not; and the action names the API-level check while saying what a browser is still
+    needed for (rendering, interaction), so nobody is told the UI test is worthless.
+
+The precision guards are the point. v0.1's "a cheaper surface exists" was true for almost every
+scenario in any product and scored precision 0.118; a shared word has to be specific to count, and
+two of the four conditions exist only to refuse a match that is proximity rather than evidence.
 
 v0.10.3 is TESTOPS-40: identical assertions carry their occurrence count in their identity.
 
@@ -163,6 +192,8 @@ assertion is decidable without one.
 
 Verdicts:
   distinct  the instrument is adequate for the claim and no browser was bought unnecessarily
+  repeats_product  a browser was spent on a claim the product already publishes at a route of its
+            own, so the check re-verifies the developer's work (TESTOPS-72)
   review    a browser was used for a claim that the response body settles
   gap       the claim needs a browser and no browser ran - the claim is not established at all
   unplaced  the claim or the instrument cannot be identified
@@ -177,7 +208,7 @@ from ..extract.gherkin import normalise
 from .base import Claim, Evidence
 
 name = "level_fitness"
-version = "0.10.3"
+version = "0.11"
 uses_model = False
 
 # What this analyser's verdict rests on, and what it would like to check itself against but does
@@ -266,6 +297,250 @@ WHY_META = ("the words judge something correct or accurate and never say what it
 
 NEEDS_BROWSER = {"I3", "I4"}
 
+# ---------------------------------------------------------------- the product, as evidence (v0.11)
+#
+# TESTOPS-72. The question this tool exists to answer - "is the tester essentially repeating work
+# the developer has already done?" - cannot be answered from the suite alone, so the product's own
+# surfaces are read here. A surface is evidence when a word is shared between the assertion and the
+# surface's route or its own claim; these two tables decide which words are allowed to count.
+#
+# A word in this list names the act of testing or the kind of thing, not the thing tested. "the
+# data", "the result", "the page", "should", "correct", "displayed" appear in almost any assertion,
+# and a match on one of them would be proximity dressed as evidence - the failure that scored v0.1 at
+# precision 0.118. The UI and code vocabulary below earned its place the same way: on the CotW corpus
+# "class" matched a docstring's ``:class:`` reference and "accessible" matched a test name in the
+# product repository, and neither said the product publishes what the assertion checks.
+PRODUCT_STOP = frozenset("""
+a an the and or but if then than that this these those it its is are was were be been being
+of to in on at by for with from as into over under about after before while yet so such
+not no nor only just also very more most less least all any each every some both either
+which who whom whose what when where why how
+has have had do does did done can could may might must shall should will would
+i you we they he she them his her their our your my me us
+test tests testing check checks checked checking verify verifies verified verification
+assert asserts asserted assertion expect expects expected actual result results
+data value values content contents element elements button buttons field fields form forms
+input label labels text displayed display displays visible shown show shows
+render renders rendered rendering click clicks clicked type types typed enter enters
+response request requests status code codes error errors
+api http https json body header headers url route routes endpoint endpoints id ids
+get post put delete patch head options
+user users visitor visitors customer customers person people new old first last
+same different correct accurate right wrong true false success successful
+one two three four five six seven eight nine ten
+class classes control controls interactive accessible accessibility position document
+style styles css html markup attribute attributes name names named
+expose exposes exposed provide provides return returns take takes give gives
+use uses used make makes include includes contain contains hold holds allow allows
+support supports line lines file files path paths module modules method methods
+function functions call calls code source library package object objects item items
+part parts thing things way ways case cases example examples step steps
+""".split())
+
+# A word that appears in more than this share of the product's surfaces is the noun the whole
+# repository is about, not evidence about one route (AC3). Strictly more than half: with 25 surfaces
+# a word in 13 of them is the product's subject, and a word in 12 is not. A product that declares a
+# single surface can therefore never produce a repeat - every word in it is the whole product - and
+# that is stated rather than worked around.
+PRODUCT_COMMON_SHARE = 0.5
+
+# The verbs a route's claim is written with. They are stop words - no match may rest on them - but
+# they break a tie between two surfaces that share the assertion's noun, by preferring the surface
+# whose own claim uses the assertion's verb ("get message" over "delete message" for a claim that
+# says "will get ... message"). Without the tie-break the winner would be whichever id sorted first.
+PRODUCT_CLAIM_VERBS = frozenset({"get", "list", "read", "create", "add", "update", "delete",
+                                 "remove", "clear", "validate", "mark", "check"})
+
+# What a target has to start with to be a route rather than a file path.
+_ROUTE_VERBS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "ANY"})
+
+_PRODUCT_WORD = re.compile(r"[a-z0-9]+")
+
+
+def _product_words(text: str) -> list[str]:
+    """The words of a phrase, lower-cased. Punctuation, quotes and path syntax are not words."""
+    return _PRODUCT_WORD.findall((text or "").lower())
+
+
+def _product_meaningful(text: str) -> set[str]:
+    """The words of a phrase that could be evidence: not generic, not a one- or two-letter token."""
+    return {word for word in _product_words(text)
+            if len(word) >= 3 and word not in PRODUCT_STOP}
+
+
+def _surface_field(surface, name: str, default):
+    """One field of a surface, from an object or a plain record.
+
+    The analyser never imports the surface reader: it is handed surfaces and reads their fields, so
+    a caller can pass the reader's own objects, or plain dicts in a test, without this module
+    depending on either.
+    """
+    if isinstance(surface, dict):
+        return surface.get(name, default)
+    return getattr(surface, name, default)
+
+
+def _first_sentence(text: str, limit: int = 160) -> str:
+    """The first sentence of a claim, cut to a quotable length.
+
+    A surface's claim is quoted back to a reader as the evidence, so it has to be one thing the
+    product says, not a docstring's whole list of public functions. The cut is marked, so a reader
+    can see the quote stops rather than reading a truncated sentence as the product's whole claim.
+    """
+    text = " ".join(str(text or "").split())
+    for stop in (". ", "; "):
+        if stop in text:
+            text = text.split(stop)[0]
+            break
+    text = text.rstrip(".")
+    if len(text) > limit:
+        text = text[:limit].rsplit(" ", 1)[0].rstrip(",;:") + "\u2026"
+    return text
+
+
+def _claim_carrying(claims, word: str) -> str:
+    """The surface's claim that carries the matched word, as one quotable sentence."""
+    for claim in claims:
+        if word in _product_words(str(claim)):
+            return _first_sentence(claim)
+    return _first_sentence(claims[0]) if claims else ""
+
+
+def _surface_reading(surface) -> tuple[str, str, tuple, set[str], set[str], set[str]]:
+    """(id, route, claims, route words, claim words, every word) for one surface.
+
+    Only a target that *is* a route contributes route words. An engine surface's target is a file
+    path, and a module's name is not an address the product publishes anything at: matching
+    ``src/cotw/citation.py`` on the word "citation" would say the product exposes citations, when all
+    it says is that a file is called that. Such a surface can still be evidence through its claims,
+    which are its own words.
+    """
+    identifier = str(_surface_field(surface, "id", "") or "")
+    route = str(_surface_field(surface, "target", "") or "")
+    claims = tuple(str(claim) for claim in (_surface_field(surface, "claims", ()) or ()))
+    words = _product_words(route)
+    route_words = (set(words) if words and (route.startswith("/") or words[0].upper() in _ROUTE_VERBS)
+                   else set())
+    claim_words = set(_product_words(" ".join(claims)))
+    return identifier, route, claims, route_words, claim_words, route_words | claim_words
+
+
+def product_match(assertion: str, surfaces) -> dict | None:
+    """The strongest surface the assertion's words share, or ``None`` when nothing matches.
+
+    Deterministic and total: every candidate is scored and the lowest key wins, so the same assertion
+    over the same surfaces always names the same route. The ranking, in order, prefers
+
+      1. a word the surface's *route* carries over a word only its claim carries - the route names
+         the thing, so a shared route word says the product publishes that thing at an address;
+      2. the rarer word, because a word in 3 of 25 surfaces is more specific than one in 12;
+      3. the surface sharing more of the assertion's meaningful words;
+      4. the surface whose claim uses the assertion's own verb ("get message" for "will get ...
+         message"), which separates a read from a delete that happens to name the same noun;
+      5. the surface id, so the choice is stable when everything else ties.
+
+    Two guards refuse a candidate outright: a stop word is never evidence, and a word carried by more
+    than :data:`PRODUCT_COMMON_SHARE` of the surfaces is the product's subject rather than this
+    surface's. A word must appear literally - "created" does not match "create" - because the matched
+    word is quoted back to a reader as the evidence, and a stem nobody wrote is not quotable.
+    """
+    assertion_words = _product_meaningful(assertion)
+    readings = [_surface_reading(surface) for surface in surfaces or ()]
+    if not assertion_words or not readings:
+        return None
+    total = len(readings)
+    frequency: dict[str, int] = {}
+    for _identifier, _route, _claims, _route_words, _claim_words, doc_words in readings:
+        for word in doc_words:
+            frequency[word] = frequency.get(word, 0) + 1
+    assertion_verbs = set(_product_words(assertion)) & PRODUCT_CLAIM_VERBS
+
+    best = None
+    for identifier, route, claims, route_words, claim_words, doc_words in readings:
+        shared = assertion_words & doc_words
+        if not shared:
+            continue
+        agrees = bool(assertion_verbs & claim_words)
+        for word in sorted(shared):
+            if word in PRODUCT_STOP:
+                continue
+            if frequency[word] > PRODUCT_COMMON_SHARE * total:
+                continue
+            key = (0 if word in route_words else 1, frequency[word], -len(shared),
+                   0 if agrees else 1, identifier, word)
+            if best is None or key < best[0]:
+                best = (key, identifier, route, _claim_carrying(claims, word), word,
+                        frequency[word], total)
+    if best is None:
+        return None
+    _key, identifier, route, claim_text, word, shared_with, total = best
+    return {"surface": identifier, "route": route, "claim": claim_text, "word": word,
+            "shared_with": shared_with, "surfaces": total}
+
+
+# The four states a claim's product record can be in. They never share wording, and none of them is
+# a default: ``found`` (a surface matched), ``zero`` (the product was read and offered no match),
+# ``not_assessable`` (the product could not be consulted, with the reason attached) and ``none``
+# (the product is not evidence about this claim - it does not need a browser, or nothing placed it,
+# or the run recorded no product reading at all).
+PRODUCT_FOUND = "found"
+PRODUCT_ZERO = "zero"
+PRODUCT_NOT_ASSESSABLE = "not_assessable"
+PRODUCT_NONE = "none"
+
+
+def _product_record(interaction: str, assertion: str, surfaces, state: str, reason: str, *,
+                    placed: bool = True) -> dict:
+    """What the product said about one claim, as a record the claim and the page carry (AC1).
+
+    Every claim gets one, so no verdict can be read as if the product had been silent when it was
+    consulted, or as if it had said zero when nobody could read it. ``state`` is the caller's record
+    of the product arm (``found``/``zero``/``not_assessable``, or ``""`` for a caller that recorded
+    nothing) - the analyser never reads a product itself.
+    """
+    surfaces = list(surfaces or ())
+    record = {"state": PRODUCT_NONE, "needs_browser": interaction in NEEDS_BROWSER,
+              "surfaces": len(surfaces), "surface": None, "route": None, "claim": None,
+              "word": None, "shared_with": 0, "reason": ""}
+    if not placed or interaction == "U":
+        record["reason"] = ("nothing placed this claim, so nothing is known about what would settle "
+                            "it and the product is not evidence about it")
+        return record
+    if interaction not in NEEDS_BROWSER:
+        record["reason"] = ("this claim does not need a browser, so the product is not evidence "
+                            "about it")
+        return record
+    if state == PRODUCT_NOT_ASSESSABLE:
+        record["state"] = PRODUCT_NOT_ASSESSABLE
+        record["reason"] = (f"the product could not be consulted: {reason}" if reason
+                            else "the product could not be consulted")
+        return record
+    if not state:
+        record["reason"] = ("this run recorded no product reading, so nothing here says whether "
+                            "the product already exposes this")
+        return record
+    if state != PRODUCT_FOUND or not surfaces:
+        record["state"] = PRODUCT_ZERO
+        record["reason"] = (f"the product was read and declares {len(surfaces)} surfaces, none of "
+                            f"which shares a meaningful word with this assertion"
+                            if surfaces else
+                            "the product was read and declares no surface at all")
+        return record
+    match = product_match(assertion, surfaces)
+    if match is None:
+        record["state"] = PRODUCT_ZERO
+        record["reason"] = (f"the product was read and declares {len(surfaces)} surfaces, and none "
+                            f"of them shares a meaningful word with this assertion")
+        return record
+    record.update(match)
+    record["state"] = PRODUCT_FOUND
+    record["reason"] = (f'the product declares {match["route"]}, whose own claim is '
+                        f'"{match["claim"]}", and it shares the word "{match["word"]}" with the '
+                        f'assertion - a word that appears in {match["shared_with"]} of the '
+                        f'product\'s {len(surfaces)} surfaces')
+    return record
+
+
 # One claim per step means a step that asserts two things is read strictly: a step cannot assert
 # less than it says, so if any part of it needs a browser, the claim needs a browser.
 _STRENGTH = {"U": 0, "I1": 1, "I2": 2, "KP": 3, "I3": 4, "I4": 5}
@@ -334,6 +609,24 @@ def _opening(interaction: str, clause: str) -> str:
     if _SUBJECTLESS.match(clause):
         return f'The step reads "{clause}"'
     return f"{_OPENER.get(interaction, 'The assertion')}: {clause}"
+
+
+def _repeats_opening(interaction: str, clause: str) -> str:
+    """The statement's first sentence for a claim the product already publishes.
+
+    A browser claim's usual opener says what only a browser can work out, and a statement that then
+    says the API already publishes it would contradict its own first sentence. The subject is the
+    same - what a person is shown - and the second sentence carries the finding.
+    """
+    if _SUBJECTLESS.match(clause):
+        return f'The step reads "{clause}"'
+    label = {
+        "I3": "The assertion is about what a person sees while acting",
+        "I4": "The assertion is about what a browser puts in front of a person",
+    }.get(interaction)
+    if label is None:
+        return _opening(interaction, clause)
+    return f"{label}: {clause}"
 
 
 def _meta_without_comparison(text: str) -> bool:
@@ -566,8 +859,15 @@ def _second(interaction: str, instrument: str) -> str:
 
 
 def _statement(interaction: str, clause: str, verdict: str, instrument: str,
-               why: str = "") -> str:
+               why: str = "", product: dict | None = None) -> str:
     """What is asserted, what establishing it needs, and what the test actually did."""
+    if verdict == "repeats_product":
+        route = (product or {}).get("route") or "a route"
+        claim = (product or {}).get("claim") or ""
+        own = f', and its own claim for that route is "{claim}"' if claim else ""
+        return (f"{_repeats_opening(interaction, clause)}. The product already publishes this at "
+                f"{route}{own}, so a browser check here re-verifies the developer's work rather "
+                f"than deciding anything the API has not already said.")
     opening = _opening(interaction, clause)
     if verdict == "gap":
         return (f"{opening}. Nothing short of a browser can decide it, and the run "
@@ -591,7 +891,8 @@ def _statement(interaction: str, clause: str, verdict: str, instrument: str,
     return f"{opening}. {_second(interaction, instrument)}"
 
 
-def _proposed_action(interaction: str, clause: str, verdict: str, why: str = "") -> str:
+def _proposed_action(interaction: str, clause: str, verdict: str, why: str = "",
+                     product: dict | None = None) -> str:
     """What to change, and never why. This is the field a case reviewer acts on (TESTOPS-29).
 
     The action is not a summary of the case: the statement above it is. A second sentence giving
@@ -602,6 +903,15 @@ def _proposed_action(interaction: str, clause: str, verdict: str, why: str = "")
 
     One instruction, one or two sentences, no restatement of the statement (AC1).
     """
+    if verdict == "repeats_product":
+        # The one action here whose second sentence is a scope, not a reason: the ticket requires
+        # that a reader is not told the UI test is worthless, and a browser is still the only
+        # instrument that shows a result is rendered and can be acted on. It shares no content word
+        # with the first sentence, so the box does not restate itself (TESTOPS-29's measure).
+        route = (product or {}).get("route") or "that route"
+        return (f"Assert this at the API: call {route} and check the response, rather than reading "
+                f"it through a UI run. A browser is still needed for what only a person sees - that "
+                f"the result is rendered, and that someone can act on it.")
     if verdict == "gap":
         return f'Move the step "{clause}" into a test that drives a browser, or delete it.'
     if verdict == "review":
@@ -675,7 +985,8 @@ def _binding_provenance(binding) -> dict:
 def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = None, *,
             sources_missing=None, assessment=None, commit: str = "",
             support_index: dict[tuple[str, str, str], int] | None = None,
-            extractor: str = "", unmatched=None) -> list[Claim]:
+            extractor: str = "", unmatched=None, product_state: str = "",
+            product_reason: str = "") -> list[Claim]:
     """One claim per asserting step, in deterministic order.
 
     ``sources_missing`` is the caller's record of which sources were never connected, and *whether*
@@ -703,6 +1014,14 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
     a step it could not bind: when it is supplied, an asserting step with no binding of its own is
     **unplaced for that reason**, never rescued by a sibling step's layer. The .NET path supplies
     neither, so its claims are exactly what they were.
+
+    ``surfaces`` are the product's own routes and claims, and ``product_state``/``product_reason``
+    are the caller's record of whether the product could be read at all (TESTOPS-72). Together they
+    decide whether a browser claim is ``repeats_product``; every claim records the answer in
+    ``detail["product"]``, including the claims the product is not evidence about. ``product_state``
+    defaults to ``""`` - "this run recorded no product reading" - and never to ``found``, because a
+    caller that forgets the argument would otherwise let every claim be judged against a product
+    nobody read.
     """
     assessed = sources_missing is not None
     missing = list(sources_missing) if assessed else None
@@ -777,6 +1096,12 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                         support.append(observation)
 
                 clause = _clause(step.text)
+                # What the product says about this claim (TESTOPS-72). Read for every claim, so a
+                # claim nobody could judge against the product says which of the four states it is
+                # in rather than falling silent - and a claim that does not need a browser says so,
+                # instead of borrowing a zero it never looked for.
+                product = _product_record(interaction, step.text, surfaces, product_state,
+                                          product_reason, placed=unbound is None)
                 if unbound is not None:
                     # The ecosystem's own account of why nothing placed this step. The claim is
                     # unplaced for that reason, whoever else was bound in the scenario.
@@ -786,7 +1111,15 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                 elif interaction in NEEDS_BROWSER and not uses_browser:
                     verdict = "gap"
                 elif interaction in NEEDS_BROWSER:
+                    # A browser claim the run actually paid for. When the product declares a route
+                    # for it, the browser is re-verifying the developer's work rather than deciding
+                    # anything (AC1); when it does not, the claim stays `distinct`.
                     verdict = "distinct"
+                    if product["state"] == PRODUCT_FOUND:
+                        verdict = "repeats_product"
+                        # The rule that decided it, in the reader's words, beside the rule that
+                        # placed the claim: the evidence is the product's, so it is named here too.
+                        why = f"{why}, and {product['reason']}"
                 elif uses_browser:
                     verdict = "review"
                 else:
@@ -818,8 +1151,13 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                     "sources_assessed": assessed,
                     "sources_missing": list(missing) if assessed else None,
                     "assessment": assessment_record,
+                    # What the product said about this claim, always - found, zero, not_assessable
+                    # or none, with the matched surface, route and word when there was a match
+                    # (TESTOPS-72, AC1). A claim nobody could judge against the product says why.
+                    "product": product,
                     "proposed_action": (_unbound_action(unbound) if unbound is not None
-                                        else _proposed_action(interaction, clause, verdict, why)),
+                                        else _proposed_action(interaction, clause, verdict, why,
+                                                              product)),
                     "support": support,
                     "evidence_key": evidence_key,
                     "uses_browser": uses_browser,
@@ -854,7 +1192,7 @@ def analyse(features, bindings, surfaces, uri_for_path, budget: dict | None = No
                 claims.append(Claim(
                     subject_ref=ref,
                     statement=(_unbound_statement(unbound) if unbound is not None else
-                               _statement(interaction, clause, verdict, instrument, why)),
+                               _statement(interaction, clause, verdict, instrument, why, product)),
                     verdict=verdict,
                     confidence=0.8,
                     evidence=[Evidence(uri=uri_for_path(feat.path), line=step.line, note=step.text)],

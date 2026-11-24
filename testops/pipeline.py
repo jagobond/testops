@@ -33,7 +33,7 @@ def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
 
-RAISES = {"review", "gap", "duplicate"}
+RAISES = {"review", "gap", "duplicate", "repeats_product"}
 
 
 def _fingerprint(analyser_name: str, claim) -> str:
@@ -706,7 +706,14 @@ def run_level_fitness(project: Project, token: str,
                                        assessment=assessment,
                                        commit=test_repo.commit,
                                        support_index=support_index,
-                                       extractor=extractor, unmatched=unmatched)
+                                       extractor=extractor, unmatched=unmatched,
+                                       # What the surface reader made of the product arm, so a
+                                       # browser claim can be judged against it - or say that it
+                                       # could not be (TESTOPS-72). The state and its reason travel
+                                       # together: a run that found no surface and a run that could
+                                       # not read the product are different facts.
+                                       product_state=discovery.state,
+                                       product_reason=discovery.reason)
 
     # What this run placed, what it did not, and why - recorded with the snapshot so the run page
     # can still say it months later (AC3), and so an unreadable declaration is visible rather than
@@ -760,7 +767,8 @@ def run_level_fitness(project: Project, token: str,
                    "surfaces": len(surfaces), "budget": budget})),
         )
         if _emit(conn, case_id, level_fitness.name, c,
-                 "high" if c.verdict in ("review", "gap") else "info"):
+                 "high" if c.verdict in ("review", "gap")
+                 else ("medium" if c.verdict == "repeats_product" else "info")):
             case_ids.append(case_id)
         else:
             conn.execute("DELETE FROM case_ WHERE id = ?", (case_id,))
@@ -777,6 +785,14 @@ def run_level_fitness(project: Project, token: str,
                             # beside the count.
                             "surfaces_state": discovery.state,
                             "surfaces_reason": discovery.reason,
+                            # Two counts that are not each other (TESTOPS-72, AC6): claims the
+                            # product's own routes show are repeats of work already done, and
+                            # claims that needed the product and could not be judged against it.
+                            "repeats_product": sum(1 for c in claims
+                                                   if c.verdict == "repeats_product"),
+                            "product_not_consulted": sum(
+                                1 for c in claims
+                                if (c.detail.get("product") or {}).get("state") == "not_assessable"),
                             "ecosystems": ecosystems_record,
                             "placement": placement,
                             "read": _counts(arms), "skipped": _skips(arms), "budget": budget})
