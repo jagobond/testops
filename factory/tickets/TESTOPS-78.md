@@ -2,7 +2,7 @@
 id: TESTOPS-78
 title: A verb-less assertion still accuses, and the near miss is never shown
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-72
 ---
