@@ -76,11 +76,17 @@ _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 # thought of. An unlisted word therefore means an **unscreened name** - this screen does not claim to
 # know every credential noun, and no reader should infer that it does.
 #
-# What holds when the list fails is the **value shape**, which is word-free and needs nobody to have
-# thought of the word first: the pair rule, the PEM block, the JWT, the issued-prefix bodies, the
-# base64/entropy floor, and (TESTOPS-65 AC4) a bare `key`/`apikey` pair carrying a literal value
-# rather than a slot. Those rules are the real floor; the vocabulary is a convenience laid on top of
-# them, and every value-shaped rule is written to fire on a name nobody has listed.
+# What holds when the list fails is the **value shape**, divided in two (TESTOPS-68 AC4) because the
+# earlier comment claimed every value rule was word-free and that was not true:
+#
+#   * **shape-only** - no vocabulary is read at all: the PEM block, the JWT, the known issued-token
+#     prefixes (with their real bodies and truncations), the base64/entropy floor, and the inline
+#     password in a URL (`scheme://user:secret@host`, TESTOPS-68 AC3). These fire on a name nobody
+#     has listed, which is why they are the floor this screen stands on;
+#   * **vocabulary-dependent** - a credential word has to be known first: the `name=value` pair whose
+#     name is a strong or context word, the instance rule for a determiner-marked name, the
+#     qualification rule for `key`, and the bare `key` pair. They catch what the words name, and
+#     nothing else; the bare `key` pair is word-free only in the sense that `key` itself is known.
 #
 # Credential words are matched singular and plural alike, so `passwords-list` and `password-list` are
 # decided by the same rule instead of by an accident of spelling (TESTOPS-59 AC3).
@@ -126,9 +132,16 @@ _CONTEXT_PAIR = re.compile(rf"(?i)(?<![A-Za-z0-9])({_CONTEXT_WORDS})[ \t]*[:=][ 
 # TESTOPS-65 AC4: a *bare* `key` has no qualifier to make it a credential word, so it is the value
 # that decides. The lookbehind excludes `_` and `-` as well as alphanumerics, which is what keeps
 # `sort_keys=True`, `sorting_keys=asc` and `primary_key=id` - the settings this product really has -
-# out of the rule; and it excludes a space, which is what keeps the sentence "the key: it is in the
-# vault" prose rather than a pair (the TESTOPS-63 boundary, kept).
-_BARE_KEY_PAIR = re.compile(r"(?i)(?:^|(?<=[^A-Za-z0-9_\s]))keys?[ \t]*[:=][ \t]*"
+# out of the rule.
+#
+# TESTOPS-68 AC1 states the distinguishing rule exactly: a bare key pair is refused where it *begins
+# a line* of configuration - at the start of the value, after a newline (with optional indentation),
+# or after a separator such as `;` or `,` - and accepted where it stands inside a sentence. The
+# lookbehind therefore excludes horizontal whitespace only (space and tab), so a preceding newline is
+# a line boundary while "the key: it is in the vault" is prose; `[ \t]*` after the boundary lets an
+# indented settings line be read as a line. It is a line-boundary rule, not a wider whitespace class:
+# allowing any whitespace in the lookbehind is what accepted `auth = none\nkey = hunter2`.
+_BARE_KEY_PAIR = re.compile(r"(?im)(?:^|(?<=[^A-Za-z0-9_ \t]))[ \t]*keys?[ \t]*[:=][ \t]*"
                             r"(?P<value>[^\s,;]+)")
 # The key family as a *name*: the spellings AC3 normalises to one reading.
 _KEY_FAMILY = re.compile(r"(?i)^(?:keys?|apikeys?|api[ _-]?keys?|apikey|accesskeys?|sshkeys?)$")
@@ -144,8 +157,10 @@ _REFERENCE_VALUE = re.compile(
         | [.~]?[/\\] | [A-Za-z]:[\\/] | https?://    # a path or a URL: a location, not a secret
         )[^\s]*$""")
 # A URL that carries its own password - `scheme://user:secret@host/db` - is not a location: the
-# credential is written into it. `dsn=postgres://app:«secret»@db/qa` is the secret itself, while
-# `dsn=postgres://db.example/qa` and `cert=/etc/ssl/ca.pem` are references.
+# credential is written into it. `dsn=postgres://app:***@db/qa` is the secret itself, while
+# `dsn=postgres://db.example/qa` and `cert=/etc/ssl/ca.pem` are references. TESTOPS-68 AC3: this is a
+# **floor**, not a gate - it is checked anywhere in a value, beside a credential word or without one,
+# because a password in a URL is a shape that needs nobody to have thought of the word `dsn`.
 _INLINE_PASSWORD = re.compile(r"(?i)://[^/@\s]*:[^/@\s]*@")
 
 
@@ -342,7 +357,6 @@ _KEY_QUALIFIERS = frozenset({
     "api", "ssh", "access", "private", "secret", "signing", "encryption", "auth", "deploy", "master",
     "client", "public", "gpg", "hmac", "session", "storage", "subscription", "license", "webhook",
 })
-_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 
 
 def _split_merged(part: str) -> list[str]:
@@ -364,19 +378,25 @@ def _split_merged(part: str) -> list[str]:
 
 
 def _credential_parts(name: str) -> list[str]:
-    """The parts any rule reads a name by: separators and camel case undone, merged keys split.
+    """The parts any rule reads a name by: separators and merges undone.
 
     Called before the rule sees the name, so qualification is a property of the name rather than of
     its spelling (TESTOPS-65 AC3). `api_key`, `api-key`, `apiKey` and `apikey` all arrive as
     `["api", "key"]`, and `the-signing-key` as `["the", "signing", "key"]`.
+
+    TESTOPS-68 AC2: a capital letter is not a word boundary. The earlier version split camel
+    boundaries first, which invented a bare `Key` out of `usbKey` (`["usb", "Key"]`) and refused
+    `the-usbKey` while accepting `the-usbkey` - the verdict decided by capitalisation. A camel
+    segment is one segment of a longer word, not a bare credential word, exactly as the merged
+    spelling of the same word is (`usbkey`, `hotkey`). The only split inside a word is the one a
+    *known qualifier* licenses (`apiKey`, `sshKey`, `privateKey`), which is the same closed class
+    that already decides `apikey`; qualification is read from the letters, never from the case.
     """
     parts: list[str] = []
     for raw in re.split(r"[^A-Za-z0-9]+", name):
         if not raw:
             continue
-        for piece in _CAMEL_BOUNDARY.sub("-", raw).split("-"):
-            if piece:
-                parts.extend(_split_merged(piece))
+        parts.extend(_split_merged(raw))
     return parts
 # The same qualification in the pair branch: a pair whose *name* is a determiner plus `key`
 # (`my-key=hunter2`, `the_keys: abc`) is a credential name, while `sort_keys=True` - the name a
@@ -586,8 +606,10 @@ def _looks_like_secret(value: str) -> str | None:
 
     The value is scanned, not prefix-matched: a real token, pair, JWT or PEM block anywhere in the
     string is a credential (TESTOPS-59 AC1). The vocabulary is knowingly incomplete (TESTOPS-65 AC5):
-    a credential *name* built from a word nobody listed is unscreened, which is why the value-shape
-    rules below - pair, PEM, JWT, prefix, entropy - are the floor this screen really stands on.
+    a credential *name* built from a word nobody listed is unscreened. TESTOPS-68 AC4 states where
+    the floor actually is: shape-only rules (PEM, JWT, known issued prefixes, the base64/entropy
+    floor, and an inline password in a URL) need nobody to have thought of the word, while the pair,
+    instance and `key`-qualification rules depend on the vocabulary and catch only what it names.
     Residual risk, stated rather than implied: an
     unrecognised format is not detected at all; a covered prefix whose body is too short to tell a
     word from a fragment (below eight characters, or all lower-case letters) is a name and is
@@ -600,6 +622,14 @@ def _looks_like_secret(value: str) -> str | None:
     plain = (value or "").strip()
     if not plain:
         return None
+    # 0. TESTOPS-68 AC3: a password written into a URL (`scheme://user:secret@host`) is a shape, not
+    #    a vocabulary lookup. It is refused anywhere in the value, with or without a credential word
+    #    beside it, which is what makes this a floor: `postgres://app:secret@db/qa` on its own is
+    #    caught here, before any rule asks whether somebody listed `dsn`. The reason names the shape
+    #    and never the secret.
+    if _INLINE_PASSWORD.search(plain):
+        return ("it embeds a password in a URL: the 'scheme://user:password@host' form carries the "
+                "credential inside the address")
     # 1. A pasted `name=value` (or `name: value`) pair: the shape a credential arrives in. The reason
     #    names the field, never the value. TESTOPS-65 AC4: a key-family name whose value is a slot
     #    reference (`${API_KEY}`, `from-env`, `os.environ[...]`) names where the credential lives and
