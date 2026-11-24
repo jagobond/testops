@@ -1,0 +1,33 @@
+You are the reviewer on the TestOps factory. Judge TESTOPS-61 - the identifier rule now reads every part, and it
+distinguishes an instance label from a statement by looking for a finite verb or a negator rather than by length. That is
+better than the ticket asked for, and it is also a new exemption, so the question is whether it can be abused.
+
+Repository: worktree C:/Users/Chester/Projects/testops-t61 (branch `factory/testops-61-grammar-fix`). Only here.
+Ticket: factory/tickets/TESTOPS-61.md ; Build: factory/reports/2026-11-24/TESTOPS-61-build.md
+The finding it fixes: factory/reports/2026-11-24/TESTOPS-59-review.md, "The grammatical rule, judged".
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+
+HARD RULES
+- Never write to the live store or contact port 8791. Copy `data/`, serve on a free port.
+- **Check the two named cases both ways:** `this-is-not-a-password` accepted, `acme-their-password` refused, over HTTP
+  through the service Name field, with nothing echoed. Then `acme-their-prod-db-password` (the build's own harder case)
+  must be refused, because a length rule would have let it through and this rule should not.
+- **Attack the new exemption.** The rule accepts anything containing a finite verb or a negator. Try to smuggle a
+  credential INSTANCE past it: `my-password-is-here`, `the-token-is-abcd1234`, `not-my-password`, `never-the-api-token`,
+  `my-secret-has-value`, `is-my-password`, `has-my-token`, `no-password-yet`, `this-token-was-leaked`,
+  `x-not-a-token-but-abcdef`. Which are accepted, and does any of them name a particular credential while reading as a
+  sentence? An exemption that a user can reach for by typing a verb is a hole in a politeness rule; say how big.
+- **Judge the grammar claim honestly.** The build says determiners, finite verbs and negators are all closed classes and
+  none of the lists names a credential, product or vendor. Read the constants and verify that claim: is every entry
+  genuinely a function word, and do the verb/negator lists stay small enough to be closed?
+- **AC3 truncation:** confirm `github_pat_` + 22 characters is now refused (or warned) with a reason that says it is too
+  short for the format, and that a FULL 82-character fine-grained token is still refused. Then confirm a genuine
+  non-token that merely starts with the prefix (e.g. `github_pat_notes.md`) is not refused for the wrong reason.
+- **AC6 no weakening:** re-run the T59 leak probes (`the key is ghp_<36>`, prose JWT, PEM inside a sentence,
+  `notes: name=token=abc123`) - all refused - and the twenty ordinary values - all accepted. Report both lists' results.
+- **AC4:** the vault-token vendor appeal is gone and the reason given is the one that holds for `session-token`.
+- **Suite:** contract suite green; full suite green; no case-page golden changed.
+- Write exactly one file: factory/reports/2026-11-24/TESTOPS-61-review.md with: ## Verdict; ## The two named cases;
+  ## Attacking the verb exemption (my ten); ## Is the claim true; ## Truncation; ## No weakening; ## Contract suite;
+  ## Three sharpest concerns.
+- Reply with the verdict and a summary under 250 words.
