@@ -131,11 +131,46 @@ def test_a_matched_claim_carries_the_surface_the_route_and_the_word():
 
 
 def test_a_claim_the_product_is_not_evidence_about_says_so():
-    """AC1: a claim settled without a browser records `none`, not a zero it never looked for."""
+    """AC1, TESTOPS-79 AC7: a KP claim the run drove a browser for is assessed, not exempt.
+
+    ``the page is served with the room list`` is settled by the page the server sends. Before
+    TESTOPS-79 it recorded the product as irrelevant and a whole class of browser claims never
+    reached the rule; now the product is read for it. Its verdict stays ``review`` - the browser was
+    the waste - and the product record says what the product's surfaces had to say (here ``zero``:
+    the one shared word is carried by two of three surfaces, so it is the product's subject).
+    """
     claim = _analyse(WITH_ROUTE)[SERVED]
     assert claim.detail["interaction_code"] == "KP"
+    product = claim.detail["product"]
+    assert product["state"] == "zero"
+    assert product["needs_browser"] is False
+    assert "shares a meaningful word" in product["reason"]
+    assert claim.verdict == "review"
+
+
+def test_a_kp_claim_with_no_browser_says_why_the_product_is_not_evidence():
+    """AC7's other half: where no browser ran there is nothing to repeat, and the record says so.
+
+    The same KP claim in an API suite is ``distinct`` - no browser was spent - and the product
+    record names that as the reason it was not asked, rather than the old blanket "does not need a
+    browser" that also covered browser runs.
+    """
+    text = "the page is served with the room list"
+    feature = gherkin.parse("features/served.feature",
+                            f"Feature: served\n  Scenario: served\n    Then {text}\n")
+    assert feature is not None
+    suite = stepbindings.suite_of("features/served.feature")
+    bindings = [stepbindings.Binding(pattern=text, verb="Then", cls="ServedSteps",
+                                     path="steps/ServedSteps.cs", layer="api", suite=suite)]
+    claims = level_fitness.analyse(
+        features=[feature], bindings=bindings, surfaces=list(WITH_ROUTE),
+        uri_for_path=lambda path: f"github:fixture/fixture@deadbeef:{path}",
+        budget={"calls": 0, "tokens_in": 0, "tokens_out": 0}, product_state="found")
+    claim = claims[0]
+    assert claim.detail["interaction_code"] == "KP"
     assert claim.detail["product"]["state"] == "none"
-    assert "does not need a browser" in claim.detail["product"]["reason"]
+    assert "did not drive a browser" in claim.detail["product"]["reason"]
+    assert claim.verdict == "distinct"
 
 
 def test_a_product_read_with_no_match_records_zero_and_not_silence():
@@ -429,7 +464,7 @@ def test_the_run_page_says_so_when_the_product_could_not_be_consulted(tmp_path, 
         conn.close()
 
     assert result.stats["repeats_product"] == 0
-    assert result.stats["product_not_consulted"] == 1
+    assert result.stats["product_not_consulted"] == 2
     text = page.decode("utf-8")
     section = text.split("What the product says", 1)[1].split("<h2", 1)[0]
     assert "could not be consulted" in section
@@ -619,8 +654,8 @@ def test_the_run_page_counts_the_claims_it_refused_separately(tmp_path, monkeypa
     assert status == 200
     text = page.decode("utf-8")
     section = text.split("What the product says", 1)[1].split("<h2", 1)[0]
-    assert ("1 claim shares a noun with a product route but was not counted "
-            "(verb differs 0 / no intent 1)") in section
+    assert (("1 claim shares a noun with a product route but was not counted "
+             "(verb differs 0 / no intent 1 / display copy 0)") in section)
     assert "could not be consulted" not in section
 
 
@@ -657,3 +692,103 @@ def test_a_near_miss_is_reachable_from_its_run_page_and_from_its_scenarios_case_
     assert PRESENT in case_text
     assert "DELETE /booking/{id}" in case_text
     assert "no act this rule recognises" in case_text
+
+
+# ------------------------------------------------- TESTOPS-79: display copy is not the subject
+
+# The first real corpus run's exact sentences. Two are the contact feature's banner assertions;
+# the third is the one claim of the original nine that is defensible.
+BANNER = "Visitor will get Booking Successful! message"
+CONTACT = ("Visitor 'Jhon Doe' will get Thanks for getting in touch message regarding "
+           "subject 'Special Accommodation'")
+ROOM_CREATION = ("New '<room_type>' type '<accessibility>' room '<room_name>' priced at "
+                 "'<room_price>' GBP with '<features>' will be created")
+
+MESSAGE = _surface("GET /{id:[0-9]*}", "get message")
+# Six surfaces, so "message" in one of them is specific rather than the product's subject.
+DISPLAY_CORPUS = (MESSAGE, GET_ROOM, POST_ROOM, BRANDING, AUTH, REPORTS)
+
+
+def test_a_word_that_occurs_only_in_display_copy_is_not_a_candidate_shared_word():
+    """AC1, the real corpus: `message` is part of a banner, not an entity the product publishes.
+
+    The room-creation assertion beside it is a repeat on the same corpus, so the rule cannot be
+    satisfied by refusing everything - the difference is the word, not the product.
+    """
+    claim = _verb_claim(BANNER, DISPLAY_CORPUS)
+    product = claim.detail["product"]
+    assert claim.verdict == "distinct"
+    assert product["state"] == "zero"
+    assert product["near_miss"] is True
+    assert product["near_miss_kind"] == "display_copy"
+    assert product["route"] == "GET /{id:[0-9]*}"
+    assert product["word"] == "message"
+    assert product["display_text"] == "Booking Successful! message"
+
+    # The contact feature's sibling, same shape.
+    contact = _verb_claim(CONTACT, DISPLAY_CORPUS).detail["product"]
+    assert contact["state"] == "zero"
+    assert contact["near_miss_kind"] == "display_copy"
+    assert contact["word"] == "message"
+    assert contact["display_text"] == "Thanks for getting in touch message"
+
+    # AC2: the defensible case survives, on the same surfaces.
+    room = _verb_claim(ROOM_CREATION, DISPLAY_CORPUS)
+    assert room.verdict == "repeats_product"
+    assert room.detail["product"]["route"] == "POST /room"
+    assert room.detail["product"]["word"] == "room"
+    assert room.detail["product"]["display_copy"] is False
+
+
+def test_the_refusal_names_the_word_and_the_copy_it_sits_in():
+    """AC3: the reason is a sentence a reader can act on, and it quotes the display copy."""
+    product = _verb_claim(BANNER, DISPLAY_CORPUS).detail["product"]
+    reason = product["reason"]
+    assert '"message"' in reason
+    assert "display copy" in reason
+    assert "Booking Successful! message" in reason
+    assert "not counted as a repeat" in reason
+    assert "GET /{id:[0-9]*}" in reason
+
+    rendered = app.near_miss_sentence(product)
+    assert "\u201cmessage\u201d" in rendered
+    assert "display copy" in rendered
+    assert "Booking Successful! message" in rendered
+
+
+def test_a_quoted_placeholder_is_a_slot_not_display_copy():
+    """AC2's pin: `'<room_name>'` names a parameter, so the words in it stay candidates.
+
+    A rule that treated every quoted run as copy would refuse this assertion on `room`, which is
+    the true positive the ticket exists to protect.
+    """
+    assert level_fitness._display_copy(ROOM_CREATION) == {}
+    # A slot with no unquoted occurrence is still a candidate word.
+    slot_only = "New '<room_name>' will be created"
+    assert level_fitness._display_copy(slot_only) == {}
+    claim = _verb_claim(slot_only, DISPLAY_CORPUS)
+    assert claim.verdict == "repeats_product"
+    assert claim.detail["product"]["word"] == "room"
+
+
+def test_quoted_copy_is_not_the_assertions_intent():
+    """AC6: `Visitor sees "Booking created"` records `see`, never `create` from the quoted copy."""
+    assertion = 'Visitor sees the booking with "Booking created"'
+    product = _verb_claim(assertion, BOOKING_CORPUS).detail["product"]
+    assert product["assertion_verb"] == "see"
+    assert product["surface_verb"] == "GET"
+    # The quoted `create` did not outrank the sentence's own verb and hand it a POST route.
+    assert product["route"] == "GET /booking/{id}"
+    # Read without the rule, the quoted copy *would* supply the intent - which is the fault.
+    assert level_fitness._assertion_intent(assertion) == ("create", frozenset({"POST"}))
+
+    # Both directions: with only a POST surface the claim is refused, and the refusal still
+    # records the sentence's verb. The quoted string cannot make the POST route agree.
+    post_booking = _surface("POST /booking", "create booking")
+    post_only = (post_booking, BRANDING, AUTH, GET_ROOM, REPORTS)
+    refused = _verb_claim(assertion, post_only).detail["product"]
+    assert refused["assertion_verb"] == "see"
+    assert refused["route"] == "POST /booking"
+    assert refused["state"] == "zero"
+    assert refused["verb_agrees"] is False
+

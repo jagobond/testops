@@ -319,19 +319,23 @@ def test_the_cotw_run_still_says_ninety_five_items():
         "Assessed: code and test code were consulted and returned 95 items."
 
 
+# The run this criterion was written against. It is pinned rather than "the newest", because the
+# build store now also holds a later run whose product arm was read (the Java reader landed after
+# this run), and that run is the honest subject of a different criterion. Pinning keeps this test
+# about the fact it exists to prove: a run whose `.java` was skipped says so in words.
+PINNED_RB_RUN = "restfulbooker-levels-20261123T132456"
+
+
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
 def test_the_restfulbooker_run_names_the_java_it_could_not_read():
     conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        row = conn.execute(
-            "SELECT id FROM run WHERE project = 'restfulbooker' AND analyser = 'level_fitness'"
-            " ORDER BY started_at DESC LIMIT 1").fetchone()
-        if row is None:
-            pytest.skip("no restfulbooker levels run in this store")
-        run = queries.run_read(conn, row["id"])
+        run = queries.run_read(conn, PINNED_RB_RUN)
     finally:
         conn.close()
+    if run is None:
+        pytest.skip(f"the pinned run {PINNED_RB_RUN} is not in this store")
     sentence = run["assessment"]["sentence"]
     assert "code was not read" in sentence, sentence
     assert "142 .java files" in sentence, sentence

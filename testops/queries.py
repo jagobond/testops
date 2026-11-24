@@ -332,8 +332,10 @@ def product_evidence(conn, run_id: str) -> dict:
 
     ``near_miss`` counts claims the rule looked at and declined (TESTOPS-78, AC3): a noun shared with
     a product route that was not counted as a repeat, split by why - ``near_miss_verb_differs`` (the
-    route's method settles a different act) and ``near_miss_no_intent`` (the assertion names no act
-    the intent table knows). They are counted here, never folded into ``repeats`` or ``unconsulted``.
+    route's method settles a different act), ``near_miss_no_intent`` (the assertion names no act
+    the intent table knows) and ``near_miss_display_copy`` (the shared word occurs only in text the
+    assertion reproduces, so it is not the subject of the check - TESTOPS-79). They are counted
+    here, never folded into ``repeats`` or ``unconsulted``.
     """
     rows = conn.execute(
         """SELECT c.id, c.verdict, c.interaction_code,
@@ -341,7 +343,7 @@ def product_evidence(conn, run_id: str) -> dict:
                     ORDER BY i.id DESC LIMIT 1) AS output
              FROM claim c WHERE c.run_id = ? ORDER BY c.id""", (run_id,)).fetchall()
     recorded = repeats = unconsulted = examined = 0
-    near_miss = near_miss_verb_differs = near_miss_no_intent = 0
+    near_miss = near_miss_verb_differs = near_miss_no_intent = near_miss_display_copy = 0
     for row in rows:
         detail = _json(row["output"]) if row["output"] else {}
         product = detail.get("product") if isinstance(detail, dict) else None
@@ -354,7 +356,10 @@ def product_evidence(conn, run_id: str) -> dict:
             unconsulted += 1
         elif product.get("near_miss"):
             near_miss += 1
-            if product.get("near_miss_kind") == "no_intent" or not product.get("assertion_verb"):
+            if product.get("near_miss_kind") == "display_copy":
+                near_miss_display_copy += 1
+            elif (product.get("near_miss_kind") == "no_intent"
+                  or not product.get("assertion_verb")):
                 near_miss_no_intent += 1
             else:
                 near_miss_verb_differs += 1
@@ -363,7 +368,8 @@ def product_evidence(conn, run_id: str) -> dict:
     return {"recorded": recorded, "claims": len(rows), "repeats": repeats,
             "unconsulted": unconsulted, "matched": examined,
             "near_miss": near_miss, "near_miss_verb_differs": near_miss_verb_differs,
-            "near_miss_no_intent": near_miss_no_intent}
+            "near_miss_no_intent": near_miss_no_intent,
+            "near_miss_display_copy": near_miss_display_copy}
 
 
 def near_miss_claims(conn, run_id: str, scenarios: set[str] | None = None) -> list[dict]:
