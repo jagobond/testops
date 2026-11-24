@@ -69,6 +69,27 @@ p.provenance { margin:0 0 1rem; }
 p.provenance .fn { font-weight:600; color:var(--ink); }
 ul.context { margin:.35rem 0 0; padding-left:1.1rem; color:var(--dim); }
 ul.context li { margin:.2rem 0; }
+/* The source band (TESTOPS-73). Tags are links a reader can follow and keyboard focus can reach;
+   a source that was needed and could not be consulted carries the words "not consulted", so the
+   difference is never colour alone. */
+section.sources { margin:1rem 0 .6rem; }
+h2.sources-h { font-size:.95rem; letter-spacing:.03em; text-transform:uppercase; color:var(--dim);
+               margin:0 0 .4rem; }
+div.tags { display:flex; flex-wrap:wrap; gap:.4rem; margin:0 0 .5rem; }
+.tag { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:.22rem .7rem;
+       background:#fff; color:var(--ink); font-size:.88rem; line-height:1.4; }
+a.tag { text-decoration:none; }
+a.tag:hover { background:#f6f4f0; }
+.tag:focus { outline:2px solid var(--accent); outline-offset:2px; }
+.tag .tag-kind { font-weight:600; }
+.tag .tag-state { font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; color:var(--dim);
+                  margin-left:.2rem; }
+.tag .tag-where { color:var(--dim); font-size:.8rem; }
+.tag.unconsulted { border-style:dashed; background:#fbfaf7; color:var(--dim); }
+.tag.unconsulted .tag-state { font-weight:600; }
+.tag .tag-reason { display:block; font-size:.84rem; color:var(--dim); margin-top:.1rem; }
+p.band-note, p.test-only { margin:.2rem 0; }
+p.test-only { font-weight:600; }
 figure.snippet { margin:.7rem 0 1rem; }
 figure.snippet figcaption { font-size:.86rem; color:var(--dim); margin-bottom:.3rem; }
 pre.snippet { margin:0; background:#f3f1ec; border:1px solid var(--line); border-radius:5px;
@@ -84,4 +105,4 @@ aside.xref p { margin:.15rem 0; }
 nav.site { margin-top:3rem; border-top:1px solid var(--line); padding-top:.8rem;
            font-size:.92rem; color:var(--dim); }
 </style></head>
-<body><main><p class="meta"><a href="/">← all cases</a> · <a href="/runs">all runs</a></p><h1>cotw · Level fitness</h1><p class="meta"><span class="badge">No findings</span> · Analysed a fixed time ago at cotw-bdd@a3f19853</p><p class="meta">This row raised no finding, so it is not a case. The run it recorded is <a href="/run/run-09">run-09</a>.</p><h2>No findings in this run</h2><p>This run analysed 0 feature files and 0 scenarios: no project file is stored for this snapshot, so no exclusion patterns were read and all 0 stored feature files were in the build, and the level fitness analyser recorded 1 claim in this run.</p><p class="meta">Assessed: code and test code were consulted and returned 48 items.</p><h2 class="section">What this run could not consult</h2><p>Not connected when this run looked:</p><p>Jira — blocked by Quilter policy: no credentials can be created for it.</p><p>Azure DevOps — blocked by Quilter policy: no credentials can be created for it.</p><p>They were never consulted, so nothing here says they held nothing — only that this run was never checked against them.</p><nav class="site" aria-label="All pages"><a href="/">← all cases</a> · <a href="/runs">all runs</a> · <a href="/config">configure projects and services</a></nav></main></body></html>
+<body><main><p class="meta"><a href="/">← all cases</a> · <a href="/runs">all runs</a></p><h1>cotw · Level fitness</h1><p class="meta"><span class="badge">No findings</span> · Analysed a fixed time ago at cotw-bdd@a3f19853</p><section class="sources" aria-labelledby="sources-heading"><h2 class="sources-h" id="sources-heading">Sources this case examined</h2><div class="tags" role="list"><span role="listitem"><span class="tag" tabindex="0" role="note" aria-label="Test repository: jagobond/cotw-bdd, this run recorded no assertion to open"><span class="tag-kind">Test repository</span> <span class="tag-name">jagobond/cotw-bdd</span> <span class="tag-where">this run recorded no assertion to open</span> <span class="tag-state">consulted</span></span></span><span role="listitem"><a class="tag" href="https://github.com/jagobond/cotw-continuity" aria-label="Product repository: jagobond/cotw-continuity, the run did not record its commit"><span class="tag-kind">Product repository</span> <span class="tag-name">jagobond/cotw-continuity</span> <span class="tag-where">the run did not record its commit</span> <span class="tag-state">consulted</span></a></span></div><p class="meta band-note">A kind that is not tagged here was not linked to this case, so an absent tag means it was not part of the evidence.</p></section><p class="meta">This row raised no finding, so it is not a case. The run it recorded is <a href="/run/run-09">run-09</a>.</p><h2>No findings in this run</h2><p>This run analysed 0 feature files and 0 scenarios: no project file is stored for this snapshot, so no exclusion patterns were read and all 0 stored feature files were in the build, and the level fitness analyser recorded 1 claim in this run.</p><p class="meta">Assessed: code and test code were consulted and returned 48 items.</p><h2 class="section">What this run could not consult</h2><p>Not connected when this run looked:</p><p>Jira — blocked by Quilter policy: no credentials can be created for it.</p><p>Azure DevOps — blocked by Quilter policy: no credentials can be created for it.</p><p>They were never consulted, so nothing here says they held nothing — only that this run was never checked against them.</p><nav class="site" aria-label="All pages"><a href="/">← all cases</a> · <a href="/runs">all runs</a> · <a href="/config">configure projects and services</a></nav></main></body></html>
