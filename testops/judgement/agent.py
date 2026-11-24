@@ -171,13 +171,37 @@ class Outcome:
 
 # ---------------------------------------------------------------- configuration
 
-_TOKEN_CACHE: dict[str, object] = {"at": None, "token": ""}
+# The resolved token, its source, and the probes that produced them. ``imds`` and ``az`` are the
+# token-free records :mod:`testops.judgement.client` keeps; they are cached beside the token so a
+# page can explain a missing token without asking the metadata service again (TESTOPS-89).
+_TOKEN_CACHE: dict[str, object] = {"at": None, "token": "", "source": "",
+                                   "imds": None, "az": None}
 
 
 def reset_token_cache() -> None:
     """Forget the resolved token. For a test, and for an operator who has just logged in."""
     _TOKEN_CACHE["at"] = None
     _TOKEN_CACHE["token"] = ""
+    _TOKEN_CACHE["source"] = ""
+    _TOKEN_CACHE["imds"] = None
+    _TOKEN_CACHE["az"] = None
+
+
+def _resolve(env: Mapping[str, str], clock: float) -> tuple[str, str]:
+    """``(token, source)``, resolved at most once per TTL, with the probes kept beside them."""
+    supplied = (env.get("TESTOPS_AGENT_TOKEN") or "").strip()
+    if supplied:
+        return supplied, "environment"
+    cached_at = _TOKEN_CACHE.get("at")
+    if not isinstance(cached_at, float) or clock - cached_at > TOKEN_TTL_SECONDS:
+        token = client.managed_identity_token()
+        source = "imds" if token else ""
+        if not token:
+            token = client.az_token()
+            source = "az" if token else ""
+        _TOKEN_CACHE.update(token=token, source=source, at=clock,
+                            imds=client.last_identity_probe(), az=client.last_az_probe())
+    return str(_TOKEN_CACHE.get("token") or ""), str(_TOKEN_CACHE.get("source") or "")
 
 
 def config(environ: Mapping[str, str] | None = None, now: float | None = None) -> Config:
@@ -189,19 +213,125 @@ def config(environ: Mapping[str, str] | None = None, now: float | None = None) -
     """
     env = os.environ if environ is None else environ
     project = (env.get("TESTOPS_AGENT_PROJECT") or "").strip() or client.DEFAULT_PROJECT
-    model = client.model_name(env)
-    supplied = (env.get("TESTOPS_AGENT_TOKEN") or "").strip()
-    if supplied:
-        token = supplied
+    clock = time.monotonic() if now is None else now
+    token, _source = _resolve(env, clock)
+    return Config(project=project, endpoint=client.endpoint(env, project),
+                  model=client.model_name(env), token=token)
+
+
+# How each source of a token is named to a reader.
+TOKEN_SOURCE_LABEL = {"environment": "the environment", "imds": "a managed identity",
+                      "az": "the az CLI"}
+
+
+def diagnosis(environ: Mapping[str, str] | None = None, now: float | None = None) -> dict:
+    """Everything /agent-check states about this process, as plain values and no token.
+
+    The token is resolved through the same cache the case pages use, so the page describes the
+    lookup that is actually in force rather than paying for a second one. ``environment_token`` is a
+    yes/no: the value never enters this dictionary (AC3).
+    """
+    env = os.environ if environ is None else environ
+    project = (env.get("TESTOPS_AGENT_PROJECT") or "").strip() or client.DEFAULT_PROJECT
+    clock = time.monotonic() if now is None else now
+    token, source = _resolve(env, clock)
+    imds = _as_dict(_TOKEN_CACHE.get("imds")) or client.last_identity_probe()
+    az = _as_dict(_TOKEN_CACHE.get("az")) or client.last_az_probe()
+    return {
+        "endpoint": client.endpoint(env, project),
+        "endpoint_variable": client.endpoint_variable(env),
+        "model": client.model_name(env),
+        "model_variable": "TESTOPS_AGENT_MODEL" if (env.get("TESTOPS_AGENT_MODEL") or "").strip() else "",
+        "environment_token": bool((env.get("TESTOPS_AGENT_TOKEN") or "").strip()),
+        "token_obtained": bool(token),
+        "token_source": source,
+        "imds": imds,
+        "az": az,
+    }
+
+
+def _as_dict(value) -> dict:
+    """A cached probe, copied, or ``{}`` when the cache holds nothing usable."""
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def served_sentence(diag: dict) -> str:
+    """One sentence: whether an explanation would be served right now, and if not, why (AC3).
+
+    Built from the diagnosis rather than from a fresh probe, so it says what the process knows at
+    the moment it is asked. It never names a token, only where one would come from.
+    """
+    if diag.get("token_obtained"):
+        origin = TOKEN_SOURCE_LABEL.get(str(diag.get("token_source") or ""), "a token")
+        return f"An explanation would be served right now: this process holds a token from {origin}."
+    imds = diag.get("imds") or {}
+    az = diag.get("az") or {}
+    parts: list[str] = []
+    if not imds.get("attempted"):
+        parts.append("the metadata service was not asked")
+    elif imds.get("answered"):
+        parts.append("the metadata service answered")
     else:
-        clock = time.monotonic() if now is None else now
-        cached_at = _TOKEN_CACHE.get("at")
-        if not isinstance(cached_at, float) or clock - cached_at > TOKEN_TTL_SECONDS:
-            _TOKEN_CACHE["token"] = client.managed_identity_token() or client.az_token()
-            _TOKEN_CACHE["at"] = clock
-        token = str(_TOKEN_CACHE.get("token") or "")
-    return Config(project=project, endpoint=client.endpoint(env, project), model=model,
-                  token=token)
+        described = f"the metadata service answered {imds.get('status')}" \
+            if imds.get("status") is not None else \
+            f"the metadata service did not answer ({imds.get('cause') or 'no cause recorded'})"
+        code = imds.get("error_code")
+        parts.append(f"{described}{' with the error code ' + str(code) if code else ''}")
+    if az.get("answered"):
+        parts.append("the az CLI answered but no token was kept")
+    elif not az.get("present"):
+        parts.append("no az CLI is on this PATH")
+    else:
+        parts.append(f"the az CLI did not answer ({az.get('cause') or 'no cause recorded'})")
+    return f"No explanation would be served right now: {' and '.join(parts)}."
+
+
+def record_diagnosis(conn, diag: dict, now: str | None = None) -> int | None:
+    """Store one diagnosis where the ledger stores everything else, and return its id.
+
+    Nothing in ``diag`` can hold a token: the probe's own record is token-free by construction and
+    the environment is reduced to a yes/no before it arrives here. ``None`` when there is nothing to
+    record - a probe that was never attempted is not evidence of a failure (AC1).
+    """
+    if conn is None:
+        return None
+    imds = diag.get("imds") or {}
+    az = diag.get("az") or {}
+    if not imds.get("attempted") and not az.get("attempted"):
+        return None
+    cur = conn.execute(
+        "INSERT INTO agent_token_probe (at, endpoint, endpoint_variable, model, model_variable,"
+        " environment_token, token_obtained, token_source, imds_attempted, imds_answered,"
+        " imds_status, imds_cause, imds_error_code, imds_detail, imds_api_version, imds_attempt,"
+        " imds_elapsed_ms, imds_attempts, az_present, az_answered, az_cause, az_detail,"
+        " az_elapsed_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (_now(now), str(diag.get("endpoint") or ""), str(diag.get("endpoint_variable") or ""),
+         str(diag.get("model") or ""), str(diag.get("model_variable") or ""),
+         1 if diag.get("environment_token") else 0, 1 if diag.get("token_obtained") else 0,
+         str(diag.get("token_source") or ""), 1 if imds.get("attempted") else 0,
+         1 if imds.get("answered") else 0, imds.get("status"),
+         str(imds.get("cause") or ""), str(imds.get("error_code") or ""),
+         str(imds.get("detail") or "")[:300], str(imds.get("answered_api_version") or ""),
+         int(imds.get("answered_attempt") or 0), int(imds.get("elapsed_ms") or 0),
+         json.dumps(list(imds.get("attempts") or []), sort_keys=True),
+         1 if az.get("present") else 0, 1 if az.get("answered") else 0,
+         str(az.get("cause") or ""), str(az.get("detail") or "")[:300],
+         int(az.get("elapsed_ms") or 0)))
+    conn.commit()
+    return int(cur.lastrowid)
+
+
+def last_probe(conn) -> dict | None:
+    """The most recent stored diagnosis, as the page prints it, or ``None``."""
+    row = conn.execute("SELECT * FROM agent_token_probe ORDER BY id DESC LIMIT 1").fetchone()
+    if row is None:
+        return None
+    out = {key: row[key] for key in row.keys()}
+    try:
+        out["imds_attempts"] = json.loads(out.get("imds_attempts") or "[]")
+    except (ValueError, TypeError):
+        out["imds_attempts"] = []
+    return out
 
 
 # ---------------------------------------------------------------- the stored record
@@ -769,6 +899,21 @@ REFUSALS = {
 }
 
 
+def _record_unconfigured(conn) -> None:
+    """Put today's cause in the ledger when a page finds it has no token (AC1).
+
+    Only when this process has already probed: a page must not spend ten seconds talking to IMDS to
+    decorate its own failure, and a config injected by a test or a caller has probed nothing. When it
+    has probed, the probe is the answer and it belongs beside every other ledger row.
+    """
+    if not isinstance(_TOKEN_CACHE.get("imds"), dict) and not isinstance(_TOKEN_CACHE.get("az"), dict):
+        return
+    try:
+        record_diagnosis(conn, diagnosis())
+    except Exception:  # noqa: BLE001 - a ledger write must never break the page it describes
+        pass
+
+
 def rejection_sentence(outcome: Outcome) -> str:
     """The sentence for a discarded reply: what was wrong with it, and that nothing was added."""
     invented = outcome.detail or "a fact the record does not hold"
@@ -789,6 +934,7 @@ def explain_case(conn, record: dict, *, cfg: Config, completer=None,
     system, user, prompt_hash = prompt(record, model)
 
     if not cfg.configured:
+        _record_unconfigured(conn)
         return Outcome(state=STATE_UNCONFIGURED, model=model, cause="not_configured",
                        detail=cfg.why_not, prompt_hash=prompt_hash)
 

@@ -3118,6 +3118,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/agent-report":
                 self._send(agent_report(conn))
                 return
+            if path == "/agent-check":
+                self._send(agent_check(conn, refresh=bool(_form(query, "refresh"))))
+                return
             m = re.fullmatch(r"/case/([^/]+)/feedback", path)
             if m:
                 body, code = feedback_page(conn, urllib.parse.unquote(m.group(1)),
@@ -3235,7 +3238,10 @@ def agent_report(conn) -> bytes:
             'in the store, so the two can be weighed against each other rather than assumed.</p>',
             '<p class="quiet">Token counts are the provider\'s own usage figures, summed. This page '
             'does not know a price per token and does not invent one: cost is measured in tokens '
-            'here, and a price would be entered from the provider\'s price list.</p>']
+            'here, and a price would be entered from the provider\'s price list.</p>',
+            '<p class="meta">A page with no explanation and no cause is the question '
+            '<a href="/agent-check">can this deployment reach a model?</a> answers, in words, for '
+            'the process that is serving you.</p>']
     body.append('<table>')
     body.append('<tr><th>Variant</th><th>Views</th><th>Explanations shown</th><th>Rejected</th>'
                 '<th>Failed</th><th>Calls</th><th>Cache hits</th><th>Total tokens</th>'
@@ -3296,6 +3302,111 @@ def agent_report(conn) -> bytes:
     else:
         body.append('<p class="quiet">No call has been made, so there is nothing to weigh yet.</p>')
     return page("TestOps \u00b7 the agent, measured", "".join(body))
+
+
+def agent_check(conn, refresh: bool = False) -> bytes:
+    """TESTOPS-89 AC3: what this process knows about getting a token, in words, with no token.
+
+    The page exists because the deployment cannot be looked into (``az containerapp exec`` fails with
+    ClusterExecFailure). It answers the six questions a reader would ask, prints every attempt IMDS
+    was given, and writes the diagnosis into the ledger so the reason outlives the request. The token
+    value is not a fact this page can hold - the probe it renders never carried one.
+    """
+    if refresh:
+        agent.reset_token_cache()
+    diag = agent.diagnosis()
+    probe_id = agent.record_diagnosis(conn, diag)
+    imds = diag.get("imds") or {}
+    az = diag.get("az") or {}
+
+    endpoint_note = (f"set by <span class=\"code\">{esc(diag.get('endpoint_variable'))}</span>"
+                     if diag.get("endpoint_variable")
+                     else "not set, so the address is derived from the project name; neither "
+                          "<span class=\"code\">TESTOPS_AGENT_ENDPOINT</span> nor "
+                          "<span class=\"code\">TESTOPS_FOUNDRY_ENDPOINT</span> is present")
+    model_note = (f"set by <span class=\"code\">{esc(diag.get('model_variable'))}</span>"
+                  if diag.get("model_variable") else "not set, so the default model is used")
+
+    if not imds.get("attempted"):
+        imds_text = "not asked by this process"
+    elif imds.get("answered"):
+        imds_text = (f"answered {esc(imds.get('status'))} with a token, using api-version "
+                     f"<span class=\"code\">{esc(imds.get('answered_api_version'))}</span> "
+                     f"on attempt {esc(imds.get('answered_attempt'))}")
+    else:
+        answered = (f"answered {esc(imds.get('status'))}" if imds.get("status") is not None
+                    else f"did not answer ({esc(imds.get('cause'))})")
+        code = (f", error code <span class=\"code\">{esc(imds.get('error_code'))}</span>"
+                if imds.get("error_code") else "")
+        detail = (f" — {esc(imds.get('detail'))}" if imds.get("detail") else "")
+        imds_text = f"{answered}{code}{detail}"
+
+    if not az.get("attempted"):
+        az_text = ("no az CLI on this PATH" if not az.get("present") else "not asked by this process")
+    elif az.get("answered"):
+        az_text = "answered with a token"
+    else:
+        az_text = f"did not answer ({esc(az.get('cause'))})" + (
+            f" — {esc(az.get('detail'))}" if az.get("detail") else "")
+
+    body = ['<p class="meta"><a href="/">\u2190 all cases</a> \u00b7 <a href="/runs">all runs</a> '
+            '\u00b7 <a href="/agent-report">what the agent costs</a></p>',
+            '<h1>Can this deployment reach a model?</h1>',
+            f'<p class="judgement"><strong class="verdict">'
+            f'{esc(agent.served_sentence(diag))}</strong></p>',
+            '<p>Everything below describes this process as it answered this request. It is read '
+            'from the same lookup the case pages use, and it is written into the ledger, so a '
+            'deployment nobody can open can still say why it has no token.</p>',
+            '<h2 class="section">What is configured</h2>',
+            '<table>',
+            f'<tr><th>Endpoint</th><td><span class="code">{esc(diag.get("endpoint"))}</span> '
+            f'<span class="quiet">({endpoint_note})</span></td></tr>',
+            f'<tr><th>Model</th><td><span class="code">{esc(diag.get("model"))}</span> '
+            f'<span class="quiet">({model_note})</span></td></tr>',
+            f'<tr><th>Token in the environment</th><td>'
+            f'{"yes" if diag.get("environment_token") else "no"} '
+            f'<span class="quiet">(whether <span class="code">TESTOPS_AGENT_TOKEN</span> is set; '
+            f'its value is never read here)</span></td></tr>',
+            f'<tr><th>Managed identity (IMDS)</th><td>{imds_text}</td></tr>',
+            f'<tr><th>The az CLI</th><td>{az_text}</td></tr>',
+            f'<tr><th>A token was obtained</th><td>'
+            f'{"yes, from " + esc(agent.TOKEN_SOURCE_LABEL.get(str(diag.get("token_source")), "")) if diag.get("token_obtained") else "no"}</td></tr>',
+            '</table>']
+
+    attempts = list(imds.get("attempts") or [])
+    if attempts:
+        body.append('<h2 class="section">What the metadata service was asked</h2>')
+        body.append('<p class="meta">Each row is one request: the api-version, the attempt number, '
+                    'what came back and how long it took. A 400 with an error code is usually the '
+                    'whole answer - a wrong resource, a wrong api-version, or an identity the '
+                    'resource does not have.</p>')
+        body.append('<table><tr><th>api-version</th><th>Attempt</th><th>Status</th>'
+                    '<th>Error code</th><th>Exception</th><th>Detail</th>'
+                    '<th>Elapsed (ms)</th></tr>')
+        dash = "\u2014"
+        for attempt in attempts:
+            body.append(
+                f'<tr><td><span class="code">{esc(attempt.get("api_version"))}</span></td>'
+                f'<td>{esc(attempt.get("attempt"))}</td>'
+                f'<td>{esc(attempt.get("status")) if attempt.get("status") is not None else dash}</td>'
+                f'<td>{esc(attempt.get("error_code")) or dash}</td>'
+                f'<td>{esc(attempt.get("exception")) or dash}</td>'
+                f'<td>{esc(attempt.get("detail")) or dash}</td>'
+                f'<td>{esc(attempt.get("elapsed_ms"))}</td></tr>')
+        body.append('</table>')
+    else:
+        body.append('<p class="quiet">The metadata service was not asked: a token was already in '
+                    'the environment, so there was nothing to explain.</p>')
+
+    if probe_id is not None:
+        body.append(f'<p class="quiet">Stored in the ledger as probe {int(probe_id)}, beside the '
+                    f'calls and views. <a href="/agent-check?refresh=1">Ask again now</a> resolves '
+                    f'the token afresh instead of using the copy this process already holds.</p>')
+    else:
+        body.append('<p class="quiet">Nothing was probed, so there is no ledger row to add. '
+                    '<a href="/agent-check?refresh=1">Ask again now</a> resolves the token '
+                    'afresh.</p>')
+    return page("TestOps \u00b7 can this deployment reach a model?", "".join(body))
 
 
 def feedback_page(conn, case_id: str, view: str, vote: str) -> tuple[bytes, int]:
