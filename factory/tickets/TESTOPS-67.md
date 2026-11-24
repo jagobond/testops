@@ -2,7 +2,7 @@
 id: TESTOPS-67
 title: The guard's ignore list is a green channel, and corruption blames the suite
 feature: F1
-status: ready
+status: done
 autonomy: build
 depends_on: TESTOPS-66
 ---

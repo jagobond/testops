@@ -84,6 +84,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-66 | A committed write launders, the index is dead, and git failure blames the suite | F1 | ready | From the T64 review: the excuse checks the path, not the bytes; the index is recorded and never read; a git failure is reported as a suite write |
 | TESTOPS-67 | The guard's ignore list is a green channel, and corruption blames the suite | F1 | ready | From the T66 review: `build/` writes are invisible and report "0 files"; `ls-tree` failure is swallowed into an empty tree; mixed digest alphabets would blame the suite for everything |
 | TESTOPS-68 | The bare-value rule misses the next line, the camel split invents a key, and the URL rule is not a floor | F1 | ready | From the T65 review: `\nkey = hunter2` accepted; `the-usbKey` refused while `the-usbkey` passes; bare `postgres://app:pw@db` unscreened |
+| TESTOPS-69 | The small residuals the credential and guard threads left behind | F1 | ready | Six stated seams collected: tab boundary, inline-password shapes, "0 unreadable", committed build artefacts, name-based pruning, positional prose |
 
 |----|-------|---------|--------|------|
 
