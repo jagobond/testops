@@ -11,7 +11,7 @@ set -euo pipefail
 
 RG="${RG:-rg-testops-demo}"
 LOCATION="${LOCATION:-eastus}"          # eastus, not uksouth: uksouth had no capacity for this
-ACR="${ACR:-testopsdemocr}"
+ACR="${ACR:-testopsdemo30562}"
 ENVNAME="${ENVNAME:-testops-env}"
 APP="${APP:-testops}"
 TAG="${TAG:-$(date +%Y%m%d-%H%M%S)}"
