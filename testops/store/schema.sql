@@ -278,3 +278,67 @@ CREATE TABLE IF NOT EXISTS service (
 );
 
 CREATE INDEX IF NOT EXISTS idx_service_project ON service(project);
+
+-- TESTOPS-88. The agent ledger: what the explanation was asked to do, what it cost, and what a
+-- reader said about it. Additive, like every table above: a store written before this ticket gains
+-- these tables on open and loses nothing. No schema version bump, because no stored row is copied
+-- or rewritten and an older build reading this store ignores tables it does not know.
+--
+-- The verdict is evidence; the explanation is commentary. These tables hold only commentary, and
+-- ``agent_view.variant`` records which page a reader was shown so the two can be weighed against
+-- each other instead of assumed.
+CREATE TABLE IF NOT EXISTS agent_view (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  case_id TEXT NOT NULL,
+  variant TEXT NOT NULL CHECK (variant IN ('on', 'off')),
+  at TEXT NOT NULL,
+  -- What the page actually carried. ``explanation`` and ``cached`` are the two successes; every
+  -- other value is a failure mode, named, so a blank block can never be counted as a served one.
+  served TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT '',         -- the cause, or the model name; never a credential
+  call_id INTEGER                           -- the agent_call this view used, when it made one
+);
+
+CREATE TABLE IF NOT EXISTS agent_call (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  case_id TEXT NOT NULL,
+  variant TEXT NOT NULL,
+  model TEXT NOT NULL,
+  prompt_hash TEXT NOT NULL,
+  tokens_in INTEGER NOT NULL DEFAULT 0,
+  tokens_out INTEGER NOT NULL DEFAULT 0,
+  cached INTEGER NOT NULL DEFAULT 0,        -- 1: served from the store, so it cost nothing
+  wall_ms INTEGER NOT NULL DEFAULT 0,
+  outcome TEXT NOT NULL,                    -- ok | cached | rejected | error
+  cause TEXT NOT NULL DEFAULT ''            -- unreachable | http_429 | empty | ... | not_configured
+);
+
+-- The explanation cache: (case, prompt hash, model) identifies one answer. The prompt hash covers
+-- the prompt text and the model, so a changed record or a changed prompt is a new key rather than a
+-- stale hit.
+CREATE TABLE IF NOT EXISTS agent_explanation (
+  case_id TEXT NOT NULL,
+  prompt_hash TEXT NOT NULL,
+  model TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  tokens_in INTEGER NOT NULL DEFAULT 0,
+  tokens_out INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (case_id, prompt_hash, model)
+);
+
+-- Feedback without JavaScript, cookies or identity. A vote is tied to the view a reader was
+-- looking at, so clicking both links on one page counts once; nothing about the reader is stored.
+CREATE TABLE IF NOT EXISTS agent_feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  case_id TEXT NOT NULL,
+  variant TEXT NOT NULL,
+  verdict TEXT NOT NULL CHECK (verdict IN ('helped', 'did_not_help')),
+  at TEXT NOT NULL,
+  view_id INTEGER NOT NULL,
+  UNIQUE (view_id, case_id, variant)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_view_case ON agent_view(case_id);
+CREATE INDEX IF NOT EXISTS idx_agent_call_case ON agent_call(case_id);
+CREATE INDEX IF NOT EXISTS idx_agent_feedback_case ON agent_feedback(case_id);

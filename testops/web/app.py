@@ -64,6 +64,7 @@ from .. import cases, queries, services, sources
 from ..analysers import cover, is_registered
 from ..extract.ecosystems import UNSUPPORTED as ECOSYSTEM_UNSUPPORTED
 from ..extract.stepbindings import LAYER_ORDER
+from ..judgement import agent
 from ..store import db
 from . import tone
 
@@ -2721,11 +2722,64 @@ def stale_case_page(case_id: str, unregistered_analyser: str | None = None) -> b
     return page(f"TestOps \u00b7 {case_id}", "".join(body))
 
 
-def case_response(conn, case_id: str) -> tuple[bytes, int]:
+def _agent_variant(value: str | None) -> str:
+    """The variant a request asked for. Anything but an explicit ``on`` is off (TESTOPS-88 AC1).
+
+    Off is the default on purpose: a page a reader did not ask to be explained is the page as it
+    was, and the golden for every real case has to stay byte-identical when this flag is absent.
+    """
+    return agent.VARIANT_ON if (value or "").strip().lower() == "on" else agent.VARIANT_OFF
+
+
+def _explanation_block(outcome, case_id: str, view_id: int | None) -> list[str]:
+    """The one block the agent adds: a labelled explanation, its provenance, and its two links.
+
+    It sits *below* the claim's verdict, and it says so: the model wrote a reading of the record,
+    not a second opinion about it. The heading is deliberately unnumbered: the numbered sections
+    below it are the argument's, and adding one to their sequence would change the page's existing
+    structure - which the agent is not allowed to do (AC1, AC2). The feedback links carry the view
+    id, so one page counts one vote per variant without a cookie, a script or an identity (AC6).
+    """
+    out = ['<h2 class="section">Explanation of this case</h2>',
+           f'<p class="meta">Written by the model <span class="code">{esc(outcome.model)}</span> '
+           f'from this case\'s stored record. It is commentary, not evidence: the finding above is '
+           f'what the analysis decided, and nothing here changes it.</p>',
+           f'<div class="agent-text"><p>{esc(outcome.text)}</p></div>']
+    if outcome.state == "cached":
+        out.append('<p class="meta agent-cached">This is the explanation stored from an earlier '
+                   'view of this case, so showing it cost nothing.</p>')
+    if view_id is not None:
+        base = f'/case/{urllib.parse.quote(case_id)}/feedback?view={int(view_id)}'
+        out.append(f'<p class="agent-feedback">Was this useful? '
+                   f'<a href="{esc(base)}&amp;vote=helped">This helped</a> \u00b7 '
+                   f'<a href="{esc(base)}&amp;vote=did_not_help">This did not</a></p>')
+    out.append(f'<p class="meta">Agent on \u00b7 '
+               f'<a href="/case/{urllib.parse.quote(case_id)}?agent=off">Read this case without the '
+               f'explanation</a> \u00b7 <a href="/agent-report">what the agent costs</a></p>')
+    return out
+
+
+def _agent_note(outcome) -> list[str]:
+    """One sentence, and nothing else, when no explanation could be shown (AC3, AC7)."""
+    if outcome.state == "rejected":
+        sentence = agent.rejection_sentence(outcome)
+    else:
+        sentence = outcome.sentence
+    return [f'<p class="agent-note">{esc(sentence)}</p>'] if sentence else []
+
+
+def case_response(conn, case_id: str, *, variant: str = agent.VARIANT_OFF,
+                  view_id: int | None = None, agent_config=None,
+                  completer=None) -> tuple[bytes, int]:
     """The page for a case id, with the status it must be served under.
 
     A pruned case answers 404 with an explanatory page rather than ``None``: the web layer had
     to invent a status for ``None``, and every other caller crashed on it (TESTOPS-30).
+
+    TESTOPS-88: ``variant`` selects the page. With it off - the default, and every caller written
+    before this ticket - the page is built exactly as it always was. With it on the page gains one
+    block after the claim and before the decision, and every failure to produce that block adds one
+    sentence and nothing else. ``view_id``, when given, is the ledger row this view opened.
     """
     row = queries.case_row(conn, case_id)
     if not row:
@@ -2811,6 +2865,23 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
                 sections, next_section = claim_sections(c)
                 body.extend(sections)
 
+    # TESTOPS-88. The explanation is commentary *about* the finding, so it is placed after the
+    # claims that carry the verdict and before the decision. Every failure path adds one sentence
+    # and nothing else: with the agent off nothing above or below this point changes at all.
+    outcome = None
+    if variant == agent.VARIANT_ON:
+        if findings:
+            record = agent.case_record(conn, case_id, row=row, findings=findings) or {}
+            outcome = agent.explain_case(conn, record, cfg=agent_config or agent.config(),
+                                         completer=completer)
+        else:
+            outcome = agent.Outcome(state="no_finding", cause="no_finding")
+    if outcome is not None:
+        if outcome.served:
+            body.extend(_explanation_block(outcome, case_id, view_id))
+        else:
+            body.extend(_agent_note(outcome))
+
     # TESTOPS-78, AC4: the near misses belonging to this case's own scenario. They cannot raise a
     # finding, so this page is the only place they can sit beside the claim they were refused for.
     if findings and row.get("run_id"):
@@ -2826,6 +2897,9 @@ def case_response(conn, case_id: str) -> tuple[bytes, int]:
                     else "<h2>Decision</h2>")
         body.extend(form)
     body.extend(footnote(claims))
+    # The ledger row this view opened closes with what the page actually carried. ``None`` means
+    # the agent-off page: nothing was attempted, and that is recorded as a fact, not a failure.
+    agent.finish_view(conn, view_id, outcome)
     return page(f"TestOps \u00b7 {case_id}", "".join(body)), 200
 
 
@@ -3027,7 +3101,9 @@ class Handler(BaseHTTPRequestHandler):
                                      '<p><a href="/">\u2190 all cases</a></p>'), 404)
 
     def do_GET(self):
-        path = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path.rstrip("/") or "/"
+        query = urllib.parse.parse_qs(parsed.query)
         conn = db.connect()
         try:
             if path == "/":
@@ -3039,9 +3115,28 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/config":
                 self._send(config_page(conn))
                 return
+            if path == "/agent-report":
+                self._send(agent_report(conn))
+                return
+            m = re.fullmatch(r"/case/([^/]+)/feedback", path)
+            if m:
+                body, code = feedback_page(conn, urllib.parse.unquote(m.group(1)),
+                                           _form(query, "view"), _form(query, "vote"))
+                self._send(body, code)
+                return
             m = re.fullmatch(r"/case/([^/]+)", path)
             if m:
-                body, code = case_response(conn, urllib.parse.unquote(m.group(1)))
+                case_id = urllib.parse.unquote(m.group(1))
+                variant = _agent_variant(_form(query, "agent"))
+                # The view is opened before the page is rendered, so the explanation's feedback
+                # links can name it. A view of a case the store does not hold is not a view of a
+                # case: nothing is written for it.
+                view_id = None
+                if queries.case_row(conn, case_id) is not None:
+                    view_id = (agent.start_view(conn, case_id, variant)
+                               if variant == agent.VARIANT_ON
+                               else agent.record_view(conn, case_id, variant))
+                body, code = case_response(conn, case_id, variant=variant, view_id=view_id)
                 self._send(body, code)
                 return
             m = re.fullmatch(r"/run/([^/]+)", path)
@@ -3111,6 +3206,116 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
         self._send(b"", 303, {"Location": "/config"})
+
+
+def _counts_line(row: dict) -> str:
+    """One variant's numbers, as the words a reader needs rather than bare cells."""
+    mean = row["mean_tokens_per_explanation"]
+    mean_text = f"{mean} tokens" if mean is not None else "no explanation has been written yet"
+    return (f'{row["views"]} views, {row["explanation_views"]} of them showing an explanation, '
+            f'{row["cache_hits"]} of those from the store; {row["total_tokens"]} tokens in total, '
+            f'{mean_text} per explanation; {row["helped"]} said this helped and '
+            f'{row["did_not_help"]} said it did not.')
+
+
+def agent_report(conn) -> bytes:
+    """Per variant: what was shown, what it cost, and what readers said about it (AC4, AC6).
+
+    Every figure is a count of stored rows or a sum over them. The page does not know a price per
+    token, so it does not print one: tokens are the measurement, and a price is a reader's business
+    (AC10). ``None`` - "no explanation has been written yet" - is printed as that sentence, never
+    as a zero that would read as a measured result.
+    """
+    rows = agent.report(conn)
+    body = ['<p class="meta"><a href="/">\u2190 all cases</a> \u00b7 <a href="/runs">all runs</a></p>',
+            '<h1>The agent, measured</h1>',
+            '<p>Two variants of the same case page. With the agent off the page is the evidence the '
+            'run recorded, exactly as it was. With the agent on it also carries one model-written '
+            'explanation, labelled with the model that wrote it. Every view, call and vote is a row '
+            'in the store, so the two can be weighed against each other rather than assumed.</p>',
+            '<p class="quiet">Token counts are the provider\'s own usage figures, summed. This page '
+            'does not know a price per token and does not invent one: cost is measured in tokens '
+            'here, and a price would be entered from the provider\'s price list.</p>']
+    body.append('<table>')
+    body.append('<tr><th>Variant</th><th>Views</th><th>Explanations shown</th><th>Rejected</th>'
+                '<th>Failed</th><th>Calls</th><th>Cache hits</th><th>Total tokens</th>'
+                '<th>Mean tokens per explanation</th><th>Helped</th><th>Did not</th></tr>')
+    for row in rows:
+        mean = row["mean_tokens_per_explanation"]
+        body.append(f'<tr><td>{esc(row["label"])}</td><td>{row["views"]}</td>'
+                    f'<td>{row["explanation_views"]}</td><td>{row["rejected"]}</td>'
+                    f'<td>{row["errors"]}</td><td>{row["calls"]}</td><td>{row["cache_hits"]}</td>'
+                    f'<td>{row["total_tokens"]}</td>'
+                    f'<td>{mean if mean is not None else "&mdash;"}</td>'
+                    f'<td>{row["helped"]}</td><td>{row["did_not_help"]}</td></tr>')
+    body.append('</table>')
+    for row in rows:
+        body.append(f'<p><strong>{esc(row["label"])}</strong>: {esc(_counts_line(row))}'
+                    f'{" No explanation has been served under this variant yet." if row["views"] == 0 else ""}</p>')
+    calls = agent.recent_calls(conn)
+    if calls:
+        body.append('<h2 class="section">The last calls</h2>')
+        body.append('<p class="meta">One row per call, or per cache hit. A failure is here with its '
+                    'cause, so a blank block on a page is never unexplained.</p>')
+        body.append('<table><tr><th>Case</th><th>Variant</th><th>Model</th><th>Tokens in</th>'
+                    '<th>Tokens out</th><th>Cached</th><th>Wall (ms)</th><th>Outcome</th>'
+                    '<th>Cause</th></tr>')
+        for call in calls:
+            body.append(f'<tr><td><a href="/case/{esc(call["case_id"])}">{esc(call["case_id"])}</a></td>'
+                        f'<td>{esc(call["variant"])}</td><td>{esc(call["model"])}</td>'
+                        f'<td>{call["tokens_in"]}</td><td>{call["tokens_out"]}</td>'
+                        f'<td>{"yes" if call["cached"] else "no"}</td>'
+                        f'<td>{call["wall_ms"]}</td><td>{esc(call["outcome"])}</td>'
+                        f'<td>{esc(call["cause"])}</td></tr>')
+        body.append('</table>')
+    else:
+        body.append('<p class="quiet">No call has been made, so there is nothing to weigh yet.</p>')
+    return page("TestOps \u00b7 the agent, measured", "".join(body))
+
+
+def feedback_page(conn, case_id: str, view: str, vote: str) -> tuple[bytes, int]:
+    """Record one vote from one rendered view. Two links, no script, no cookie, no identity (AC6).
+
+    The view id is the session: a vote is tied to the page it was cast on, so clicking both links
+    counts once, and nothing about the reader is stored. A vote for a view that never served an
+    explanation under this case is refused rather than counted - a number nobody can trace back to
+    a page is not feedback.
+    """
+    try:
+        view_id = int(view or 0)
+    except ValueError:
+        view_id = 0
+    if vote not in ("helped", "did_not_help"):
+        body = ['<h1>That vote was not recorded</h1>',
+                '<p>A vote is either \u201cthis helped\u201d or \u201cthis did not\u201d. This '
+                f'request asked for <span class="code">{esc(vote)}</span>, which is neither.</p>',
+                self_back(case_id)]
+        return page("TestOps \u00b7 vote refused", "".join(body)), 400
+    row = conn.execute(
+        "SELECT case_id, variant, served FROM agent_view WHERE id = ?", (view_id,)).fetchone()
+    if row is None or row["case_id"] != case_id or row["served"] not in ("explanation", "cached"):
+        body = ['<h1>That vote was not recorded</h1>',
+                '<p>The page it names did not show an explanation of this case, so there is '
+                'nothing for the vote to be about.</p>', self_back(case_id)]
+        return page("TestOps \u00b7 vote refused", "".join(body)), 400
+    recorded = agent.record_feedback(conn, view_id, case_id, row["variant"], vote)
+    said = "This helped" if vote == "helped" else "This did not help"
+    if recorded:
+        body = ['<h1>Recorded</h1>',
+                f'<p>\u201c{esc(said)}\u201d is recorded against this case and the '
+                f'{esc(row["variant"])} variant. It is a vote about this explanation, not about '
+                'the finding: the verdict stays what the analysis decided.</p>', self_back(case_id)]
+    else:
+        body = ['<h1>Already recorded</h1>',
+                '<p>This page has already counted one vote for this case and variant, so this one '
+                'was not added. <a href="/agent-report">The report</a> counts votes per variant.'
+                '</p>', self_back(case_id)]
+    return page("TestOps \u00b7 feedback", "".join(body)), 200
+
+
+def self_back(case_id: str) -> str:
+    return (f'<p class="meta"><a href="/case/{urllib.parse.quote(case_id)}?agent=on">\u2190 back to '
+            f'the case</a> \u00b7 <a href="/agent-report">the agent, measured</a></p>')
 
 
 def serve(port: int = 8787, host: str = "127.0.0.1") -> None:
