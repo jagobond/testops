@@ -33,6 +33,24 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 git archive --format=tar HEAD | tar -x -C "$OUT"
 
+# The rename map is a one-time tool and it necessarily contains the names it removed, so it does not
+# travel: a copy that shipped it would leak exactly what TESTOPS-103 took out.
+rm -f "$OUT/scripts/rename_corpus.py"
+
+# The ticket that ordered the rename quotes the mapping table for the same reason. Replace the table
+# with a pointer, keeping the acceptance criteria that say what was promised.
+python - "$OUT/factory/tickets/TESTOPS-103.md" <<'PY'
+import re, sys, pathlib
+p = pathlib.Path(sys.argv[1])
+if p.exists():
+    text = p.read_text(encoding="utf-8")
+    text = re.sub(r"## The rename map.*?(?=## Acceptance criteria)",
+                  "## The rename map\n\nWithheld from this copy: the table names the identifiers it removed, and shipping it "
+                  "would undo the ticket. The mapping is recorded in the private repository the copy came from.\n\n",
+                  text, flags=re.S)
+    p.write_text(text, encoding="utf-8")
+PY
+
 cd "$OUT"
 git init -q -b main
 git config user.name "TestOps"
