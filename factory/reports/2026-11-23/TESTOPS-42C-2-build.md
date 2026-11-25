@@ -106,7 +106,7 @@ cell is corrected and the old sentence is preserved in the Corrections section, 
 
 ```
 env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 615 passed in 123.29s
 ```
 

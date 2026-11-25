@@ -1,7 +1,7 @@
 # TESTOPS-88 build — the agent, and the honest way to tell whether it earns its cost
 
 2026-11-24, branch `factory/testops-88-agent-ab`, worktree
-`C:/Users/Chester/Projects/testops-t88`.
+`C:/Users/<name>/Projects/testops-t88`.
 
 Suite, from the project `.venv` with `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV`/`CONDA_PREFIX`
 stripped and `PYTHONNOUSERSITE=1`: **1321 passed, 2 skipped** (239.9 s). The new file

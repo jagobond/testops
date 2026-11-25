@@ -76,5 +76,5 @@ No product code touched. `git status` shows only `tests/` and `tests/README.md` 
 
 ```
 env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 ```

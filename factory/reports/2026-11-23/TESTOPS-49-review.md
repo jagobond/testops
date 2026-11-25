@@ -1,8 +1,8 @@
 # TESTOPS-49 review — the enumeration refuses to pass on nothing
 
-Reviewer run, 2026-11-23. Worktree `C:/Users/Chester/Projects/testops-t49`, branch
+Reviewer run, 2026-11-23. Worktree `C:/Users/<name>/Projects/testops-t49`, branch
 `factory/testops-49-not-vacuous`, interpreter
-`env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe`.
+`env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe`.
 Full suite first: **557 passed, 11 skipped in 104.69s** — same counts as the build's before/after.
 No product code, ticket, or pyproject left modified at the end (verified after every attack).
 
@@ -22,7 +22,7 @@ test body; each restored the tree afterwards.
 
 1. **Monkeypatch `_data_files_on_disk` to `[]`** (the TESTOPS-48 reviewer's exact attack, which
    previously passed):
-       E  AssertionError: the package-data walk of C:\Users\Chester\Projects\testops-t49\testops found no non-Python files at all. That is a broken probe - a missing or wrong package directory - not a statement that packaging is complete, so no wheel-coverage verdict is drawn from it.
+       E  AssertionError: the package-data walk of C:\Users\<name>\Projects\testops-t49\testops found no non-Python files at all. That is a broken probe - a missing or wrong package directory - not a statement that packaging is complete, so no wheel-coverage verdict is drawn from it.
        E  assert []
        1 failed, 3 deselected in 8.19s
    **Fails.** Message says the probe is broken, not that packaging is fine.

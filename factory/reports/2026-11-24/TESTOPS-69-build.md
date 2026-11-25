@@ -1,7 +1,7 @@
 # TESTOPS-69 build - the six small residuals, collected
 
 Ticket: `factory/tickets/TESTOPS-69.md`. Branch: `factory/testops-69-residuals`, built in the linked
-worktree `C:/Users/Chester/Projects/testops-t69`. The live store and port 8791 were never contacted:
+worktree `C:/Users/<name>/Projects/testops-t69`. The live store and port 8791 were never contacted:
 every probe is a direct call to `testops.services` or to the guard in `tests/support.py`, plus a
 disposable git repository under `tmp_path`.
 

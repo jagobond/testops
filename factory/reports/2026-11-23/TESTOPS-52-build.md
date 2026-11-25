@@ -1,7 +1,7 @@
 # TESTOPS-52 build — uncertainty does not wear certainty's clothes
 
-Worktree `C:/Users/Chester/Projects/testops-t52`, branch `factory/testops-52-verdict-tone`.
-Interpreter for every command: `env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe`.
+Worktree `C:/Users/<name>/Projects/testops-t52`, branch `factory/testops-52-verdict-tone`.
+Interpreter for every command: `env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe`.
 
 ## What changed
 
@@ -46,7 +46,7 @@ Interpreter for every command: `env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX
   the verbatim assertion and both case ids), and the "Harness notes" paragraph naming
   `<span class="badge class="hot"">` — plus the delivered suite in `tests/contracts/`.
 - **Disclosure — accidental live write, reverted.** `pytest` as a whole runs `tests/contracts`,
-  whose default base is the live server `http://100.121.128.21:8791`; the suite's session fixture
+  whose default base is the live server `http://<tailnet-address>:8791`; the suite's session fixture
   POSTs a `contract-audit-<timestamp>` project (there is no project-delete endpoint). Two early
   full-suite runs in this session used that default and added
   `contract-audit-20261123140617` and `contract-audit-20261123141010` to the live store. Both had

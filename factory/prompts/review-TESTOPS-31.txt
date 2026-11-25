@@ -1,6 +1,6 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-31.
 
-Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-31-tables`, tree clean.
+Repository: C:/Users/<name>/Projects/testops, branch `factory/testops-31-tables`, tree clean.
 Ticket:     factory/tickets/TESTOPS-31.md
 Diff:       git diff feature/f1..HEAD
 

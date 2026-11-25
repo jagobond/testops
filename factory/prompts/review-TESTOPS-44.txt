@@ -1,6 +1,6 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-44.
 
-Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-44-secret-guard`, tree clean, 459 tests.
+Repository: C:/Users/<name>/Projects/testops, branch `factory/testops-44-secret-guard`, tree clean, 459 tests.
 Ticket:   factory/tickets/TESTOPS-44.md
 Build:    factory/reports/2026-11-22/TESTOPS-44-build.md
 

@@ -3,7 +3,7 @@
 2026-11-24, branch `factory/testops-84-honest-block`. Full suite: **1276 passed, 2 skipped** with
 
     env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-      C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+      C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 
 Contract suite alone: **37 passed, 2 skipped**. Port 8791 and the live store were not contacted;
 the page quoted below was rendered from the worktree's copied store, opened `mode=ro`.

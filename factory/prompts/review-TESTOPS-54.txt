@@ -2,9 +2,9 @@ You are the reviewer on the TestOps factory. Judge TESTOPS-54 - navigation: a ca
 must be reachable from everywhere. Small ticket, but it is the first fix to come out of a blind author's reading of the
 product, so the bar is that the promise holds on every page, not on the three the tests pick.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t54 (branch `factory/testops-54-navigation`). Only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t54 (branch `factory/testops-54-navigation`). Only here.
 Ticket: factory/tickets/TESTOPS-54.md ; Build: factory/reports/2026-11-24/TESTOPS-54-build.md
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Never write to the live store or contact port 8791. Copy `data/`, serve on an ephemeral/free port.

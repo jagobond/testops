@@ -1,6 +1,6 @@
 # TESTOPS-92 build — a switch that ignores a value is a switch that lies
 
-2026-11-24, worktree `C:/Users/Chester/Projects/testops-t92`, branch
+2026-11-24, worktree `C:/Users/<name>/Projects/testops-t92`, branch
 `factory/testops-92-agent-flag`, implementation commit `d69cd27`.
 
 Suite, from the project `.venv` with `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV`/`CONDA_PREFIX` stripped

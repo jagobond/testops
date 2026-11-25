@@ -1,9 +1,9 @@
 # TESTOPS-59 review — the screen now looks inside the value, and the boundary states itself
 
-Reviewer run, 2026-11-24. Worktree `C:/Users/Chester/Projects/testops-t59`, branch
+Reviewer run, 2026-11-24. Worktree `C:/Users/<name>/Projects/testops-t59`, branch
 `factory/testops-59-prose-scan`, HEAD `4b11e27`. Interpreter everywhere:
 `env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
-C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe`.
+C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe`.
 
 Every probe below was run by me, not taken from the build report. Function-level probes called
 `_looks_like_secret` / `_names_a_credential` directly with `PYTHONPATH` pinned to this worktree;

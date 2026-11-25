@@ -72,7 +72,7 @@ def _good_reply(conn) -> str:
     return _reply([(sentence, (claim,)) for sentence, _ in GOOD_SENTENCES])
 
 
-CONFIG = agent.Config(project="testops-resource",
+CONFIG = agent.Config(project="example-project",
                       endpoint="https://example.invalid/openai/v1/chat/completions",
                       model="deepseek-flash", token="test-token-value")
 
@@ -804,7 +804,7 @@ def test_the_report_arithmetic_is_the_ledger(tmp_path):
 
 def _other_config(model: str) -> agent.Config:
     """The same deployment, a different model: a different cache key, so the model is really asked."""
-    return agent.Config(project="testops-resource", endpoint="https://example.invalid/v1/chat",
+    return agent.Config(project="example-project", endpoint="https://example.invalid/v1/chat",
                         model=model, token="test-token-value")
 
 
@@ -976,7 +976,7 @@ def test_every_failure_is_one_sentence_and_a_cause_in_the_ledger(tmp_path, reply
 
 def test_an_unconfigured_agent_serves_the_off_page_and_one_sentence(tmp_path):
     conn = _seed(tmp_path)
-    unconfigured = agent.Config(project="testops-resource", endpoint="https://x.invalid",
+    unconfigured = agent.Config(project="example-project", endpoint="https://x.invalid",
                                 model="deepseek-flash", token="")
     try:
         off = _off(conn)
@@ -1025,15 +1025,36 @@ def test_the_az_path_is_resolved_and_never_assumed():
     assert client.az_command() in (None,) or isinstance(client.az_command(), str)
 
 
-def test_endpoint_and_model_default_to_the_foundry_project():
-    assert client.endpoint({}) == (
-        "https://testops-resource.services.ai.azure.com/openai/v1/chat/completions")
+def test_endpoint_and_model_come_from_the_environment():
+    """TESTOPS-102 AC1/AC10: the address is derived from configuration, and never invented.
+
+    The two tests this replaced pinned the derived URL against a baked account name. They still pin
+    the derived URL - that is the assertion worth keeping - but against a configured value, and the
+    unconfigured case is pinned too: no URL, and the sentence names the variable that is absent.
+    """
+    configured = {"TESTOPS_FOUNDRY_ACCOUNT": "example-account",
+                  "TESTOPS_AGENT_PROJECT": "example-project"}
+    assert client.endpoint(configured) == (
+        "https://example-account.services.ai.azure.com/openai/v1/chat/completions")
     assert client.model_name({}) == "deepseek-flash"
-    assert client.endpoint({"TESTOPS_AGENT_PROJECT": "other-project"}).startswith(
-        "https://other-project.services.ai.azure.com/")
+    assert client.endpoint({"TESTOPS_FOUNDRY_ACCOUNT": "example-other",
+                            "TESTOPS_AGENT_PROJECT": "other-project"}).startswith(
+        "https://example-other.services.ai.azure.com/")
     assert client.endpoint({"TESTOPS_AGENT_ENDPOINT": "http://localhost:1234/v1/chat"}) == (
         "http://localhost:1234/v1/chat")
     assert client.model_name({"TESTOPS_AGENT_MODEL": "gpt-x"}) == "gpt-x"
+    # Unconfigured is a state, not a default: no URL is returned and the missing variable is named.
+    assert client.endpoint({}) == ""
+    assert client.missing_variable({}) == "TESTOPS_FOUNDRY_ACCOUNT"
+    assert client.endpoint({"TESTOPS_FOUNDRY_ACCOUNT": "example-account"}) == ""
+    assert client.missing_variable({"TESTOPS_FOUNDRY_ACCOUNT": "example-account"}) == (
+        "TESTOPS_AGENT_PROJECT")
+    assert client.missing_variable(configured) == ""
+    assert client.agent_endpoint(configured).startswith(
+        "https://example-account.services.ai.azure.com/api/projects/example-project/agents/")
+    assert client.agent_endpoint({}) == ""
+    # An explicit endpoint supplies its own address, so no derived half is missing.
+    assert client.missing_variable({"TESTOPS_AGENT_ENDPOINT": "http://localhost:1234/v1/chat"}) == ""
 
 
 def test_a_supplied_token_is_used_without_asking_azure(monkeypatch):
@@ -1047,6 +1068,7 @@ def test_the_config_reports_why_it_is_unconfigured(monkeypatch):
     agent.reset_token_cache()
     monkeypatch.setattr(client, "managed_identity_token", lambda *a, **k: "")
     monkeypatch.setattr(client, "az_token", lambda *a, **k: "")
-    cfg = agent.config(environ={})
+    cfg = agent.config(environ={"TESTOPS_FOUNDRY_ACCOUNT": "example-account",
+                                "TESTOPS_AGENT_PROJECT": "example-project"})
     assert not cfg.configured
     assert "no token" in cfg.why_not

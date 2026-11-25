@@ -1,8 +1,8 @@
 # TESTOPS-49 build — an enumeration that refuses to pass on nothing
 
-Builder run, 2026-11-23. Worktree `C:/Users/Chester/Projects/testops-t49`, branch
+Builder run, 2026-11-23. Worktree `C:/Users/<name>/Projects/testops-t49`, branch
 `factory/testops-49-not-vacuous`. Interpreter
-`env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe`.
+`env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe`.
 Test files changed only; no file under `testops/` was touched (`git status` names only `tests/`).
 
 ## Baseline and final
@@ -34,13 +34,13 @@ Three red runs, each with a pytest plugin that interferes before collection:
 
 (a) `_data_files_on_disk` monkeypatched to `[]` — the reviewer's exact simulation:
 
-    E  AssertionError: the package-data walk of C:\Users\Chester\Projects\testops-t49\testops found no non-Python files at all. That is a broken probe - a missing or wrong package directory - not a statement that packaging is complete, so no wheel-coverage verdict is drawn from it.
+    E  AssertionError: the package-data walk of C:\Users\<name>\Projects\testops-t49\testops found no non-Python files at all. That is a broken probe - a missing or wrong package directory - not a statement that packaging is complete, so no wheel-coverage verdict is drawn from it.
     E  assert []
     1 failed, 3 deselected in 5.69s
 
 (b) `PACKAGE` pointed at `testops_does_not_exist`:
 
-    E  AssertionError: the package-data walk of C:\Users\Chester\Projects\testops-t49\testops_does_not_exist found no non-Python files at all. ...
+    E  AssertionError: the package-data walk of C:\Users\<name>\Projects\testops-t49\testops_does_not_exist found no non-Python files at all. ...
     1 failed, 3 deselected in 7.67s
 
 (c) one of today's two files gone (`['store/schema.sql']` only):

@@ -1,8 +1,8 @@
 # TESTOPS-30 review — stale case id, --keep wording
 
-Reviewed: worktree C:/Users/Chester/Projects/testops-t30, branch factory/testops-30-stale-id,
+Reviewed: worktree C:/Users/<name>/Projects/testops-t30, branch factory/testops-30-stale-id,
 diff feature/f1..HEAD (cli.py, retention.py, web/app.py, tests/test_retention.py).
-Imports verified to resolve to this worktree (testops.__file__ = C:\Users\Chester\Projects\testops-t30\testops\__init__.py).
+Imports verified to resolve to this worktree (testops.__file__ = C:\Users\<name>\Projects\testops-t30\testops\__init__.py).
 Suite: 327 passed, 3 skipped (73 s).
 
 ## Verdict — PASS

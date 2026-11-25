@@ -9,7 +9,7 @@ Full suite, from the project `.venv` with `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_E
 `CONDA_PREFIX` stripped and `PYTHONNOUSERSITE=1`:
 
     env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-      C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+      C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
     1409 passed, 3 skipped
 
 That is `1412 tests collected`, with no failures and no errors. The Lead's run of the same tree

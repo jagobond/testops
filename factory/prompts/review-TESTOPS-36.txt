@@ -1,11 +1,11 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-36.
 
-Repository: C:/Users/Chester/Projects/testops-t36 (a git worktree), branch `factory/testops-36-cross-reference`.
+Repository: C:/Users/<name>/Projects/testops-t36 (a git worktree), branch `factory/testops-36-cross-reference`.
 Ticket:     factory/tickets/TESTOPS-36.md
 Diff:       git diff origin/feature/f1..HEAD
 
-IMPORTANT: no .venv. `cd C:/Users/Chester/Projects/testops-t36 && env -u PYTHONPATH -u VIRTUAL_ENV
-PYTHONNOUSERSITE=1 PYTHONPATH=. C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q`; confirm
+IMPORTANT: no .venv. `cd C:/Users/<name>/Projects/testops-t36 && env -u PYTHONPATH -u VIRTUAL_ENV
+PYTHONNOUSERSITE=1 PYTHONPATH=. C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q`; confirm
 `testops.__file__` is inside this worktree.
 
 The defect: two analysers report the same step, giving competing instructions with no link between the pages. The

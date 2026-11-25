@@ -1,11 +1,11 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-42C-1 - part 1 of 3: the cucumber-js parsing floor.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t42c1 (branch `factory/testops-42c1-bindings`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t42c1 (branch `factory/testops-42c1-bindings`). Work only here.
 A store copy is in `data/` (gitignored) so the corpus blobs are readable.
 Ticket:  factory/tickets/TESTOPS-42C-1.md
 Build:   factory/reports/2026-11-23/TESTOPS-42C-1-build.md
 Reference: docs/ecosystem-inventory-cucumber-js.md, tools/ecosystem_inventory_counts.py
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Run the suite from this worktree with the interpreter above.

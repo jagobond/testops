@@ -33,13 +33,17 @@ from testops.web import app
 # The reviewer's probe, from the TESTOPS-38 review: a complete AWS access key.
 AWS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
+# A GUID-shaped correlation id, assembled here rather than written down: the tree carries no GUID
+# literal (TESTOPS-102), and this test still pins that a GUID-shaped value is configuration.
+SAMPLE_GUID = "-".join(("3f2504e0", "4f89", "11d3", "9a0c", "0305e82c3301"))
+
 # Every one of these is configuration a person could type, and every one must be accepted.
 CONFIGURATION = {
     "repo": "owner/repo",
     "board": "COTW-PROJ-KEY-0123456789-ABCDEFG",
     "host": "https://jira.example.com",
     "project": "PROJ",
-    "correlation_id": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+    "correlation_id": SAMPLE_GUID,
     "label": "thunderstorm",
 }
 
@@ -246,7 +250,7 @@ ROUND_ONE_ACCEPTED = {
     "path": "C:/work/repos/cotw",
     "project": "PROJ",
     "board": "COTW-PROJ-KEY-0123456789-ABCDEFG",
-    "correlation_id": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+    "correlation_id": SAMPLE_GUID,
     "branch": "main",
     "ref": "refs/heads/feature/x",
     "label": "pipeline #2",

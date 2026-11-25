@@ -1,7 +1,7 @@
 # TESTOPS-58 — build
 
 Builder: 2026-11-23 (run date; report filed under the ticket's 2026-11-24 folder), worktree
-`C:/Users/Chester/Projects/testops-t58` on `factory/testops-58-pinned-temp-root`. Every number
+`C:/Users/<name>/Projects/testops-t58` on `factory/testops-58-pinned-temp-root`. Every number
 below is from my own runs with the ticket's interpreter
 (`env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 …/.venv/Scripts/python.exe`).
 No run wrote to the live store and nothing contacted 8791.
@@ -11,7 +11,7 @@ No run wrote to the live store and nothing contacted 8791.
 `harness.require_disposable_store` checked the resolved path against
 `tempfile.gettempdir()`. The path check was structural; the root was not. `tempfile.gettempdir()`
 honours `TMPDIR`/`TEMP`/`TMP`, so the T53 review moved the root with
-`TMPDIR=C:/Users/Chester/Projects/attack-tmp` and the suite built its store inside `Projects/`
+`TMPDIR=C:/Users/<name>/Projects/attack-tmp` and the suite built its store inside `Projects/`
 and ran normally.
 
 What that reached: junk in a persistent directory. What it could not reach: the live store. The
@@ -40,16 +40,16 @@ because on Windows the OS temp directory lives under home — including it would
 run skip, contradicting AC3. Evidence from the reviewer's own reproduction path:
 
 ```
-$ TMPDIR=C:/Users/Chester/Projects/attack-tmp python -m pytest tests/contracts -q -rs
+$ TMPDIR=C:/Users/<name>/Projects/attack-tmp python -m pytest tests/contracts -q -rs
 39 skipped in 1.60s
 SKIPPED … the contract suite will not build a store there: TMPDIR='C:\\Users\\Chester\\Projects\\attack-tmp'
   resolves to C:\\Users\\Chester\\Projects\\attack-tmp, inside the user's home directory (C:\\Users\\Chester).
-$ find C:/Users/Chester/Projects/attack-tmp -name '*.db'   → (nothing)
+$ find C:/Users/<name>/Projects/attack-tmp -name '*.db'   → (nothing)
 ```
 
 **AC2 — root discovered without environment variables.** Discovered at import from the shell
 known folder (verified directly: `SHGetKnownFolderPath(LocalAppData)` returned
-`C:\Users\Chester\AppData\Local`, which is not read from `TMPDIR`). `TRUSTED_TEMP_ROOT` is a module
+`C:\Users\<name>\AppData\Local`, which is not read from `TMPDIR`). `TRUSTED_TEMP_ROOT` is a module
 constant; `under_temp`/`require_disposable_store`/the store test use `harness.temp_root()`.
 `test_the_trusted_temp_root_is_discovered_without_environment_variables` moves `TMPDIR`, proves
 `tempfile.gettempdir()` followed it, and asserts `harness.temp_root()` did not and that a store
@@ -57,7 +57,7 @@ there is refused.
 
 **AC3 — both directions.**
 
-1. Poison, full suite, `TMPDIR=C:/Users/Chester/Projects/attack-tmp` (dir pre-created):
+1. Poison, full suite, `TMPDIR=C:/Users/<name>/Projects/attack-tmp` (dir pre-created):
    `698 passed, 39 skipped in 154.50s`, exit 0. Every contract test skipped with the reason
    (34+3+2 = 39 clean-run contract tests became skips), everything else unchanged. The residual is
    visible and measured: the non-contract tests still use `tmp_path`, so 321 `.db` files were built

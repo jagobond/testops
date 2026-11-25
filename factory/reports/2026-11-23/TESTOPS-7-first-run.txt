@@ -1,6 +1,6 @@
 ============================= test session starts =============================
-platform win32 -- Python 3.12.5, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\Chester\Projects\testops\.venv\Scripts\python.exe
-rootdir: C:\Users\Chester\Projects\testops-contract-author
+platform win32 -- Python 3.12.5, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\<name>\Projects\testops\.venv\Scripts\python.exe
+rootdir: C:\Users\<name>\Projects\testops-contract-author
 collecting ... collected 29 items
 
 tests/test_page_contracts.py::test_P01_a_run_that_found_nothing_says_so PASSED [  3%]

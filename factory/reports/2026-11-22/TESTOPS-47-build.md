@@ -126,7 +126,7 @@ and a declaration changed; no verdict, key or fingerprint moved.
 
 ```
 env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 561 passed in 94.23s
 ```
 

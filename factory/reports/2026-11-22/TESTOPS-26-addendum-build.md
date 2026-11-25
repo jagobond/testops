@@ -67,8 +67,8 @@ asymmetry looks like a mistake to anyone who has not measured it.
 Served from `testops.web.app`, screenshotted with headless Chrome at 1100px:
 
 ```
-C:\Users\Chester\Pictures\testops-screenshots\TESTOPS-26-case-cotw-levels-20261122T011316-03.png
-C:\Users\Chester\Pictures\testops-screenshots\TESTOPS-26-case-cotw-levels-20261122T011316-03-scan-block-2x.png
+C:\Users\<name>\Pictures\testops-screenshots\TESTOPS-26-case-cotw-levels-20261122T011316-03.png
+C:\Users\<name>\Pictures\testops-screenshots\TESTOPS-26-case-cotw-levels-20261122T011316-03-scan-block-2x.png
 ```
 
 The second is the scan block at 2x, where the comma and the box's padding can be read directly.

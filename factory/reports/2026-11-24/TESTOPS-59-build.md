@@ -1,11 +1,11 @@
 # TESTOPS-59 build — search inside the value, and a boundary that states itself
 
-Builder run, 2026-11-24. Worktree `C:/Users/Chester/Projects/testops-t59`, branch
+Builder run, 2026-11-24. Worktree `C:/Users/<name>/Projects/testops-t59`, branch
 `factory/testops-59-prose-scan` (the main checkout and other worktrees were not touched). Host clock
 at the time of writing was 2026-11-23 UTC; the report is filed under the ticket's date directory as
 directed. Interpreter everywhere below:
 
-    env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+    env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 Files changed: `testops/services.py`, `tests/test_config_credential_screen.py`,
 `tests/test_secret_guard.py`, `tests/test_projects_services.py`, and this report plus the correction

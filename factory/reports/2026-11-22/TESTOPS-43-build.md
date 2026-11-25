@@ -1,6 +1,6 @@
 # TESTOPS-43 build — partial is not whole
 
-2026-11-22, branch `factory/testops-43-partial-reads`, worktree `C:/Users/Chester/Projects/testops-t43`
+2026-11-22, branch `factory/testops-43-partial-reads`, worktree `C:/Users/<name>/Projects/testops-t43`
 (HEAD `9f31ef3` when started; the main checkout was not touched).
 
 Suite, from the worktree with `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV` stripped and
@@ -10,11 +10,11 @@ Suite, from the worktree with `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV` stripped a
 > **457 passed** in 75s
 
 (The worktree has no `.venv`; the interpreter used is the main checkout's
-`C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe` with `PYTHONPATH` unset, as the
+`C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe` with `PYTHONPATH` unset, as the
 ticket allows.) Two environment notes, both verified, neither caused by this change:
 
 1. **A copy of the store, not the store.** `data/` is absent in a fresh worktree, so every corpus
-   test skips. I made a byte copy of `C:/Users/Chester/Projects/testops/data/testops.db` and
+   test skips. I made a byte copy of `C:/Users/<name>/Projects/testops/data/testops.db` and
    `data/blobs` into the worktree's gitignored `data/` and read it read-only; the main checkout's
    store was only ever opened with `?mode=ro`. Without the copy the same suite is **445 passed,
    11 skipped** plus the one failure below.

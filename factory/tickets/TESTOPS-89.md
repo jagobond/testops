@@ -12,7 +12,7 @@ depends_on: TESTOPS-88
 ## What is observed
 
 Deployed on Container Apps (revision `testops--0000003`, image `testops:v2`, system-assigned identity
-`3a887e71-88d6-4d22-b378-954d328ea710` with Cognitive Services User on `testops-resource`, `TESTOPS_FOUNDRY_ENDPOINT` and
+(the deployment's own client id, redacted here) with Cognitive Services User on the account, `TESTOPS_FOUNDRY_ENDPOINT` and
 `TESTOPS_AGENT_MODEL` set), a case page with `?agent=on` renders the honest fallback sentence: *"The model-written
 explanation is not available: this deployment has no token from the environment, a managed identity or the az CLI."*
 

@@ -143,7 +143,7 @@ old rules accepted but no prefix matches behaves exactly as before.
 ### Tests — `tests/test_secret_guard.py`, 15 → 36 (+21)
 
 - `test_a_known_token_prefix_is_refused_at_any_length` — 13 parameters, one per prefix, each at its
-  shortest realistic value (`AKIA2E0A8F3B244C9986`, 20; `ASIAY34FZKBOKMUTVV7A`, 20; `ghp_…` and the
+  shortest realistic value (an `AKIA` body of 20; an `ASIA` body of 20; `ghp_…` and the
   other GitHub/Slack/GitLab/`sk-`/`eyJ` forms; `-----BEGIN RSA PRIVATE KEY-----`, 31). Every probe
   asserts `len(token) < _BLOB_MIN`, so the test fails if it is ever rewritten into a value the
   entropy floors would have caught anyway.

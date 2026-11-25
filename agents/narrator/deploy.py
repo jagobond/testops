@@ -1,5 +1,14 @@
-"""Deploy the narrator source as a hosted agent. Requires: pip install azure-ai-projects azure-identity."""
+"""Deploy the narrator source as a hosted agent. Requires: pip install azure-ai-projects azure-identity.
+
+TESTOPS-102: every coordinate comes from the environment, and an unset one is a named error rather
+than a default pointing at somebody's tenant.
+
+  TESTOPS_PROJECT_ENDPOINT   the Foundry project endpoint, e.g.
+                             https://<account>.services.ai.azure.com/api/projects/<project>
+  TESTOPS_AGENT_NAME         the agent's name in that project, e.g. testops-narrator
+"""
 import hashlib
+import os
 import sys
 import time
 import zipfile
@@ -10,9 +19,17 @@ from azure.ai.projects.models import (CodeConfiguration, HostedAgentDefinition,
                                       ProtocolVersionRecord)
 from azure.identity import AzureCliCredential
 
-ENDPOINT = "https://testops-resource.services.ai.azure.com/api/projects/testops"
-NAME = "testops-narrator"
 HERE = Path(__file__).resolve().parent
+
+
+def required(name: str) -> str:
+    """The environment variable's value, or an exit naming the variable that is missing."""
+    value = (os.environ.get(name) or "").strip()
+    if not value:
+        print(f"deploy: {name} is not set. It has no default: a deployment names its own project "
+              f"and agent (see docs/DEPLOYING.md).", file=sys.stderr)
+        raise SystemExit(2)
+    return value
 
 
 def build_zip() -> Path:
@@ -24,19 +41,23 @@ def build_zip() -> Path:
 
 
 def main() -> int:
+    endpoint = required("TESTOPS_PROJECT_ENDPOINT")
+    name = required("TESTOPS_AGENT_NAME")
     bundle = build_zip()
     blob = bundle.read_bytes()
-    project = AIProjectClient(endpoint=ENDPOINT, credential=AzureCliCredential())
+    project = AIProjectClient(endpoint=endpoint, credential=AzureCliCredential())
     created = project.agents.create_version_from_code(
-        agent_name=NAME,
+        agent_name=name,
         definition=HostedAgentDefinition(
             cpu="0.25", memory="0.5Gi",
             code_configuration=CodeConfiguration(runtime="python_3_13",
                                                  entry_point=["python", "main.py"],
                                                  dependency_resolution="remote_build"),
             protocol_versions=[ProtocolVersionRecord(protocol="responses", version="2.0.0")],
-            environment_variables={"AZURE_AI_MODEL_DEPLOYMENT_NAME": "deepseek-flash",
-                                   "PYTHONNOUSERSITE": "1"},
+            environment_variables={
+                "AZURE_AI_MODEL_DEPLOYMENT_NAME":
+                    (os.environ.get("TESTOPS_AGENT_MODEL") or "").strip() or "deepseek-flash",
+                "PYTHONNOUSERSITE": "1"},
         ),
         code=(bundle.name, blob, "application/zip"),
         code_zip_sha256=hashlib.sha256(blob).hexdigest(),
@@ -44,7 +65,7 @@ def main() -> int:
     )
     print("created version", created.version)
     for _ in range(40):
-        v = project.agents.get_version(agent_name=NAME, agent_version=created.version)
+        v = project.agents.get_version(agent_name=name, agent_version=created.version)
         state = getattr(v.status, "name", str(v.status)).split(".")[-1].lower()
         print("status:", state)
         if state in ("active", "failed", "error"):

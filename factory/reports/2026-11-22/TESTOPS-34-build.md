@@ -1,7 +1,7 @@
 # TESTOPS-34 — build report
 
 Verdict: **implemented, suite green, rehearsed on a copy of the live store**. The live store at
-`C:/Users/Chester/Projects/testops/data` was read only (SQLite opened `?mode=ro`); nothing in it was
+`C:/Users/<name>/Projects/testops/data` was read only (SQLite opened `?mode=ro`); nothing in it was
 written, migrated or deleted.
 
 ## What the defect actually was
@@ -45,7 +45,7 @@ No analyser, pipeline, scoring or schema change. No migration: the rows stay whe
 
 ## Live store: case list before / after
 
-Read from `C:/Users/Chester/Projects/testops/data/testops.db` with `?mode=ro`, running the old query
+Read from `C:/Users/<name>/Projects/testops/data/testops.db` with `?mode=ro`, running the old query
 and the new one side by side.
 
 ```
@@ -123,10 +123,10 @@ worktree with
 
 ```
 env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 PYTHONPATH=. \
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 ```
 
-`import testops` resolves to `C:\Users\Chester\Projects\testops-t34\testops\__init__.py`.
+`import testops` resolves to `C:\Users\<name>\Projects\testops-t34\testops\__init__.py`.
 
 ## What the Product Owner has to run
 

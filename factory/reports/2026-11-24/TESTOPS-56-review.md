@@ -1,9 +1,9 @@
 # TESTOPS-56 review — tuning the credential screen: both directions judged
 
-Reviewer run, 2026-11-24. Worktree `C:/Users/Chester/Projects/testops-t56`, branch
+Reviewer run, 2026-11-24. Worktree `C:/Users/<name>/Projects/testops-t56`, branch
 `factory/testops-56-screen-tuning`, HEAD `c800b73`. Interpreter everywhere:
 `env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
-C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe`.
+C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe`.
 
 Every probe below was run by me, not taken from the build report. Detection probes called
 `_looks_like_secret` directly; the HTTP battery ran against a fresh copy of `data/` served by an

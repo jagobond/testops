@@ -14,7 +14,7 @@ depends_on: TESTOPS-53
 `harness.require_disposable_store` refuses any offered path outside `tempfile.gettempdir()`. That is structural - it
 checks the resolved path, not a variable - but the root it compares against is itself movable: `tempfile.gettempdir()`
 honours `TMPDIR`/`TEMP`/`TMP`, and on this host `TMPDIR` with a pre-created directory wins. The T53 review proved it:
-with `TMPDIR=C:/Users/Chester/Projects/attack-tmp`, the suite built its store inside the Projects directory and ran
+with `TMPDIR=C:/Users/<name>/Projects/attack-tmp`, the suite built its store inside the Projects directory and ran
 normally, so the guarantee "no environment variable can point it at a persistent store" was false as written.
 
 It cannot reach the live store - the fixture hands the store to the child rather than reading it from the environment,

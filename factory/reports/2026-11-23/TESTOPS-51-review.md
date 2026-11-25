@@ -52,7 +52,7 @@ Ticket AC4 — all eleven verified over HTTP, individually:
 | `RuckoldtAndRylander` | accepted | right |
 | `cotw-continuity pipeline #2` | accepted | right |
 | `mwinteringham/restful-booker-platform` | accepted | right |
-| `100.121.128.21` | accepted | right |
+| `<tailnet-address>` | accepted | right |
 | `localhost:8791` | accepted | right |
 | `https://github.com/org/repo.git` | accepted | right |
 | `COTW` | accepted | right |

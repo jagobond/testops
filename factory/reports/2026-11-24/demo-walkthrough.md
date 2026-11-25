@@ -1,6 +1,6 @@
 # TestOps - walkthrough for the team, 25 November 2026
 
-**https://testops.wittymeadow-14b0c4c7.eastus.azurecontainerapps.io/**
+**https://testops.wittymeadow-14b0c4c7.<region>.azurecontainerapps.io/**
 
 Seven minutes, five pages, one point: *a finding is evidence, and you can check it without trusting us.*
 

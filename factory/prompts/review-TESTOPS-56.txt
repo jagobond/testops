@@ -2,10 +2,10 @@ You are the reviewer on the TestOps factory. Judge TESTOPS-56 - tuning the crede
 ordinary words. This is the classic trade: every narrowing that removes a false positive risks a false negative, and a
 screen that misses real keys is worse than one that is annoying. Judge both directions.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t56 (branch `factory/testops-56-screen-tuning`). Only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t56 (branch `factory/testops-56-screen-tuning`). Only here.
 Ticket: factory/tickets/TESTOPS-56.md ; Build: factory/reports/2026-11-24/TESTOPS-56-build.md
 Prior evidence: factory/reports/2026-11-23/TESTOPS-51-review.md (the false-positive table and three concerns)
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Never write to the live store or contact port 8791. Copy `data/`, serve on a free port.

@@ -74,7 +74,7 @@ page golden exists in that fixture; `runs.html` and the twelve case pages are by
 ## Verification
 
     env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-      C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+      C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 
     730 passed, 3 skipped, 2 failed in 151.81s
 

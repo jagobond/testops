@@ -74,7 +74,7 @@ subject and complement.
 Interpreter:
 
     env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-      C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+      C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 
 - Contract suite: `pytest tests/contracts -q` -> **37 passed, 2 skipped**.
 - Full suite: `pytest -q` -> **866 passed, 2 skipped**.

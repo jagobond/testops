@@ -1,5 +1,13 @@
-"""Draw the deployed TestOps architecture as a PNG. Second pass: layout faults fixed."""
+"""Draw the deployed TestOps architecture as a PNG. Second pass: layout faults fixed.
+
+TESTOPS-102: the subscription id is read from ``AZURE_SUBSCRIPTION_ID``, and the output path is
+whatever the caller passes (default: ``testops-azure-components.png`` in the working directory).
+Nothing here names a subscription or a home directory of its own.
+"""
 import math
+import os
+import sys
+
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1760, 1200
@@ -116,9 +124,10 @@ arrow(1274, 190, 1070, 190, color=GREY, width=2, dash=True)
 label((706, 176), "hyperlinks to files at a commit - fetched by the browser, never by the app", F_SMALL, MUTED)
 
 # subscription
+SUBSCRIPTION = (os.environ.get("AZURE_SUBSCRIPTION_ID") or "").strip() or "(subscription id not set)"
 SUB = (48, 292, 1712, 1100)
 rbox(SUB, r=18, fill=(247, 249, 252), outline=AZURE, width=3)
-text((70, 306), "Azure subscription: Foundry  ·  965a76e1-8fe3-405e-b484-4820aca954b1", F_ZONE, AZURE)
+text((70, 306), f"Azure subscription: Foundry  ·  {SUBSCRIPTION}", F_ZONE, AZURE)
 
 # resource group
 RG = (70, 356, 1300, 1074)
@@ -199,6 +208,6 @@ label((1148, 812), "container logs", F_SMALL, GREEN, anchor="ra")
 text((48, 1124), "Not shown because it does not exist: no database server, no queue, no secrets manager, no outbound network path. The app is one process, one file, one directory of blobs.",
      F_SMALL, MUTED)
 
-out = "C:/Users/Chester/Projects/testops/factory/reports/2026-11-24/testops-azure-components.png"
+out = sys.argv[1] if len(sys.argv) > 1 else "testops-azure-components.png"
 img.save(out)
 print("saved", out)

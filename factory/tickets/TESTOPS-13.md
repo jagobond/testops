@@ -48,7 +48,7 @@ file, so nothing checks it.
 env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
   .venv/Scripts/python.exe -m pytest -q
 env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-  "C:/Users/Chester/AppData/Roaming/uv/python/cpython-3.11.15-windows-x86_64-none/python.exe" -m pytest -q
+  "C:/Users/<name>/AppData/Roaming/uv/python/cpython-3.11.15-windows-x86_64-none/python.exe" -m pytest -q
 ```
 
 ## Notes

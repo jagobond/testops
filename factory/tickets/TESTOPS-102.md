@@ -12,7 +12,7 @@ depends_on: TESTOPS-93
 ## Why
 
 Harry wants to push this repository to a Quilter organisation so colleagues can run it. Today the tree carries his
-subscription id, resource group and account names, a tailnet address, absolute `C:/Users/Chester/...` paths and baked
+subscription id, resource group and account names, a tailnet address, absolute `C:/Users/<name>/...` paths and baked
 deployment defaults. A scan of the tracked files found 471 matches: 55 Azure identifiers in 20 files, 324 absolute
 paths in 154 files, 6 GUIDs, 17 tailnet addresses.
 

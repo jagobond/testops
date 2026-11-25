@@ -1,6 +1,6 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-37.
 
-Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-37-decision-survives`, tree clean.
+Repository: C:/Users/<name>/Projects/testops, branch `factory/testops-37-decision-survives`, tree clean.
 Ticket:     factory/tickets/TESTOPS-37.md
 Diff:       git diff main..HEAD
 

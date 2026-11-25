@@ -72,7 +72,7 @@ an untracked write to `data/` fails; a committed deletion is reported.
 
 Interpreter:
 `env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
-C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q`
+C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q`
 
 - Full suite: **886 passed, 2 skipped** (154s).
 - Contract suite (`tests/contracts`): **37 passed, 2 skipped**.

@@ -1,6 +1,6 @@
 # TESTOPS-57 build — the claims the tool could not place have a section of their own
 
-Worktree: `C:/Users/Chester/Projects/testops-t57`, branch `factory/testops-57-unplaced-section`.
+Worktree: `C:/Users/<name>/Projects/testops-t57`, branch `factory/testops-57-unplaced-section`.
 Store used: the copy in `data/`, opened read-only. The live store was not written and port 8791 was
 not contacted.
 

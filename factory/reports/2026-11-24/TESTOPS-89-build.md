@@ -71,7 +71,7 @@ and asserts that no eight-character window of it appears in the rendered page or
 ## Verification
 
     env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-      C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+      C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
     1342 passed, 2 skipped in 281.56s (EXIT=0)
 
 That includes the AC5 gates as they already stood: `test_every_real_case_page_is_byte_identical_to_the_pre_change_build`

@@ -1,12 +1,12 @@
 You are the builder on the TestOps factory. Implement TESTOPS-2 exactly.
 
 Read, in this order:
-  1. C:/Users/Chester/Projects/testops/factory/tickets/TESTOPS-2.md  (the ticket and its acceptance criteria)
-  2. C:/Users/Chester/Projects/testops/AGENTS.md                    (the Factory Rule and verification command)
-  3. C:/Users/Chester/Projects/testops/ROLES.md                     (your role)
+  1. C:/Users/<name>/Projects/testops/factory/tickets/TESTOPS-2.md  (the ticket and its acceptance criteria)
+  2. C:/Users/<name>/Projects/testops/AGENTS.md                    (the Factory Rule and verification command)
+  3. C:/Users/<name>/Projects/testops/ROLES.md                     (your role)
 
-Repository: C:/Users/Chester/Projects/testops
-Python:     C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe  (pytest 9.2.0 already installed)
+Repository: C:/Users/<name>/Projects/testops
+Python:     C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe  (pytest 9.2.0 already installed)
 
 HARD CONSTRAINTS
 - Do not change anything under testops/ except pyproject.toml. AC2 is a packaging fix; everything

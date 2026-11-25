@@ -1,6 +1,6 @@
 # TESTOPS-88 review — the agent, weighed by a reviewer who did not build it
 
-2026-11-24, worktree `C:/Users/Chester/Projects/testops-t88`, commit `6eddb2e`, branch
+2026-11-24, worktree `C:/Users/<name>/Projects/testops-t88`, commit `6eddb2e`, branch
 `factory/testops-88-agent-ab`. Everything below was reproduced in this worktree only; the live
 store and port 8791 were never touched. The `data/testops.db` in the worktree was opened
 read-only (`mode=ro`) for every render.

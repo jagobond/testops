@@ -1,6 +1,6 @@
 # TESTOPS-74 review — the Java reader stops guessing
 
-2026-11-24, worktree `C:/Users/Chester/Projects/testops-t74`, branch
+2026-11-24, worktree `C:/Users/<name>/Projects/testops-t74`, branch
 `factory/testops-74-java-honesty`. Store: the worktree's own `data/` only; the live store and
 port 8791 were never opened. Note: the stated prior review
 (`factory/reports/2026-11-24/TESTOPS-70-review.md`) does not exist at that path; the two concerns

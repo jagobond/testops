@@ -1,11 +1,17 @@
 """Daily spend by service for the Foundry subscription, over the last N days.
 
 Uses the Cost Management query API directly: `az consumption` returns null costs on this subscription.
+TESTOPS-102: the subscription id is read from ``AZURE_SUBSCRIPTION_ID``; the ``az`` CLI is found on
+PATH. Neither a subscription nor an install directory is written into the source.
 """
-import json, subprocess, sys, datetime as dt
+import json, os, shutil, subprocess, sys, datetime as dt
 
-AZ = r"C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd"
-SUB = "965a76e1-8fe3-405e-b484-4820aca954b1"
+SUB = (os.environ.get("AZURE_SUBSCRIPTION_ID") or "").strip()
+AZ = shutil.which("az")
+if not SUB or not AZ:
+    missing = "AZURE_SUBSCRIPTION_ID" if not SUB else "the az CLI on PATH"
+    print(f"cost_probe: {missing} is unset, so there is no subscription to price.", file=sys.stderr)
+    sys.exit(2)
 days = int(sys.argv[1]) if len(sys.argv) > 1 else 3
 end = dt.date.today()
 start = end - dt.timedelta(days=days)

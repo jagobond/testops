@@ -1,6 +1,6 @@
 # TESTOPS-90 review — a citation id is not a statistic, and a rejection gets one repair
 
-2026-11-24, worktree `C:/Users/Chester/Projects/testops-t90`, branch
+2026-11-24, worktree `C:/Users/<name>/Projects/testops-t90`, branch
 `factory/testops-90-citation-id`, commit `515354d`. Store touched only read-only (`file:...?mode=ro`);
 port 8791 never touched. Probes run from the project `.venv` with `PYTHONPATH`/`VIRTUAL_ENV`/
 `CONDA_PREFIX` stripped and `PYTHONNOUSERSITE=1`.

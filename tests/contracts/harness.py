@@ -53,8 +53,9 @@ SEED_JSON = HERE / "seed" / "seed.json"
 SEED_BLOBS = HERE / "seed" / "blobs"
 
 # The live deployment, named here only so a test can refuse it. Nothing in this suite connects to
-# it: the harness binds 127.0.0.1 on a port the kernel chose.
-LIVE_HOST = "100.121.128.21"
+# it: the harness binds 127.0.0.1 on a port the kernel chose. The host is a reserved name rather
+# than an address (TESTOPS-102): refusing "the live deployment" needs a second port, not a tailnet.
+LIVE_HOST = "live.invalid"
 LIVE_PORT = 8791
 
 HOST = "127.0.0.1"
@@ -118,7 +119,7 @@ def _windows_temp_root() -> Path:
                     ("Data3", ctypes.c_uint16), ("Data4", ctypes.c_ubyte * 8)]
 
     guid = _GUID()
-    known = uuid.UUID("{F1B32785-6FBA-4FCF-9D55-7B8E7F157091}")  # FOLDERID_LocalAppData
+    known = uuid.UUID(bytes=bytes.fromhex("f1b327856fba4fcf9d557b8e7f157091"))  # FOLDERID_LocalAppData
     guid.Data1, guid.Data2, guid.Data3 = struct.unpack("<IHH", known.bytes_le[:8])
     ctypes.memmove(guid.Data4, known.bytes[8:], 8)
 

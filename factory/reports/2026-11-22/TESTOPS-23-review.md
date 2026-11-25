@@ -113,7 +113,7 @@ restatement. The margin of safety: a writer could paraphrase in 5-word windows a
 3. **AC11 is trusted, not verified, by this review.** The screenshots exist and the CSS carries the
    measured numbers with the reason, but I had no way to view the images in this session. Whoever
    merges should look once at
-   `C:\Users\Chester\Pictures\testops-screenshots\TESTOPS-26-case-cotw-levels-20261122T011316-03-scan-block-2x.png`.
+   `C:\Users\<name>\Pictures\testops-screenshots\TESTOPS-26-case-cotw-levels-20261122T011316-03-scan-block-2x.png`.
 
 ## Demo
 

@@ -1,6 +1,6 @@
 # TESTOPS-73 build — the case page names what it examined
 
-Worktree `C:/Users/Chester/Projects/testops-t73`, branch `factory/testops-73-source-tags`.
+Worktree `C:/Users/<name>/Projects/testops-t73`, branch `factory/testops-73-source-tags`.
 Ticket: `factory/tickets/TESTOPS-73.md`. All work is on that branch; nothing was pushed to `main`.
 
 ## What changed
@@ -64,7 +64,7 @@ change even though their content did not.
 
 ```
 env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 1142 passed, 2 skipped in 193.25s
 
 ... -m pytest -q tests/contracts

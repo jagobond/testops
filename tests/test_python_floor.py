@@ -19,6 +19,7 @@ fails its own tests rather than passing quietly.
 from __future__ import annotations
 
 import io
+import os
 import shutil
 import subprocess
 import sys
@@ -28,11 +29,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "testops"
 
-# The interpreter that actually serves this project's UI (see TESTOPS-13 notes).
-KNOWN_FLOOR_INTERPRETERS = [
-    Path("C:/Users/Chester/AppData/Roaming/uv/python/"
-         "cpython-3.11.15-windows-x86_64-none/python.exe"),
-]
+# A Python 3.11 an operator wants the guards run against, named by ``TESTOPS_FLOOR_PYTHON``. It used
+# to be an absolute path on one developer's machine (TESTOPS-102); a machine that names none tests
+# against whatever 3.11 it finds on PATH, and a machine with none says so rather than skipping.
+def _known_floor_interpreters() -> list[Path]:
+    named = (os.environ.get("TESTOPS_FLOOR_PYTHON") or "").strip()
+    return [Path(named)] if named else []
 
 
 def _modules() -> list[Path]:
@@ -89,7 +91,7 @@ def _floor_interpreters() -> list[Path]:
     found = shutil.which("python3.11")
     if found:
         candidates.append(Path(found))
-    candidates.extend(p for p in KNOWN_FLOOR_INTERPRETERS if p.exists())
+    candidates.extend(p for p in _known_floor_interpreters() if p.exists())
     out: list[Path] = []
     for candidate in candidates:
         try:

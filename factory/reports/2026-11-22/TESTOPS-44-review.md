@@ -176,7 +176,7 @@ Suite: `env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOU
 | `sk-abcdefghij` (10-char body) | accepted | 200, stored |
 | `sk-` + 32 digits | refused | 400, prefix `sk-` |
 | `github_pat_` + 22 containing `-` | accepted | 200, stored |
-| `github_pat_ABCDEFGHIJKLMNOPQRSTUV` (exactly 22 base62) | refused | 400, prefix `github_pat_` |
+| `github_pat_` + exactly 22 base62 | refused | 400, prefix `github_pat_` |
 
 All five agree with the code: `_is_sk_key` demands a 32+ unbroken `[A-Za-z0-9_-]` body that is not a
 word chain (so 10 chars passes, 48 alnum/digits refuses); `_GITHUB_PAT` demands 22+ base62 with only

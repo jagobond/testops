@@ -1,9 +1,9 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-8.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t8 (branch `factory/testops-8-packaging`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t8 (branch `factory/testops-8-packaging`). Work only here.
 Ticket:  factory/tickets/TESTOPS-8.md
 Build:   factory/reports/2026-11-23/TESTOPS-8-build.md
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 A packaging test that has never been seen to fail is the false confidence this ticket removed. Your job is to check the
 replacement is not the same problem in new clothes.

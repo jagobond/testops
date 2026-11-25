@@ -276,7 +276,8 @@ _COMPOUND_CREDENTIAL = re.compile(
     r"conn[ _-]?strings?|dsns?)$")
 # A name on its own, used for the settings *key* and for the single-token rule.
 _CREDENTIAL_NAME_ALONE = re.compile(rf"(?i)(?:^|[^A-Za-z0-9]){_STRONG_WORDS}(?:$|[^A-Za-z0-9])")
-# `Bearer abc123`, `Basic dXNlcjpwYXNz`: an authorization scheme and exactly one unbroken value.
+# `Bearer <value>`, `Basic <base64 of user:password>`: an authorization scheme and exactly one
+# unbroken value.
 # TESTOPS-59 AC1/AC2: the scheme is the shape only when the value is the whole remainder. A sentence
 # that happens to open with the word ("Bearer token rotation work continues") continues past the
 # first word, so it is prose, not a header - scanning prose must not turn into refusing sentences.
@@ -730,7 +731,7 @@ def _looks_like_secret(value: str) -> str | None:
     #    caught here, before any rule asks whether somebody listed `dsn`. The reason names the shape
     #    and never the secret.
     if _INLINE_PASSWORD.search(plain):
-        return ("it embeds a password in a URL: the 'scheme://user:password@host' form carries the "
+        return ("it embeds a password in a URL: the 'scheme://user:<password>@host' form carries the "
                 "credential inside the address")
     # TESTOPS-69 residual 2: the query string is the other half of the same floor -
     # `postgres://app@db/qa?password=x` writes the secret into the address under a name that says

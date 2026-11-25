@@ -1,11 +1,11 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-49 - the guard against a test that passes when its subject
 has vanished.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t49 (branch `factory/testops-49-not-vacuous`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t49 (branch `factory/testops-49-not-vacuous`). Work only here.
 Ticket:  factory/tickets/TESTOPS-49.md
 Build:   factory/reports/2026-11-23/TESTOPS-49-build.md
 Prior review: factory/reports/2026-11-23/TESTOPS-48-review.md, concern 1 - the evidence.
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Run the suite from this worktree with the interpreter above.

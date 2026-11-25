@@ -1,9 +1,9 @@
 # TESTOPS-51 build — one screen for every field, and a project that can be deleted
 
-Builder run, 2026-11-23. Worktree `C:/Users/Chester/Projects/testops-t51`, branch
+Builder run, 2026-11-23. Worktree `C:/Users/<name>/Projects/testops-t51`, branch
 `factory/testops-51-credential-screen`. Interpreter, everywhere below:
 
-    env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+    env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 No product code was edited outside this ticket, no contract test was edited, and the live store
 (`data/testops.db`) and the live server on 8791 were not touched.
@@ -101,7 +101,7 @@ for `pytest tests --ignore=tests/contracts` (622 before this ticket + 54 new). N
 fixture changed (`git status` shows only the two product files and the new test file).
 
 Note on "full suite": a bare `pytest -q` also runs `tests/contracts`, which by design drives a live
-server (default `http://100.121.128.21:8791`) and fails on the five promises above. That gate is
+server (default `http://<tailnet-address>:8791`) and fails on the five promises above. That gate is
 AC7's, run separately against a copy; it is not a product-suite failure.
 
 ## Red run

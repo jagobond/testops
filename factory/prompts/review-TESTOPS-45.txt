@@ -1,9 +1,9 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-45.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t45 (branch `factory/testops-45-verdict-trigger`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t45 (branch `factory/testops-45-verdict-trigger`). Work only here.
 Ticket:  factory/tickets/TESTOPS-45.md
 Build:   factory/reports/2026-11-22/TESTOPS-45-build.md
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 The change adds schema v5: a `verdict_vocabulary` table (5 current + 3 retired names) and BEFORE INSERT / BEFORE
 UPDATE OF verdict triggers that refuse anything else, plus `testops check-store`.

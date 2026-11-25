@@ -185,6 +185,10 @@ def store(tmp_path):
 @pytest.fixture(autouse=True)
 def _clean_token_state(monkeypatch):
     agent.reset_token_cache()
+    # TESTOPS-102: the address is configuration. A test that renders /agent-check configures the
+    # account and project it expects, rather than relying on a name baked into the build.
+    monkeypatch.setenv("TESTOPS_FOUNDRY_ACCOUNT", "example-account")
+    monkeypatch.setenv("TESTOPS_AGENT_PROJECT", "example-project")
     monkeypatch.setattr(client, "_LAST_PROBE", dict(client._LAST_PROBE))
     yield
     agent.reset_token_cache()

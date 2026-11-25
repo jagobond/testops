@@ -1,11 +1,11 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-33.
 
-Repository: C:/Users/Chester/Projects/testops-t33 (a git worktree), branch `factory/testops-33-headline`.
+Repository: C:/Users/<name>/Projects/testops-t33 (a git worktree), branch `factory/testops-33-headline`.
 Ticket:     factory/tickets/TESTOPS-33.md (in this worktree)
 Diff:       git diff origin/feature/f1..HEAD
 
-IMPORTANT: no .venv here. `cd C:/Users/Chester/Projects/testops-t33 && env -u PYTHONPATH -u VIRTUAL_ENV
-PYTHONNOUSERSITE=1 PYTHONPATH=. C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q`; confirm
+IMPORTANT: no .venv here. `cd C:/Users/<name>/Projects/testops-t33 && env -u PYTHONPATH -u VIRTUAL_ENV
+PYTHONNOUSERSITE=1 PYTHONPATH=. C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q`; confirm
 `testops.__file__` points into this worktree.
 
 The defect: the case list's link text was the raw assertion fragment "the suggestions list should be" - not a

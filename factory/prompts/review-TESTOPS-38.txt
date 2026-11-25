@@ -1,7 +1,7 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-38 - the largest change so far and the one that
 touches the live store.
 
-Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-38-projects-services`, tree clean, 439 tests.
+Repository: C:/Users/<name>/Projects/testops, branch `factory/testops-38-projects-services`, tree clean, 439 tests.
 Ticket:     factory/tickets/TESTOPS-38.md
 Decision:   docs/ADR-1-projects-and-services.md
 Build report: factory/reports/2026-11-22/TESTOPS-38-build.md (read it, then distrust it)

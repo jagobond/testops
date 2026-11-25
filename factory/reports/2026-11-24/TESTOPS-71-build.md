@@ -1,7 +1,7 @@
 # TESTOPS-71 build - the quiet fallback, the lying field, the placeholder
 
 Ticket: `factory/tickets/TESTOPS-71.md`. Branch: `factory/testops-71-quiet-fallback`, built in the
-linked worktree `C:/Users/Chester/Projects/testops-t71`. The live store and port 8791 were never
+linked worktree `C:/Users/<name>/Projects/testops-t71`. The live store and port 8791 were never
 contacted: every probe is a direct call to `testops.services`, the guard in `tests/support.py`, or a
 disposable git repository under `tmp_path`.
 

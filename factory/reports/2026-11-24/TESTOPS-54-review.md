@@ -1,6 +1,6 @@
 # TESTOPS-54 — review: every page leads somewhere
 
-Reviewed on branch `factory/testops-54-navigation`, worktree `C:/Users/Chester/Projects/testops-t54`
+Reviewed on branch `factory/testops-54-navigation`, worktree `C:/Users/<name>/Projects/testops-t54`
 (build commit 9cd8c83). Every check below was run against a **copy** of `data/testops.db` served on
 127.0.0.1:8477 (`TESTOPS_DATA` pointed at the copy); the live store and port 8791 were never
 written. One process note, disclosed in full: the first server launch silently fell back to the

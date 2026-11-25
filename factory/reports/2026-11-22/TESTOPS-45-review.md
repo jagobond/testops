@@ -50,7 +50,7 @@ After every refused INSERT the claim count was still 0.
 
 Done twice — once on a simulated v4 store (128 claims: `optimal` 36, `overbuilt` 67, `necessary` 25,
 triggers dropped, `schema_version` set back to 4), once on a **copy of the real live store**
-(`C:/Users/Chester/Projects/testops/data/testops.db` → scratch copy, 2,310 claims, still at v4 with
+(`C:/Users/<name>/Projects/testops/data/testops.db` → scratch copy, 2,310 claims, still at v4 with
 no triggers).
 
 - Simulated v4 → v5 reopen: `migrated store v4 -> v5`, triggers installed, all 128 rows present, all

@@ -10,8 +10,12 @@ they are the three things this module now gets right:
 * **No credential of its own.** A token comes from ``TESTOPS_AGENT_TOKEN`` when a deployment sets it,
   otherwise from the managed identity over IMDS, otherwise from the locally logged-in ``az``. The
   token is never stored, never logged and never returned in an error message.
-* **Endpoint and model are configuration.** They default to the Foundry project ``testops-resource``
-  and ``deepseek-flash`` and can be pointed anywhere without editing code.
+* **Endpoint and model are configuration.** The Foundry account and project, the agent's name and
+  the model name all arrive from the environment (``TESTOPS_FOUNDRY_ACCOUNT``,
+  ``TESTOPS_AGENT_PROJECT``, ``TESTOPS_AGENT_NAME``, ``TESTOPS_AGENT_MODEL``) and can be pointed
+  anywhere without editing code. With either half of the address absent the route is
+  **unconfigured**: this module returns no URL at all rather than inventing one, and
+  :func:`missing_variable` names the setting that is absent (TESTOPS-102).
 
 Nothing in this module decides whether a claim is right. It returns text and its token counts;
 ``testops/judgement/agent.py`` decides whether that text may be shown.
@@ -43,15 +47,50 @@ IMDS_API_VERSIONS = ("2018-02-01", "2019-08-01")
 IMDS_TIMEOUT = 10.0
 IMDS_RETRIES = 1
 
-# The two pieces of configuration. Both are overridable; neither is a secret.
-DEFAULT_PROJECT = "testops-resource"
+# The pieces of configuration. Nothing here names a real account, project or host: a repository is
+# pushed to a colleague's organisation and must not point at anybody's tenant (TESTOPS-102). Every
+# one of them is overridable; none is a secret.
+FOUNDRY_ACCOUNT_VARIABLE = "TESTOPS_FOUNDRY_ACCOUNT"
+PROJECT_VARIABLE = "TESTOPS_AGENT_PROJECT"
 DEFAULT_MODEL = "deepseek-flash"
 
-# TESTOPS-93. The hosted agent's own defaults: its name in the Foundry project, and how long the
-# page is willing to wait for it. Twenty seconds is the ticket's limit, and a page that has waited
-# that long says so rather than substituting the model route for it.
+# TESTOPS-93. The hosted agent's own defaults: how long the page is willing to wait for it.
+# Twenty seconds is the ticket's limit, and a page that has waited that long says so rather than
+# substituting the model route for it. The agent's *name* is configuration (``TESTOPS_AGENT_NAME``)
+# like every other coordinate, but it is also the name this repository's own agent is deployed
+# under, so it is the one value that has an honest default.
 DEFAULT_AGENT_NAME = "testops-narrator"
 DEFAULT_AGENT_TIMEOUT = 20.0
+
+
+def foundry_account(environ: Mapping[str, str] | None = None) -> str:
+    """The Foundry account (``TESTOPS_FOUNDRY_ACCOUNT``), or ``""`` when nobody configured one."""
+    env = os.environ if environ is None else environ
+    return (env.get(FOUNDRY_ACCOUNT_VARIABLE) or "").strip()
+
+
+def project_name(environ: Mapping[str, str] | None = None, project: str | None = None) -> str:
+    """The project inside the account (``TESTOPS_AGENT_PROJECT``), or ``""`` when unset."""
+    env = os.environ if environ is None else environ
+    return (project or (env.get(PROJECT_VARIABLE) or "").strip()).strip()
+
+
+def missing_variable(environ: Mapping[str, str] | None = None,
+                     project: str | None = None) -> str:
+    """The variable that keeps the derived address unconfigured, or ``""`` when both are set.
+
+    Two settings make one address, so "unconfigured" has to name which half is absent: an operator
+    who set the project and not the account would otherwise be told to set what is already there.
+    Only the derived form needs them; an explicit endpoint variable supplies its own address.
+    """
+    env = os.environ if environ is None else environ
+    if endpoint_variable(env):
+        return ""
+    if not foundry_account(env):
+        return FOUNDRY_ACCOUNT_VARIABLE
+    if not project_name(env, project):
+        return PROJECT_VARIABLE
+    return ""
 
 
 def endpoint(environ: Mapping[str, str] | None = None, project: str | None = None) -> str:
@@ -61,13 +100,20 @@ def endpoint(environ: Mapping[str, str] | None = None, project: str | None = Non
     derived form is the project's own OpenAI-compatible surface. :func:`endpoint_variable` names the
     setting that supplied an explicit value, because a page that says "configured" without saying
     which variable said it cannot explain a deployment that set the other one.
+
+    With the account or the project absent the answer is ``""`` - no URL, not a guess, and not an
+    address that names somebody else's tenant (TESTOPS-102 AC1). :func:`missing_variable` names the
+    setting to set.
     """
     env = os.environ if environ is None else environ
     explicit = endpoint_variable(env)
     if explicit:
         return (env.get(explicit) or "").strip()
-    name = project or (env.get("TESTOPS_AGENT_PROJECT") or "").strip() or DEFAULT_PROJECT
-    return f"https://{name}.services.ai.azure.com/openai/v1/chat/completions"
+    account = foundry_account(env)
+    name = project_name(env, project)
+    if not account or not name:
+        return ""
+    return f"https://{account}.services.ai.azure.com/openai/v1/chat/completions"
 
 
 # The two names an explicit endpoint has been given. The first is this build's; the second is what
@@ -475,14 +521,17 @@ def agent_endpoint(environ: Mapping[str, str] | None = None,
     :data:`ENDPOINT_VARIABLES`: those already name the model route's chat-completions address, and
     giving one variable two meanings would let a deployment point both routes at one address and
     believe it had configured two. The derived form is the project's own hosted-agent surface, which
-    the ticket verified live.
+    the ticket verified live; with the account or the project absent it is ``""``, never a guess.
     """
     env = os.environ if environ is None else environ
     explicit = (env.get(AGENT_ROUTE_VARIABLE) or "").strip()
     if explicit:
         return explicit
-    project = project or (env.get("TESTOPS_AGENT_PROJECT") or "").strip() or DEFAULT_PROJECT
-    return (f"https://{project}.services.ai.azure.com/api/projects/{project}"
+    account = foundry_account(env)
+    project = project_name(env, project)
+    if not account or not project:
+        return ""
+    return (f"https://{account}.services.ai.azure.com/api/projects/{project}"
             f"/agents/{agent_name(env)}/endpoint/protocols/openai/responses?api-version=v1")
 
 

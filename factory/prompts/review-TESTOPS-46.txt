@@ -1,9 +1,9 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-46.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t46 (branch `factory/testops-46-restore`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t46 (branch `factory/testops-46-restore`). Work only here.
 Ticket:  factory/tickets/TESTOPS-46.md
 Build:   factory/reports/2026-11-22/TESTOPS-46-build.md
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 The change makes the INSERT trigger accept every name in `verdict_vocabulary` (current and retired) so a store can be
 restored from its own history, keeps the UPDATE trigger current-only, and makes `db.add_claim` actually call

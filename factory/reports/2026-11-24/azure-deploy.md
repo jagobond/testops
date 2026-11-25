@@ -1,6 +1,6 @@
 # TestOps on Azure
 
-**Live: https://testops.wittymeadow-14b0c4c7.eastus.azurecontainerapps.io/**
+**Live: https://testops.wittymeadow-14b0c4c7.<region>.azurecontainerapps.io/**
 
 Deployed 2026-11-24 for a team walkthrough. Nothing in this deployment touches the FoundryVTT stack
 in `rg-foundry-prod`; it has its own resource group and its own registry.
@@ -11,7 +11,7 @@ in `rg-foundry-prod`; it has its own resource group and its own registry.
 |---|---|---|
 | resource group | `rg-testops-demo` | `eastus`. Its own group, so the demo can be deleted in one command |
 | container registry | `testopsdemo30562` | Basic tier, admin credentials enabled for the pull secret |
-| container apps environment | `testops-env` | default domain `wittymeadow-14b0c4c7.eastus.azurecontainerapps.io` |
+| container apps environment | `testops-env` | default domain `wittymeadow-14b0c4c7.<region>.azurecontainerapps.io` |
 | container app | `testops` | 0.25 vCPU / 0.5 Gi, external ingress on port 8080, replicas 1..1 |
 | storage account | `testopsdata20426` | Standard_LRS, share `testopsdata` mounted at `/app/data` |
 | Log Analytics | `workspace-rgtestopsdemoTazJ` | container stdout |

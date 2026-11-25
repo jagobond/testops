@@ -94,7 +94,7 @@ The repository is organised into **five zones**:
 | **2. Hosted Foundry Agent & Container** | `Dockerfile`, `.dockerignore`, `agents/narrator/`, `scripts/deploy_azure.sh` | Container image build (ACR Tasks), Container Apps deployment script, and the `testops-narrator` hosted Azure AI Foundry agent. |
 | **3. Tests & Page Contracts** | `tests/`, `tests/contracts/`, `tests/fixtures/` | ~80 invariant/unit test suites, real-repo fixtures (`reqoverflow`, pre-migration DBs), and a blind black-box HTTP/HTML contract suite running on an isolated port-0 child server. |
 | **4. Governance, Docs & Factory** | `AGENTS.md`, `PRODUCT.md`, `ROLES.md`, `docs/`, `factory/` | Multi-agent factory rules, ADRs ([docs/ADR-1-projects-and-services.md](docs/ADR-1-projects-and-services.md)), ecosystem inventories, tickets, prompts, and build/review/deploy reports. |
-| **5. Probes, Dev Scripts & CI** | `scripts/`, `tools/`, `.github/workflows/ci.yml`, `hello/`, `*_hello.py`, `cost_probe.py` | CI pipeline, exploratory inspection scripts, diagram generators, and earlier Foundry hello-world/cost probes. |
+| **5. Probes, Dev Scripts & CI** | `scripts/`, `tools/`, `.github/workflows/ci.yml`, `hello/`, `cost_probe.py` | CI pipeline (including the no-identifiers scan), exploratory inspection scripts, diagram generators, and the cost probe. |
 
 ### Inside `testops/`
 
@@ -318,7 +318,7 @@ Deterministic rules in `duplication.py` and `level_fitness.py` produce every ver
 TestOps already ships a working cloud demo deployment documented in [factory/reports/2026-11-24/azure-deploy.md](factory/reports/2026-11-24/azure-deploy.md) and [agents/narrator/README.md](agents/narrator/README.md):
 
 - **Container image:** [Dockerfile](Dockerfile) (`python:3.12-slim`, zero pip installs) built in the cloud via **ACR Tasks** (`scripts/deploy_azure.sh` → `az acr build` into `testopsdemo30562`) and deployed to **Azure Container Apps** (`rg-testops-demo` / `testops-env` / `testops`, `0.25 vCPU`, `0.5 Gi`, external ingress on port `8080`).
-- **Foundry integration:** Connects to Azure AI Foundry project `testops-resource` (`deepseek-flash` deployment) directly (`?agent=on`) and via the hosted Responses v2 agent `testops-narrator` (`?agent=foundry`, deployed from `agents/narrator/`).
+- **Foundry integration:** Connects to an Azure AI Foundry project named by `TESTOPS_FOUNDRY_ACCOUNT` and `TESTOPS_AGENT_PROJECT` (with the `deepseek-flash` deployment) directly (`?agent=on`) and via the hosted Responses v2 agent `testops-narrator` (`?agent=foundry`, deployed from `agents/narrator/`).
 - **Key lessons discovered live in Azure (driving the production target below):**
   1. **SQLite over Azure Files (SMB) fails on schema migrations across warm revisions** (`database is locked`), so the demo currently serves a baked-in read-mostly store (decisions/votes reset on revision restart). Production requires managed PostgreSQL + Azure Blob Storage.
   2. **Container Apps IMDS (`169.254.169.254`) was unreachable** from the demo container (`Errno 111`), so `TESTOPS_AGENT_TOKEN` is supplied via a Container App secret rather than image/repo config.

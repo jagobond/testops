@@ -88,7 +88,7 @@ anything else moved.
 
 ```
 env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 \
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 561 passed in 94.53s
 ```
 

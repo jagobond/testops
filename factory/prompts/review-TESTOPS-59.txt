@@ -2,10 +2,10 @@ You are the reviewer on the TestOps factory. Judge TESTOPS-59 - the credential s
 instead of matching from position 0, and the identifier rule claims to state itself grammatically. Both changes are the
 kind that quietly overreach: a scanner that finds a "token" in every sentence, and a rule that refuses names by grammar.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t59 (branch `factory/testops-59-prose-scan`). Only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t59 (branch `factory/testops-59-prose-scan`). Only here.
 Ticket: factory/tickets/TESTOPS-59.md ; Build: factory/reports/2026-11-24/TESTOPS-59-build.md
 The finding it fixes: factory/reports/2026-11-24/TESTOPS-56-review.md, "False negatives" and "Three sharpest concerns".
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Never write to the live store or contact port 8791. Copy `data/`, serve on a free port.
