@@ -11,7 +11,7 @@ verified afterwards, by running the checks rather than reading a summary.
 - The corpus was renamed across code, tests, fixtures, page goldens, the content-addressed seed and the docs, through
   `scripts/rename_corpus.py` (a data table, not hand edits). Old -> new: the private project keys became
   `demo-product` / `demo-service` / `demo-booking`, the two personal handles became `example-org`, and the tag prefix
-  `@COTW-n` became `@DEMO-n`.
+  the project's tag prefix became `@DEMO-n`.
 - `tests/contracts/seed/blobs/*` are named by the SHA-256 of their contents, so each rewritten blob was rehashed,
   renamed and its reference in `seed.json` updated. **Verified independently: 187 blobs, 0 whose filename disagrees
   with its contents.**

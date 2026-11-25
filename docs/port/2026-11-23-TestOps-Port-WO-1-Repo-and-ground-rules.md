@@ -6,6 +6,7 @@ deliverables:
   - .gitattributes
   - .gitignore (three additions)
   - scripts/verify.sh
+  - scripts/doctor.sh
   - docs/state/testops.md
   - .github/workflows/ci.yml (three changes)
   - factory/tickets/ (migration ticket)
@@ -32,7 +33,7 @@ Stop if the tree is dirty. A baseline taken on a dirty tree is not a baseline.
 
 ## Do this
 
-**1. Create the work repository from the export — not from a mirror.** This step was rewritten on 2026-11-25. The original instruction was `git clone --mirror` / `git push --mirror`, which republishes ~460 commits that contain the Azure subscription id, absolute `C:/Users/...` paths and the names of every project the tool was demonstrated on. **Do not run a mirror push.** If `DECISIONS.md` recorded D7 as full history, stop and take that decision back to the operator before doing anything else.
+**1. Create the work repository from the export — not from a mirror.** This step was rewritten on 2026-11-25. The original instruction was `git clone --mirror` / `git push --mirror`, which republishes ~460 commits that contain the Azure subscription id, absolute home paths (`C:/Users/<name>/...`) and the names of every project the tool was demonstrated on. **Do not run a mirror push.** If `DECISIONS.md` recorded D7 as full history, stop and take that decision back to the operator before doing anything else.
 
 If the target repo exists and is empty, build it from the export:
 

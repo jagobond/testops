@@ -144,7 +144,7 @@ Invoked as `python factory/coordinator.py --once` from the repo root, everywhere
 
 **Amended 2026-11-25, after the tree was scrubbed.** This section used to prescribe `git clone --mirror` then
 `git push --mirror`, so every branch and tag carried across. That instruction is now both wrong and dangerous: the
-private history is ~460 commits and the early ones contain the Azure subscription id, absolute `C:/Users/...` paths and
+private history is ~460 commits and the early ones contain the Azure subscription id, absolute home paths (`C:/Users/<name>/...`) and
 the names of every project the tool was demonstrated on. A mirror republishes all of it, and `git log -S` finds it in
 the new organisation in seconds.
 
@@ -207,6 +207,12 @@ exec env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX \
 ```
 
 Used by: Phase 1's baseline, Phase 2's container check, both pytest steps in `ci.yml` (the suite and the contract gate, on both matrix legs), and the coordinator. There is no second copy of the strip list anywhere.
+
+### 5.3b `scripts/doctor.sh` — why it does not work, in one command
+
+A bare checkout is a supported way to edit and an unsupported way to conclude, so the first thing a person does when a push is refused or a test fails only on their machine is run the doctor rather than change code. It reports the interpreter against the 3.11–3.12 matrix, a stray `PYTHONPATH`, the identifier guard, remote reachability, TLS trust (a corporate proxy re-signs HTTPS and the failure reads like an authentication problem), whether the account may actually write, and whether the store directory is usable. It prints no credential and its push check is a `--dry-run`, so it sends no objects.
+
+Exit 0 means nothing blocking; exit 1 names each blocking item with one line of remedy. The push check is the one that matters for the porting week: `GitHub` refuses a direct push to a protected branch, an SSO-unauthorised token and a TLS trust failure with three different messages, and the script says which one you are looking at.
 
 ### 5.4 Secrets and data outside the checkout
 

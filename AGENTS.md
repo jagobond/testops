@@ -27,3 +27,19 @@ What the Lead may edit directly: `factory/**` (tickets, board, features, reports
 Run the suite from the project `.venv`, with `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_ENV` and
 `CONDA_PREFIX` stripped and `PYTHONNOUSERSITE=1`, or the result is an environment error rather
 than a pass.
+
+## Running without the dev container
+
+A bare checkout is a supported way to **edit**, and an unsupported way to **conclude**. The package
+has no runtime dependencies, so `pip install -e ".[dev]"` and `./scripts/verify.sh` are enough to
+work; what a bare checkout cannot do is stand in for the matrix. CI is the authority, not a local
+pass: the `suite` job proves the 3.11 floor (a 3.12-only construct passes locally and then kills the
+process serving the UI), the `identifiers` job proves nothing personal was committed, and the
+`image` job proves the container works as the editor's user. Never describe a green local run as
+"the suite passes" — say which interpreter, and say CI has not run.
+
+When something does not work — a push refused, tests that fail only here — run
+`./scripts/doctor.sh` before changing anything. It reports the interpreter, a stray `PYTHONPATH`, the
+identifier guard, remote reachability, TLS trust (the corporate proxy re-signs HTTPS, and that
+failure reads like an authentication problem), whether the account may write, and the store's state.
+It prints no credential and its push check sends no objects.
