@@ -13,6 +13,22 @@ Moving the TestOps product and its factory workflow from the home Hermes system 
 
 ---
 
+## Amendment log
+
+**2026-11-25 — amended after the repository was scrubbed (TESTOPS-102/103/104).** Nothing about the architecture
+changed; three instructions did, because they were written against a tree that still carried identifiers.
+
+- **§5.1 and WO-1 step 1: export, never mirror.** A `--mirror` push republishes ~460 commits containing the subscription
+  id, absolute home paths and the names of every project the tool was demonstrated on. The work repository is built from
+  `scripts/export_clean.sh` as a single import commit, and D7 records the decision so it is not taken silently.
+- **§2 refreshed against the tree**: 1,427 collected / 1,423 passed / 4 skipped; `.env` is already ignored; `ci.yml` has
+  four jobs including the `identifiers` guard; the three deployment variables are listed.
+- **The guard is a gate, not a note**: P0-AC1 before anything is pushed, and the coordinator runs it before every commit.
+- **Four run results in WO-4**: INCOMPLETE covers the agent that stages work, files no report and claims success — which
+  is what actually happened twice while this plan was being written.
+- **WO-3 gains the identifiers rule**: an agent may not write a host, id or path into a file, because scrubbing is a
+  one-time act and re-leaking is continuous.
+
 ## 1. What this plan is and is not
 
 **Is:** an ordered set of steps ending in the same working practice you have now — you write tickets, a builder implements, a reviewer falsifies, you merge on a demo — running on infrastructure that exists at work.
@@ -36,18 +52,19 @@ Measured against the repository on 2026-11-23/24. Every line below was checked a
 | Runtime dependencies | **none** (`dependencies = []`) | Nothing to resolve from PyPI at run time |
 | Dev extras | `pytest>=8`, `setuptools>=68`, `wheel` | `pip install -e ".[dev]"` is the whole install |
 | Lockfile | **no `uv.lock`, no requirements.txt** | Any instruction to `uv sync --frozen` fails. Use pip, as `ci.yml` already does |
-| Tests | **1,188** by `pytest --collect-only -q` on 2026-11-24 | A point-in-time figure. Never hard-code it in a gate; §11 pins the count to the migration commit |
-| Test files | 84 (`tests/*.py`) | Same rule |
-| Existing CI | `.github/workflows/ci.yml` — matrix 3.11 + 3.12, contract gate, render check | **Keep it and add to it.** See §5.6 |
+| Tests | **1,427 collected, 1,423 passed, 4 skipped** on 2026-11-25 | A point-in-time figure; it was 1,188 when this plan was written. Never hard-code it in a gate; §11 pins the count to the migration commit |
+| Test files | 89 (`tests/*.py`) | Same rule |
+| Existing CI | `.github/workflows/ci.yml` — **four jobs**: `identifiers` (the no-secrets guard), `suite` on a 3.11/3.12 matrix, contract gate, render check | **Keep all four and add to them.** The `identifiers` job must never be dropped or folded into another. See §5.6 |
 | Config env vars | `TESTOPS_DATA` (default `data`), `TESTOPS_ENV` (default `.env`) | Both usable. `TESTOPS_HOME` is read at import into `config.HOME` and never used again — do not rely on it |
 | Secrets | `GITHUB_PAT`, `JIRA_SITE`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, read **only** from the env file | Exporting them into the process environment does nothing |
+| Deployment configuration | `TESTOPS_FOUNDRY_ACCOUNT`, `TESTOPS_AGENT_PROJECT`, `AZURE_SUBSCRIPTION_ID` (since TESTOPS-102) | Environment, never a file in the tree. The work environment must provision them; with either Foundry variable unset the agent route reports `unconfigured` and names it |
 | Missing credential behaviour | `load_env()` returns `{}` when the file is absent → `env["GITHUB_PAT"]` raises `KeyError`. If the file exists with an empty value, the key exists and the collector is called with an empty token | The second is the dangerous one: silent, not loud |
 | CLI surface | `duplicate`, `levels`, `cases`, `runs`, `case-set`, `scrub-fixtures`, `check-store`, `serve`, `retention` | The factory's verification calls `duplicate`/`levels`, so they need `GITHUB_PAT` |
 | Console scripts | **none** — no `[project.scripts]`; only `python -m testops.cli` | There is no `testops` command to call |
 | Factory tree | `factory/{TICKETS.md, tickets, reports, prompts, briefs, candidates.md}` | Ports unchanged. `factory/config.json` and `factory/coordinator.py` do **not** yet exist — Phase 4 creates them |
 | `docs/state/` | **does not exist** | Phase 1 creates it |
 | `.devcontainer/` | **does not exist** | Phase 2 creates it |
-| `.gitignore` | `.venv/`, `__pycache__/`, `*.egg-info/`, `build/`, `dist/`, `data/`, `*.log`, `.tmp/` — **no `.env`** | Phase 1 adds it. Do not assume it is ignored |
+| `.gitignore` | `.venv/`, `__pycache__/`, `*.egg-info/`, `build/`, `dist/`, `data/`, `*.log`, `.tmp/`, **`.env` and `*.env`**, `*.zip`, `*.bak`, `export/` | `.env` is ignored since TESTOPS-102, so Phase 1 no longer adds it. `.factory/` is still absent and Phase 1 adds that |
 | Remote | `github.com/example-org/testops` | Already GitHub; the port is a mirror to a work remote |
 
 Two consequences worth stating plainly:
@@ -69,6 +86,8 @@ Settle these first. QA's main structural criticism of revision 1 was that two of
 | **D4** | **Are both an OpenAI and an Anthropic deployment available, with quota?** | builder = Anthropic, reviewer = OpenAI | One family → the review is *advisory*, labelled as such, with a human review gate. It does not become a weaker PASS |
 | **D5** | Is a service identity acceptable for commits and PRs? | Workflow token, scoped | If not, the factory cannot push and the plan reduces to read-only assistance |
 | **D6** | Does branch protection require a human approval? | Yes — keep it | None. This is the merge gate |
+
+**D3, D4 and D7 are answered before Phase 1, not after.** D7 decides whether the work repository carries history at all, and Phase 1 cannot start without it: the export and a mirror produce different repositories and only one of them is safe.
 
 **D3 and D4 are answered before Phase 4, not after.** D3 determines whether the builder can ever run the full suite; D4 determines whether "reviewed" means anything. Both change what the acceptance criteria can honestly assert.
 
@@ -121,24 +140,41 @@ Invoked as `python factory/coordinator.py --once` from the repo root, everywhere
 
 ## 5. Phase 1 — Move the repository and its ground rules (one day)
 
-### 5.1 Mirror, don't re-init
+### 5.1 Export a single commit — do not mirror
+
+**Amended 2026-11-25, after the tree was scrubbed.** This section used to prescribe `git clone --mirror` then
+`git push --mirror`, so every branch and tag carried across. That instruction is now both wrong and dangerous: the
+private history is ~460 commits and the early ones contain the Azure subscription id, absolute `C:/Users/...` paths and
+the names of every project the tool was demonstrated on. A mirror republishes all of it, and `git log -S` finds it in
+the new organisation in seconds.
+
+Build the work repository from the export instead:
 
 ```bash
-git clone --mirror https://github.com/example-org/testops.git testops-mirror.git
-cd testops-mirror.git
-git remote set-url origin https://github.com/<work-org>/testops.git
-git push --mirror origin
+scripts/export_clean.sh ../testops-for-quilter     # refuses to run unless check_no_secrets.py is green
+git -C ../testops-for-quilter remote add origin <work-org-url>
+git -C ../testops-for-quilter push -u origin main
 ```
 
-`--mirror` carries `+refs/*:refs/*`, so every factory branch and tag moves and anything absent at the destination is deleted. Then clone normally from the new remote and confirm **in the new clone** (inside a mirror clone `git branch -r` is empty by design — the refs live in `refs/*`):
+The export is **one commit** ("TestOps: initial import"), excludes `.env`, `data/`, `scripts/rename_corpus.py` and the
+ticket that quotes the rename table, and refuses to be built while the guard is red.
+
+What this costs, stated so nobody discovers it on the day:
+
+- No commit archaeology at work: `git log` starts at the import and `git branch -r` shows one branch.
+- The `factory/*` branches do not travel. They are all merged, and the tickets and reports they produced travel as
+  files under `factory/tickets` and `factory/reports`.
+- The private repository becomes the archive, and the only place to answer "why was this done" beyond what a report
+  says. Keep it, and keep it private.
+
+Confirm in the **work clone**, not in the export directory:
 
 ```bash
-git log --oneline -3                    # same three commits as the source
-git branch -r | wc -l                   # same factory/* branch count
-ls factory/tickets/*.md | wc -l         # same ticket count
+git log --oneline | wc -l                 # 1
+git branch -r                             # origin/main only
+python scripts/check_no_secrets.py        # "read N files, no identifiers and no old names"
+ls factory/tickets/*.md | wc -l           # same ticket count as the source
 ```
-
-Keep the old remote as `upstream` for a fortnight.
 
 ### 5.2 Ground rules, committed before anything else
 
@@ -146,8 +182,6 @@ Keep the old remote as `upstream` for a fortnight.
 printf '* text=auto eol=lf\n*.bat text eol=crlf\n' > .gitattributes
 
 cat >> .gitignore <<'EOF'
-.env
-*.env
 .factory/
 EOF
 
@@ -155,7 +189,7 @@ git add .gitattributes .gitignore && git commit -m "Port: line endings, ignore s
 git check-ignore -q .env && echo "OK: .env is ignored"
 ```
 
-`.gitignore` did **not** previously ignore `.env`. This step adds it. `git check-ignore -q` is the test, not a `grep`, because a grep also matches a comment that mentions `.env`.
+`.gitignore` already ignores `.env` and `*.env` (since TESTOPS-102), so this step adds only `.factory/`. `git check-ignore -q` is the test, not a `grep`, because a grep also matches a comment that mentions `.env`.
 
 ### 5.3 `scripts/verify.sh` — one canonical test command
 
@@ -196,7 +230,7 @@ Does not exist. Create it in this phase, from what you already know, because the
 Content: one page of facts a new session cannot rediscover — the store schema version, the `not_assessable`-not-zero rule, which ecosystems extract and which only detect, the current baseline numbers, and the constraints that look like bugs but are deliberate.
 
 ### 5.6 Extend `ci.yml` — add, don't replace
-`ci.yml` keeps its matrix, its contract gate and its render job. Three specific changes, and nothing else:
+`ci.yml` keeps its `identifiers` job, its matrix, its contract gate and its render job. Four specific changes, and nothing else:
 
 1. **Both existing pytest steps route through `scripts/verify.sh`**, keeping their `tee` and their path argument. Otherwise the strip list still lives in three places and §5.3 was cosmetic.
 2. **A new `image` job** builds the devcontainer and runs the suite inside it, so the port's own container is tested on every push.
@@ -225,6 +259,8 @@ Content: one page of facts a new session cannot rediscover — the store schema 
           refFilterForPush: refs/heads/main
           runCmd: bash -lc "pip install -e '.[dev]' && ./scripts/verify.sh"
 ```
+
+4. **Keep the `identifiers` job, and make it a required check.** It runs `scripts/check_no_secrets.py` before the suite and fails the build on any identifier, absolute home path, Azure hostname, tailnet address or credential shape. It was added because a scrub is a one-time act while a re-leak is continuous, and it is the cheapest gate in the workflow — a few seconds against a red build that would otherwise have shipped.
 
 The `docker/login-action` step is not optional: `devcontainers/ci` exposes no registry credential input, so it relies on an existing Docker login.
 
@@ -711,6 +747,8 @@ The pass count is **not** in this plan. It is recorded in the migration ticket, 
 
 | Gate | Proves |
 |---|---|
+| P0-AC1 | The guard is green and the export names nothing — **before** anything is pushed |
+| P1-AC0 | The work repository has one commit and one branch, and its guard is green in the clone, not just the export directory |
 | P1-AC3 | The repo works in the new environment |
 | P2-AC1 | The **container** works, as the editor's user |
 | P2-AC3 | The **package** is importable, not merely installed |
@@ -741,6 +779,8 @@ Self-hosted runners are no longer free by default — GitHub has introduced a pe
 | TLS inspection breaks builds and API calls | Medium | The commented CA block in the Dockerfile |
 | Actions blocked or budget-capped | Low | **The whole loop also runs from the VS Code terminal** — that is the fallback, and it needs no pipeline |
 | Agent commits to `main` | Low | Branch protection, scoped `permissions`, the AGENTS.md rule, the weekly drift count |
+| A mirror re-publishes the pre-scrub history | Medium | Phase 1 builds the work repository from `scripts/export_clean.sh`, never from `git push --mirror`. A mirror is prohibited in WO-1 |
+| A builder writes an endpoint, id or local path into a file | Medium | The guard runs in CI **and** in the coordinator before each commit; `AGENTS.md` states that identifiers are configuration |
 | Secrets committed | Medium | `.factory/` ignored, staged paths restricted, `git check-ignore` gate, P5-AC5 |
 | Builder cannot reach Jira/ADO | **High** | Expected. `not_assessable` is the honest verdict and `AGENTS.md` requires it. A self-hosted runner is the only real fix (D3) |
 | Factory decays into "nobody uses it" | Medium | The weekly drift count |
@@ -751,8 +791,8 @@ Self-hosted runners are no longer free by default — GitHub has introduced a pe
 
 | Phase | Work | Days | Gate |
 |---|---|---|---|
-| 0 | Settle D1–D6, especially D3 and D4 | 1 | Two families confirmed |
-| 1 | Mirror, ground rules, `verify.sh`, `docs/state/`, extend `ci.yml` | 1 | Count matches; `.env` ignored; container job green |
+| 0 | Settle D1–D7, especially D3, D4 and D7 | 1 | Two families confirmed; the export is the chosen history policy |
+| 1 | Export (never mirror), ground rules, `verify.sh`, `docs/state/`, extend `ci.yml` | 1 | One commit in the clone; guard green; count matches; container job green |
 | 2 | Container + verify as `vscode` | 1 | Suite green inside the container |
 | 3 | Three agent files | 0.5 | Reviewer cannot edit; Demo section appears |
 | 4 | **Write** `config.json` + `coordinator.py` | 2–3 | Dry-run correct; one real draft PR |

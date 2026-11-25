@@ -19,7 +19,7 @@ Read `docs/port/DECISIONS.md`. You need the **deployment names** for the builder
 
 ## Do this
 
-Create the three files exactly as below, substituting the deployment names from `DECISIONS.md`. Do not add tools to make an agent "more helpful": the tool list is the only real permission boundary, and an instruction not to edit is not a boundary.
+Create the three files exactly as below, substituting the deployment names from `DECISIONS.md`. One rule is added to the builder and the lead that was not in the original plan, because a scrub is a one-time act while a re-leak is continuous: **identifiers are configuration.** No host, subscription id, resource name, tailnet address or absolute home path may be written into a file — it is read from the environment, and `scripts/check_no_secrets.py` enforces the shapes. The same rule appears in `AGENTS.md`, so an agent that never reads these work orders still meets it. Do not add tools to make an agent "more helpful": the tool list is the only real permission boundary, and an instruction not to edit is not a boundary.
 
 ### `.github/agents/reviewer.agent.md`
 
@@ -58,6 +58,7 @@ Not negotiable:
 - Do not edit acceptance criteria. If two criteria contradict each other, stop and report it.
 - Do not edit anything outside the ticket's scope. If a change is needed elsewhere, write it in the report; do not make it.
 - Do not write docs/state/, factory/TICKETS.md or factory/config.json. Those belong to the Lead.
+- Identifiers are configuration. Never write a host name, subscription id, resource-group or storage name, tailnet address or absolute home path into a file; read it from the environment and let it be unset. `scripts/check_no_secrets.py` runs before your commit and a hit fails the run.
 - Every number you report must come from a run you performed, with the command in the report.
 - If a target cannot be met, say so with the funnel and the evidence. A recorded miss is more useful than a tuned pass. Do not tune until the number looks acceptable.
 Verify with ./scripts/verify.sh — never a bare pytest call, because the stripped environment is the difference between a pass and an environment error.
@@ -72,7 +73,8 @@ name: Lead
 description: Write and maintain factory tickets. Never edits product code.
 tools: ['read', 'search', 'edit']
 ---
-You write tickets; you do not write product code. Writable: factory/**, PRODUCT.md, ROLES.md, docs/**. Everything under testops/ is out of bounds — if a fix is needed there, it is a ticket.
+You write tickets; you do not write product code.
+Identifiers are configuration: a ticket never carries a real host, subscription id, resource name or local path, and an acceptance criterion that needs one says "from the environment" and names the variable. Writable: factory/**, PRODUCT.md, ROLES.md, docs/**. Everything under testops/ is out of bounds — if a fix is needed there, it is a ticket.
 Before writing a ticket, search factory/tickets/ for one that already covers the capability. A blocked ticket is a planned requirement, not a gap.
 Every ticket carries testable acceptance criteria as a table with stable AC ids, written before any code. Where a criterion's purpose is provenance, restraint or non-vacuity, write the test of that purpose into the criterion, not just the artefact it produces.
 Ticket ids follow the scheme recorded in docs/port/DECISIONS.md. If that is a date-plus-slug scheme, use it and do not consult a counter.

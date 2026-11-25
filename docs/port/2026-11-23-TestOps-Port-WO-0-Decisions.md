@@ -3,7 +3,7 @@ phase: 0
 title: Decisions and preconditions
 prereqs: none — this is the first work order
 deliverables: [docs/port/DECISIONS.md]
-gate: DECISIONS.md exists, all six rows answered, and no answer reads "unknown" or "TBD"
+gate: DECISIONS.md exists, all seven rows answered, and no answer reads "unknown" or "TBD"
 stop-if: any decision needs a person who is not in this conversation
 ---
 
@@ -11,7 +11,7 @@ stop-if: any decision needs a person who is not in this conversation
 
 ## Scope
 
-Interview the operator and record six decisions. **Do not create, edit or delete any other file. Do not begin Phase 1.** This work order produces a document, nothing else.
+Interview the operator and record seven decisions. **Do not create, edit or delete any other file. Do not begin Phase 1.** This work order produces a document, nothing else.
 
 ## Why this exists
 
@@ -19,11 +19,11 @@ Every later work order branches on these answers. An agent that assumes them pro
 
 ## Do this
 
-Ask the six questions **one at a time**, conversationally, and wait for each answer. Do not batch them and do not offer a default that the operator might accept without thinking.
+Ask the seven questions **one at a time**, conversationally, and wait for each answer. Do not batch them and do not offer a default that the operator might accept without thinking.
 
-Then write `docs/port/DECISIONS.md` with a table of all six, the answer, the date, and one line of consequence for each.
+Then write `docs/port/DECISIONS.md` with a table of all seven, the answer, the date, and one line of consequence for each.
 
-## The six questions
+## The seven questions
 
 **D1 — Repo.** Which GitHub org and repository will host this? Does the operator have write access to it, and permission to add workflows? If the repo does not exist yet, say so plainly: creating it is a human step and WO-1 cannot start.
 
@@ -44,6 +44,13 @@ A model in the catalogue with no quota cannot be deployed; `InsufficientQuota` n
 
 **D6 — Branch protection.** Does the protected branch require a human approval before merge? If yes, keep it. This is the merge gate and removing it is not an option the factory needs.
 
+**D7 — History.** Does the work repository need the private repository's ~460-commit history, or does it start at a single import commit? Record the answer and its consequence either way, and record **why**, because this is the one decision that cannot be revisited quietly:
+
+- **Single import (recommended, and the default).** `scripts/export_clean.sh` builds a one-commit repository. It costs `git log` archaeology and the `factory/*` branches, and it guarantees nothing that was in the private history can be recovered from the work remote.
+- **Full history.** Only if the organisation requires it for audit, and only with a written statement that the early commits contain a subscription id, absolute local paths and the names of the projects the tool was demonstrated on. Say who accepted that, and do not describe the result as scrubbed.
+
+A mirror (`git push --mirror`) is not a third option: it republishes every ref and deletes nothing, so it is the full-history answer taken silently.
+
 ## Files you may create or edit
 
 - `docs/port/DECISIONS.md` (new)
@@ -58,7 +65,7 @@ Run this and paste the raw output:
 cat docs/port/DECISIONS.md
 ```
 
-Pass requires: six rows, each with a concrete answer, none reading "unknown", "TBD" or "ask someone". For D4, two deployment names and two different families.
+Pass requires: seven rows, each with a concrete answer, none reading "unknown", "TBD" or "ask someone". For D4, two deployment names and two different families.
 
 ## Stop list — do not work around
 

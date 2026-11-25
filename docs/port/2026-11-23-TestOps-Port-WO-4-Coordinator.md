@@ -77,7 +77,25 @@ Required behaviours, each with the acceptance test that proves it:
 
 **Single-run lock.** `.factory/run.lock` holding a pid, cleared only when that pid is gone. Two runs in one checkout share the SQLite store and the worktree directory.
 
-**Tri-state tests.** `run_tests()` returns `True` pass, `False` genuine failure, `None` environment problem. Never collapse `None` into `False`: a broken measurement reported as a failure sends a human debugging healthy code.
+**Four results, not three.** `run_tests()` returns `True` pass, `False` genuine failure, `None` environment problem. Never collapse `None` into `False`: a broken measurement reported as a failure sends a human debugging healthy code.
+
+The fourth state is about the *run*, not the tests: **INCOMPLETE** — the tree changed, but the builder filed no report and made no commit. This is not hypothetical; it happened twice on wide mechanical changes while this plan was being written. The agent staged its work, ran out of budget and reported success, and the exit status was 1 while the summary said done. A coordinator that treats that as a pass merges an unreviewed tree; one that treats it as a failure throws away work that is usually correct. Detect it explicitly:
+
+```python
+def run_outcome(exit_code, worktree):
+    dirty = subprocess.run(["git", "status", "--porcelain"], cwd=worktree,
+                           capture_output=True, text=True).stdout.strip()
+    report = glob.glob(f"{worktree}/factory/reports/*/*.md")
+    if exit_code == 0 and not dirty:
+        return "COMPLETE"
+    if dirty or not report:
+        return "INCOMPLETE"          # work exists and the paperwork does not
+    return "FAILED"
+```
+
+On INCOMPLETE: commit what is staged, as the Lead would, with a message naming the ticket and saying it was committed by the coordinator after the builder ran out of budget; then halt that ticket and put it in the Lead's queue for review rather than opening a PR. Do not re-dispatch in the same run — a second attempt on the same prompt usually repeats the failure, and it doubles the token spend.
+
+**The guard runs before the commit.** Before any `git add`, run `scripts/check_no_secrets.py` in the worktree and refuse to commit on a hit. CI catches a leaked identifier after it has been pushed; this catches it before it exists in the work repository at all. It costs about a second and it is the one gate that protects the thing this port is most likely to damage.
 
 **Subprocess environment.** Set `TESTOPS_ENV` and `TESTOPS_DATA` to absolute paths under `.factory/`, and strip `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_ENV`, `CONDA_PREFIX`. Set them **before** importing `testops`: `config.DATA` is computed at import while `settings()` re-reads the environment, so a late assignment gives you one old path and one new one.
 

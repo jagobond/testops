@@ -9,7 +9,7 @@ deliverables:
   - docs/state/testops.md
   - .github/workflows/ci.yml (three changes)
   - factory/tickets/ (migration ticket)
-gate: ./scripts/verify.sh reports the recorded baseline count, and git check-ignore passes for both secrets paths
+gate: the work clone has one commit, the guard is green in the clone, ./scripts/verify.sh reports the recorded baseline count, and git check-ignore passes for both secrets paths
 stop-if: no write access to the target repo; Actions disabled; the suite is not green before any change
 ---
 
@@ -32,39 +32,39 @@ Stop if the tree is dirty. A baseline taken on a dirty tree is not a baseline.
 
 ## Do this
 
-**1. Mirror the repository.** If `DECISIONS.md` says the target repo exists and is empty:
+**1. Create the work repository from the export — not from a mirror.** This step was rewritten on 2026-11-25. The original instruction was `git clone --mirror` / `git push --mirror`, which republishes ~460 commits that contain the Azure subscription id, absolute `C:/Users/...` paths and the names of every project the tool was demonstrated on. **Do not run a mirror push.** If `DECISIONS.md` recorded D7 as full history, stop and take that decision back to the operator before doing anything else.
+
+If the target repo exists and is empty, build it from the export:
 
 ```bash
-git clone --mirror <source-url> /tmp/testops-mirror.git
-cd /tmp/testops-mirror.git
-git remote set-url origin <target-url>
-git push --mirror origin
+scripts/export_clean.sh /tmp/testops-for-work     # aborts unless check_no_secrets.py is green
+git -C /tmp/testops-for-work remote add origin <target-url>
+git -C /tmp/testops-for-work push -u origin main
 ```
 
-`--mirror` carries every ref and deletes anything absent at the destination. Then clone the target normally and check **in the new clone** — inside a mirror clone `git branch -r` is empty by design, because the refs live in `refs/*`:
+Then verify **in a fresh clone of the target**, not in the export directory:
 
 ```bash
-git log --oneline -3
-git branch -r | wc -l
-ls factory/tickets/*.md | wc -l
+git log --oneline | wc -l                 # 1
+git branch -r                             # origin/main only
+python scripts/check_no_secrets.py        # "read N files, no identifiers and no old names"
+ls factory/tickets/*.md | wc -l           # same ticket count as the source
 ```
 
-All three must match the source. If the target already contains the history, skip this step and say so.
+The commit count and branch list are expected to differ from the source; the ticket count and the guard are not. Record all four lines in the ticket.
 
 **2. Line endings and ignores**, committed before anything else:
 
 ```bash
 printf '* text=auto eol=lf\n*.bat text eol=crlf\n' > .gitattributes
 cat >> .gitignore <<'EOF'
-.env
-*.env
 .factory/
 EOF
 git add .gitattributes .gitignore
 git commit -m "Port: line endings, ignore secrets and factory state"
 ```
 
-`.gitignore` does **not** currently contain `.env`. This step adds it. Do not assume it is already there.
+`.gitignore` already ignores `.env` and `*.env` since TESTOPS-102, so this step adds only `.factory/`. Still prove it rather than assuming: `git check-ignore -v .factory/secrets.env` must name the matching line.
 
 **3. `scripts/verify.sh`** — the single canonical test command:
 
@@ -88,7 +88,7 @@ Write both numbers — collected and passed — into a new migration ticket `fac
 
 **4. `docs/state/testops.md`** — one page, from what the existing tickets and `AGENTS.md` already say: the store schema version, the `not_assessable`-not-zero rule, which ecosystems extract and which only detect, the current baseline verdict numbers, and the constraints that look like bugs but are deliberate. Do not invent facts; if you cannot establish one, write "not established" and list it for the operator.
 
-**5. `.github/workflows/ci.yml`** — three changes, and no others. Keep the matrix, the contract gate and the render job exactly as they are.
+**5. `.github/workflows/ci.yml`** — four changes, and no others. Keep the `identifiers` job, the matrix, the contract gate and the render job exactly as they are. The `identifiers` job runs `scripts/check_no_secrets.py` and must never be dropped, folded into another job, or made optional.
 
 - Route the **two** existing pytest steps through `./scripts/verify.sh`, keeping their `tee` and their path argument. There are two, in the `suite` job; the render job runs a script, not pytest.
 - Add a job `image` that builds the devcontainer, with `permissions: {contents: read, packages: write}` at job level, a `docker/login-action@v4` step for `ghcr.io`, and `devcontainers/ci@v0.3` with `push: filter` / `refFilterForPush: refs/heads/main`.
