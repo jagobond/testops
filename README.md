@@ -54,6 +54,10 @@ python -m testops.cli serve --host 127.0.0.1 --port 8787
 python -m testops.cli levels --project demo-product
 python -m testops.cli duplicate --project demo-service
 
+# A fresh install has no projects: add one on the /config page (or POST to /config/projects), then
+# add its services. The demo slugs above belong to the fixture corpus this repository's tests and
+# reports describe - they are not created by a new store.
+
 # Inspect runs and cases, or record a human decision
 python -m testops.cli runs --project demo-product
 python -m testops.cli cases --project demo-product
