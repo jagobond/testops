@@ -117,6 +117,7 @@ ticket, because criteria encode what PRODUCT.md and ROLES.md decide.
 | TESTOPS-99 | Price a verified finding, then decide | F3 | queued | Cost per verified finding against a human baseline, with every price marked verified or assumed |
 | TESTOPS-100 | The store must not be SQLite over an SMB share | F2 | queued | A migration locked the v5 deployment; persistence needs a single-writer store and a serialised migration |
 | TESTOPS-101 | A default that names the account where the project belongs | F2 | queued | The derived agent URL used the account name as the project; unset must mean unconfigured, never invented |
+| TESTOPS-102 | The repository carries no personal identifiers | F2 | building | Identifiers and paths leave source for configuration, a scan keeps them out, and the export has one commit |
 
 |----|-------|---------|--------|------|
 
