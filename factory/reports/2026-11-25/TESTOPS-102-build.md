@@ -95,7 +95,7 @@ the identifiers back into the file you are reading.
 
 The suite: 1423 passed, 4 skipped (7 min 17 s), run with
 `env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
-C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q`. The project's own screen
+<repo>/.venv/Scripts/python.exe -m pytest -q`. The project's own screen
 prints `read 880 files, no identifiers`.
 
 ## The scrub: names with no shape
