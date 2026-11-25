@@ -1,10 +1,10 @@
 # TESTOPS-61 build — the rule reads every part, and a cut-off prefix is refused
 
-Builder run, 2026-11-24. Worktree `C:/Users/Chester/Projects/testops-t61`, branch
+Builder run, 2026-11-24. Worktree `C:/Users/<name>/Projects/testops-t61`, branch
 `factory/testops-61-grammar-fix` (the main checkout and other worktrees were not touched). Interpreter
 everywhere below:
 
-    env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+    env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 Files changed: `testops/services.py`, `tests/test_config_credential_screen.py`, and this report. No
 contract test was edited, no case-page golden changed, the live store was never written and port 8791

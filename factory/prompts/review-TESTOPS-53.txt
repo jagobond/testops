@@ -2,12 +2,12 @@ You are the reviewer on the TestOps factory. Judge TESTOPS-53 - the contract sui
 server over a disposable store, because a bare `pytest` used to write to the live store. This ticket is about a hazard
 that already bit three times, so the bar is: make it structurally impossible, and show the gate can fail.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t53 (branch `factory/testops-53-self-contained-contracts`). Only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t53 (branch `factory/testops-53-self-contained-contracts`). Only here.
 Ticket: factory/tickets/TESTOPS-53.md ; Build: factory/reports/2026-11-23/TESTOPS-53-build.md
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
-- Do not write to the live store (`C:/Users/Chester/Projects/testops/data/testops.db`) or contact the live server on 8791.
+- Do not write to the live store (`C:/Users/<name>/Projects/testops/data/testops.db`) or contact the live server on 8791.
   Reading the live db with `file:...?mode=ro` is allowed and expected for the before/after check.
 - **The claim to break:** that no environment variable, default or fallback can point the suite's server at a persistent
   store. Attack it: set `TESTOPS_DATA`, `TESTOPS_ENV`, `TESTOPS_BASE`, `PYTHONPATH`, `PYTHONHOME` and an inherited

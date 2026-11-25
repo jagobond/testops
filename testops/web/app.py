@@ -3503,9 +3503,20 @@ def agent_check(conn, refresh: bool = False) -> bytes:
 
     endpoint_note = (f"set by <span class=\"code\">{esc(diag.get('endpoint_variable'))}</span>"
                      if diag.get("endpoint_variable")
-                     else "not set, so the address is derived from the project name; neither "
-                          "<span class=\"code\">TESTOPS_AGENT_ENDPOINT</span> nor "
-                          "<span class=\"code\">TESTOPS_FOUNDRY_ENDPOINT</span> is present")
+                     else (f"<strong>unconfigured</strong>: <span class=\"code\">"
+                           f"{esc(diag.get('unconfigured'))}</span> is not set, so no address is "
+                           f"derived and none is invented"
+                           if diag.get("unconfigured")
+                           else "derived from <span class=\"code\">TESTOPS_FOUNDRY_ACCOUNT</span> "
+                                "and <span class=\"code\">TESTOPS_AGENT_PROJECT</span>; neither "
+                                "<span class=\"code\">TESTOPS_AGENT_ENDPOINT</span> nor "
+                                "<span class=\"code\">TESTOPS_FOUNDRY_ENDPOINT</span> is present"))
+    account_note = (f"set by <span class=\"code\">{esc(diag.get('account_variable'))}</span>"
+                    if diag.get("account_variable")
+                    else "not set, so no address can be derived and the route is unconfigured")
+    project_note = (f"set by <span class=\"code\">{esc(diag.get('project_variable'))}</span>"
+                    if diag.get("project_variable")
+                    else "not set, so no address can be derived and the route is unconfigured")
     model_note = (f"set by <span class=\"code\">{esc(diag.get('model_variable'))}</span>"
                   if diag.get("model_variable") else "not set, so the default model is used")
 
@@ -3541,8 +3552,14 @@ def agent_check(conn, refresh: bool = False) -> bytes:
             'deployment nobody can open can still say why it has no token.</p>',
             '<h2 class="section">What is configured</h2>',
             '<table>',
-            f'<tr><th>Endpoint</th><td><span class="code">{esc(diag.get("endpoint"))}</span> '
+            f'<tr><th>Endpoint</th><td><span class="code">{esc(diag.get("endpoint")) or "unconfigured"}</span> '
             f'<span class="quiet">({endpoint_note})</span></td></tr>',
+            f'<tr><th>Foundry account</th><td><span class="code">'
+            f'{esc(diag.get("account")) or "not set"}</span> '
+            f'<span class="quiet">({account_note})</span></td></tr>',
+            f'<tr><th>Project</th><td><span class="code">'
+            f'{esc(diag.get("project")) or "not set"}</span> '
+            f'<span class="quiet">({project_note})</span></td></tr>',
             f'<tr><th>Model</th><td><span class="code">{esc(diag.get("model"))}</span> '
             f'<span class="quiet">({model_note})</span></td></tr>',
             f'<tr><th>Token in the environment</th><td>'

@@ -1,6 +1,6 @@
 # TESTOPS-8 build — packaging proof
 
-Branch `factory/testops-8-packaging`, worktree `C:/Users/Chester/Projects/testops-t8`. Product code
+Branch `factory/testops-8-packaging`, worktree `C:/Users/<name>/Projects/testops-t8`. Product code
 untouched: the change is a test, a marker, one dev dependency and the `package-data` comment.
 
 ## What was wrong

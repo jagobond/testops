@@ -1,6 +1,6 @@
 # TESTOPS-77 build — a refusal is only honest if its reason is true
 
-2026-11-24, worktree `C:/Users/Chester/Projects/testops-t77`, branch
+2026-11-24, worktree `C:/Users/<name>/Projects/testops-t77`, branch
 `factory/testops-77-reasons`. Store: the worktree's own `data/` was read only; the corpus was read
 from the cached checkout, and pages were rendered from a **copy** of the scratch store. Port 8791
 was never opened and the live store was never contacted.

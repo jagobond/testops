@@ -3,7 +3,7 @@
 Reviewer: independent review of the TESTOPS-42C-3 build. Round 1 ran out of iterations before
 writing a file; this round finished all four items and wrote the report. Environment for every
 command: `env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
-C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe`.
+C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe`.
 
 ## Verdict
 
@@ -24,7 +24,7 @@ Rendered pages saved under `factory/reports/2026-11-23/`.
 
 Method: `rebuild.rebuild` of snapshot `cotw-levels-20261122-a3f19853-r11` run twice against copies
 of the store — once with the branch code (`testops-t42c3`, 09c99da), once with main's code
-(`C:/Users/Chester/Projects/testops`, d69881e, which does not contain T42C-3) — each compared
+(`C:/Users/<name>/Projects/testops`, d69881e, which does not contain T42C-3) — each compared
 claim-by-claim (subject_ref + assertion_line) with the `proposed_action`, `statement` and `verdict`
 rows of every stored cotw levels run.
 

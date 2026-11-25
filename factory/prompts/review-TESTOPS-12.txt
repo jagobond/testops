@@ -1,17 +1,17 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-12 against its acceptance criteria.
 
 STANDING RULE (TESTOPS-35) — a review fixture belongs in a COPY of the store.
-The live store at C:/Users/Chester/Projects/testops/data is the Product Owner's evidence: never
+The live store at C:/Users/<name>/Projects/testops/data is the Product Owner's evidence: never
 write a case, claim, snapshot or blob into it, and never run a destructive command against it.
 Copy it first and point the tooling at the copy:
-    cp -r C:/Users/Chester/Projects/testops/data/. <scratch>/store/data/
+    cp -r C:/Users/<name>/Projects/testops/data/. <scratch>/store/data/
     export TESTOPS_HOME=<scratch>/store
 Every rehearsal, dry run and deletion runs against that copy. If a fixture has already reached
 the live store, `python -m testops.cli scrub-fixtures --dry-run` reports it and `--yes` removes
 it — never hand-edit SQLite. The full workflow is factory/prompts/REVIEW-WORKFLOW.txt.
 
 
-Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-12-labels`.
+Repository: C:/Users/<name>/Projects/testops, branch `factory/testops-12-labels`.
 Ticket:     factory/tickets/TESTOPS-12.md
 Diff:       git diff feature/f1..HEAD
 

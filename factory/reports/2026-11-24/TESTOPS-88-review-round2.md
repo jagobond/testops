@@ -1,6 +1,6 @@
 # TESTOPS-88 review, round 2 — the citation scheme, and what honesty costs
 
-2026-11-24, worktree `C:/Users/Chester/Projects/testops-t88`, amendment `8916a14`, branch
+2026-11-24, worktree `C:/Users/<name>/Projects/testops-t88`, amendment `8916a14`, branch
 `factory/testops-88-agent-ab`. Everything below was reproduced in this worktree only; the live
 store and port 8791 were never touched. The only file I wrote is this one. The real store
 (`data/testops.db`) was opened read-only (`mode=ro`) for every render and probe; the state
@@ -130,7 +130,7 @@ temp store, one fresh view, one cached view, one off view:
 - **AC1 unchanged, independently reproduced.** I re-hashed every golden page myself (own script,
   read-only store, clock pinned at 2026-11-24T12:00Z): **275 of 275 byte-identical** (226 case +
   49 run), 0 absent, 0 mismatched, against `tests/fixtures/agent/off-golden.json`.
-- **Suite:** **1332 passed, 2 skipped in 245 s** from `C:/Users/Chester/Projects/testops/.venv`
+- **Suite:** **1332 passed, 2 skipped in 245 s** from `C:/Users/<name>/Projects/testops/.venv`
   with `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_ENV`, `CONDA_PREFIX` stripped and
   `PYTHONNOUSERSITE=1`. The contracts suite (`tests/contracts/`) is inside that number; the
   42 `tests/test_agent_case.py` tests are all green, including the four-lies parametrisation, the

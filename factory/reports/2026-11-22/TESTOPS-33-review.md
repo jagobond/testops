@@ -1,10 +1,10 @@
 # TESTOPS-33 review — a headline a reader would click
 
-Reviewed 2026-11-22 from worktree `C:/Users/Chester/Projects/testops-t33` on `factory/testops-33-headline`
+Reviewed 2026-11-22 from worktree `C:/Users/<name>/Projects/testops-t33` on `factory/testops-33-headline`
 (HEAD `a92a6ec`), diff `origin/feature/f1..HEAD`. Suite: 363 passed, 7 skipped, from
-`C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe` with `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_ENV`,
+`C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe` with `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_ENV`,
 `CONDA_PREFIX` stripped and `PYTHONNOUSERSITE=1`; `PYTHONPATH=.`, and `testops.__file__` confirmed as
-`C:\Users\Chester\Projects\testops-t33\testops\__init__.py`. The live store was read read-only
+`C:\Users\<name>\Projects\testops-t33\testops\__init__.py`. The live store was read read-only
 (`file:...?mode=ro` + `PRAGMA query_only`), never through `db.connect` (see concern 3).
 
 ## Verdict — NEEDS-FIX

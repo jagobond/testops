@@ -1,8 +1,8 @@
 # TESTOPS-48 review — coverage decided by the built wheel
 
-Reviewer run, 2026-11-23. All commands from worktree C:/Users/Chester/Projects/testops-t48, branch
+Reviewer run, 2026-11-23. All commands from worktree C:/Users/<name>/Projects/testops-t48, branch
 factory/testops-48-wheel-coverage, interpreter
-`env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe`.
+`env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe`.
 No product code or ticket edited; tree clean at the end (`git status` empty, no `.whl` anywhere in
 the checkout, no `data/` directory exists).
 

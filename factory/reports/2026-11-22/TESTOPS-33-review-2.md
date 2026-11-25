@@ -1,9 +1,9 @@
 # TESTOPS-33 review, second round — the fix
 
-Reviewed 2026-11-22 from worktree `C:/Users/Chester/Projects/testops-t33` on `factory/testops-33-headline`
+Reviewed 2026-11-22 from worktree `C:/Users/<name>/Projects/testops-t33` on `factory/testops-33-headline`
 (HEAD `616237b`, fix commit `bb2d57f`, diff `a92a6ec..bb2d57f`: `testops/web/app.py` +134/−26,
 `tests/test_claim_headline.py` +115). Suite: **371 passed, 7 skipped** in 48.4 s from
-`C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe` with `PYTHONPATH`, `PYTHONHOME`,
+`C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe` with `PYTHONPATH`, `PYTHONHOME`,
 `VIRTUAL_ENV`, `CONDA_PREFIX` stripped and `PYTHONNOUSERSITE=1` (8 tests more than the first review's
 363 — the new guard and trim tests). Worktree clean, no stray store file (the `data/testops.db` the
 first review created is gone).

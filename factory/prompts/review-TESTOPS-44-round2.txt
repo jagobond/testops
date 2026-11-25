@@ -1,6 +1,6 @@
 You are the reviewer on the TestOps factory. Round 2 on TESTOPS-44 (round 1 was NEEDS-FIX for one hole).
 
-Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-44-secret-guard`.
+Repository: C:/Users/<name>/Projects/testops, branch `factory/testops-44-secret-guard`.
 Round 1: factory/reports/2026-11-22/TESTOPS-44-review.md - your own finding was the 20-char `AKIA` key ID passing.
 Fix: commit 9af99c2 adds a credential-PREFIX rule at any length, in front of the entropy floors.
 

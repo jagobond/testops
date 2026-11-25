@@ -14,6 +14,13 @@ data/
 # Local scratch
 .tmp/
 
-# Credentials. Never committed: see ~/.hermes/credentials/README.md
+# Credentials. Never committed: see SECURITY.md
 *.env
 .env
+
+# Deployment artefacts and machine scratch (TESTOPS-102). A zip and a backup are build output, and
+# an export is the directory the projection tool writes; none of them is source, and all three have
+# carried identifiers in the past.
+*.zip
+*.bak
+export/

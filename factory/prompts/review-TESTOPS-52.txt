@@ -2,13 +2,13 @@ You are the reviewer on the TestOps factory. Judge TESTOPS-52 - uncertainty must
 badges must carry valid markup. The build claims both fixes and one uncomfortable number: 522 malformed attributes across
 46 pages, not the 32+ the blind author saw.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t52 (branch `factory/testops-52-verdict-tone`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t52 (branch `factory/testops-52-verdict-tone`). Work only here.
 Ticket: factory/tickets/TESTOPS-52.md ; Build: factory/reports/2026-11-23/TESTOPS-52-build.md
 Evidence: factory/reports/2026-11-23/TESTOPS-7-author-report.md (the review of T7 is on main, not in this worktree)
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
-- **Never touch the live store** (`C:/Users/Chester/Projects/testops/data/testops.db`) or the live server on port 8791.
+- **Never touch the live store** (`C:/Users/<name>/Projects/testops/data/testops.db`) or the live server on port 8791.
   Copy `data/` to a scratch dir, point `TESTOPS_DATA` at the copy, serve on a free port, and set `TESTOPS_BASE` for the
   contract suite. If any command would write to the live store, stop and use the copy.
 - Verify the tone mapping yourself: read `testops/web/tone.py`, then check the **served** HTML of a real `Cannot assess`

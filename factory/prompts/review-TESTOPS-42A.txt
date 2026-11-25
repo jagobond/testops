@@ -2,11 +2,11 @@ You are the reviewer on the TestOps factory. Judge TESTOPS-42A. The builder wrot
 iteration limit before committing; the Lead wrote the build report and committed. Treat every claim as the builder's and
 verify it yourself.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t42a (branch `factory/testops-42a-seam`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t42a (branch `factory/testops-42a-seam`). Work only here.
 Ticket:  factory/tickets/TESTOPS-42A.md
 Build:   factory/reports/2026-11-23/TESTOPS-42A-build.md
 Deliverable: docs/ecosystem-inventory-cucumber-js.md
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Run the suite from this worktree with the interpreter above. A copy of the live store is in `data/` (gitignored) so the

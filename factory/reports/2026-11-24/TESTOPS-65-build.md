@@ -1,7 +1,7 @@
 # TESTOPS-65 build - the list says it is incomplete, and the spelling stops deciding
 
 Ticket: `factory/tickets/TESTOPS-65.md`. Branch: `factory/testops-65-vocabulary`, built in the linked
-worktree `C:/Users/Chester/Projects/testops-t65`. The live store and port 8791 were never contacted:
+worktree `C:/Users/<name>/Projects/testops-t65`. The live store and port 8791 were never contacted:
 every probe below is a direct call to `testops.services`, plus one in-process HTTP run against a
 `tmp_path` database. Files touched: `testops/services.py` and the new
 `tests/test_credential_vocabulary.py`. No case-page golden, template or fixture changed
@@ -176,7 +176,7 @@ checks is not a statement.
 
 ```
 env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 1043 passed, 2 skipped in 159.57s
 
 env ... -m pytest -q tests/contracts

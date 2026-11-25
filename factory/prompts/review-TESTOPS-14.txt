@@ -1,10 +1,10 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-14 (including its addendum AC8-AC10)
 
 STANDING RULE (TESTOPS-35) — a review fixture belongs in a COPY of the store.
-The live store at C:/Users/Chester/Projects/testops/data is the Product Owner's evidence: never
+The live store at C:/Users/<name>/Projects/testops/data is the Product Owner's evidence: never
 write a case, claim, snapshot or blob into it, and never run a destructive command against it.
 Copy it first and point the tooling at the copy:
-    cp -r C:/Users/Chester/Projects/testops/data/. <scratch>/store/data/
+    cp -r C:/Users/<name>/Projects/testops/data/. <scratch>/store/data/
     export TESTOPS_HOME=<scratch>/store
 Every rehearsal, dry run and deletion runs against that copy. If a fixture has already reached
 the live store, `python -m testops.cli scrub-fixtures --dry-run` reports it and `--yes` removes
@@ -12,7 +12,7 @@ it — never hand-edit SQLite. The full workflow is factory/prompts/REVIEW-WORKF
 
 against the acceptance criteria.
 
-Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-14-evidence-depth`, tree clean.
+Repository: C:/Users/<name>/Projects/testops, branch `factory/testops-14-evidence-depth`, tree clean.
 Ticket:     factory/tickets/TESTOPS-14.md   (read the addendum section; AC8-AC10 were added after the
             Lead rendered the first build and found evidence attached by file rather than by claim)
 Diff:       git diff feature/f1..HEAD
@@ -21,7 +21,7 @@ HARD RULES
 - Run the suite on both interpreters:
     env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
     env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 \
-      C:/Users/Chester/AppData/Local/hermes/profiles/builder/cache/scratch/venv311/Scripts/python.exe -m pytest -q
+      C:/Users/<name>/AppData/Local/hermes/profiles/builder/cache/scratch/venv311/Scripts/python.exe -m pytest -q
 - **Test AC1 for real, which means the hard part: can a run be rebuilt with no network?** Take a
   snapshot, rebuild from the snapshot id alone with networking made unusable to the process (do not
   simply trust a code path), and compare the claims to the originals. If you cannot disable networking,

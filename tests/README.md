@@ -104,7 +104,7 @@ credentials, Jira, or an external repository - and no test may write to the live
 ## The page-contract suite owns its server (TESTOPS-53)
 
 `tests/contracts/` is the blind page-contract suite from TESTOPS-7. It used to default to the live
-deployment (`http://100.121.128.21:8791`) and POST a timestamped audit project into the store the
+deployment (`http://<live-host>:8791`) and POST a timestamped audit project into the store the
 product runs from, so a bare `pytest` wrote to the Product Owner's evidence. It no longer can:
 
 - `conftest.py` starts a child process (`_server.py`) that serves the product on **port 0** - the

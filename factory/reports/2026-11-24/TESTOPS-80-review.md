@@ -1,6 +1,6 @@
 # TESTOPS-80 review — the routes tag answers from the surface reader
 
-Reviewer: independent, worktree `C:/Users/Chester/Projects/testops-t80`, branch
+Reviewer: independent, worktree `C:/Users/<name>/Projects/testops-t80`, branch
 `factory/testops-80-band-truth` at `c7ca1c9`. Nothing outside this worktree was touched; the store
 was copied to scratch and served on 127.0.0.1:8793 (8791 never approached).
 

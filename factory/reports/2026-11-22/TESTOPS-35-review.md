@@ -1,6 +1,6 @@
 # TESTOPS-35 — review report
 
-Reviewer session, 2026-11-22. All work on copies under `C:/Users/Chester/AppData/Local/Temp/rev35` and
+Reviewer session, 2026-11-22. All work on copies under `C:/Users/<name>/AppData/Local/Temp/rev35` and
 `rev35b`; the live store was opened only through `file:...?mode=ro`.
 
 ## Verdict — PASS
@@ -65,17 +65,17 @@ Wrote a probe test (`tests/test_zz_reviewer_guard_probe.py`, since deleted) whos
 second test wrote to `tmp_path`.
 
 - With the suite's guard active, the live-store test **failed** at the connect itself with
-  `StoreWriteRefused: a test tried to open the product store for writing: C:\Users\Chester\Projects\testops\data\testops.db`;
+  `StoreWriteRefused: a test tried to open the product store for writing: C:\Users\<name>\Projects\testops\data\testops.db`;
   the tmp-path test passed. This is a refusal at the open, not a warning and not a post-hoc digest.
 - Incidental second proof: the full suite ran while the probe file was still on disk, and the session
   `repo_guard` failed teardown with `a test wrote into the repository: {'added':
   ['tests/test_zz_reviewer_guard_probe.py']}` — the repository digest caught an added file too.
 - Clean re-run after deleting the probe: **351 passed, 7 skipped** (matches the build report), `import testops`
-  resolves to `C:\Users\Chester\Projects\testops-t35\testops\__init__.py`, worktree `git status` clean.
+  resolves to `C:\Users\<name>\Projects\testops-t35\testops\__init__.py`, worktree `git status` clean.
 
 ## Live store untouched
 
-Before and after all review activity, `C:/Users/Chester/Projects/testops/data/testops.db`:
+Before and after all review activity, `C:/Users/<name>/Projects/testops/data/testops.db`:
 mtime `1795349163.497` (2026-11-22 12:06:03), 5,697,536 bytes, sha256
 `dc3071175d4cdc8e2445d413f7614449016358b3eb61172743334a738e6a6ce2`; 168 cases, 667 findings; `rev-duplicate`
 still present (its removal is the Product Owner's command to run, not the reviewer's).

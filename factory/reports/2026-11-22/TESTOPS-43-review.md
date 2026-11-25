@@ -2,7 +2,7 @@
 
 Reviewed 2026-11-22 against branch `factory/testops-43-partial-reads` (af84327), tree clean.
 Suite: `env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1
-C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q` → **456 passed, 1 failed**.
+C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q` → **456 passed, 1 failed**.
 The one failure (`test_every_case_page_and_the_indexes_are_byte_identical_after_the_migration`,
 differs at byte 59, `\n` vs `\r`) reproduces identically on a `main` worktree checked out the same
 way — it is a CRLF fixture artifact of this environment, not this branch. All evidence below is

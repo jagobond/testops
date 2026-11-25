@@ -1,14 +1,14 @@
 You are the builder on the TestOps factory. Implement TESTOPS-3 exactly.
 
 Read, in this order:
-  1. C:/Users/Chester/Projects/testops/factory/tickets/TESTOPS-3.md
-  2. C:/Users/Chester/Projects/testops/AGENTS.md
-  3. C:/Users/Chester/Projects/testops/ROLES.md
-  4. C:/Users/Chester/Projects/testops/factory/reports/2026-11-21/TESTOPS-2-review.md  (the review that
+  1. C:/Users/<name>/Projects/testops/factory/tickets/TESTOPS-3.md
+  2. C:/Users/<name>/Projects/testops/AGENTS.md
+  3. C:/Users/<name>/Projects/testops/ROLES.md
+  4. C:/Users/<name>/Projects/testops/factory/reports/2026-11-21/TESTOPS-2-review.md  (the review that
      immediately preceded you; its concerns 1 and 3 still apply to this tree)
 
-Repository: C:/Users/Chester/Projects/testops  (branch factory/testops-3-schema-v2)
-Python:     C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Repository: C:/Users/<name>/Projects/testops  (branch factory/testops-3-schema-v2)
+Python:     C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 Suite:      17 tests must still pass. `python -m pytest -q`.
 
 HARD CONSTRAINTS

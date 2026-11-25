@@ -101,7 +101,7 @@ golden is a weaker proof than a captured-before one, and the reviewer should kno
 
 ```
 env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 \
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 540 passed in 102.14s
 ```
 

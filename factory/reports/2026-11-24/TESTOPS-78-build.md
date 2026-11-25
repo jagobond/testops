@@ -1,12 +1,12 @@
 # TESTOPS-78 build — no intent, no accusation; no page, no honesty
 
 2026-11-24, branch `factory/testops-78-near-miss`, worktree
-`C:/Users/Chester/Projects/testops-t78`. `level_fitness` 0.11 → **0.12**. No store schema change;
+`C:/Users/<name>/Projects/testops-t78`. `level_fitness` 0.11 → **0.12**. No store schema change;
 no verdict moved except the ones this ticket was written to refuse.
 
 The ticket's review source is `factory/reports/2026-11-24/TESTOPS-72-review-round2.md`. It is not in
 this worktree (the TESTOPS-72 branch carries it); it was read at
-`C:/Users/Chester/Projects/testops-t72/factory/reports/2026-11-24/TESTOPS-72-review-round2.md`, and
+`C:/Users/<name>/Projects/testops-t72/factory/reports/2026-11-24/TESTOPS-72-review-round2.md`, and
 its two concerns are the two holes this build closes.
 
 Suite, from the project `.venv` with `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV`/`CONDA_PREFIX` stripped

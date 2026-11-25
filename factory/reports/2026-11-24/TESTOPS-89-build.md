@@ -10,7 +10,7 @@ timeout, and threw the exception away. Whatever the deployment replied, the tool
 
 ## The cause in the deployed container (AC4) - determined, not narrowed
 
-A new revision was deployed (`testops--0000004`, image `testopsdemo30562.azurecr.io/testops:20261124-161320`)
+A new revision was deployed (`testops--0000004`, image `<registry>.azurecr.io/testops:20261124-161320`)
 carrying this change, and `/agent-check` was read from the live app. Its own words:
 
     No explanation would be served right now: the metadata service did not answer (unreachable)
@@ -71,7 +71,7 @@ and asserts that no eight-character window of it appears in the rendered page or
 ## Verification
 
     env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-      C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+      C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
     1342 passed, 2 skipped in 281.56s (EXIT=0)
 
 That includes the AC5 gates as they already stood: `test_every_real_case_page_is_byte_identical_to_the_pre_change_build`

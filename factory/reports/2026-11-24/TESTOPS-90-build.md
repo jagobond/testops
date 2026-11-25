@@ -1,7 +1,7 @@
 # TESTOPS-90 build — a citation id is not a statistic, and a rejection gets one repair
 
 2026-11-24, branch `factory/testops-90-citation-id`, worktree
-`C:/Users/Chester/Projects/testops-t90`.
+`C:/Users/<name>/Projects/testops-t90`.
 
 Suite, from the project `.venv` with `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV`/`CONDA_PREFIX` stripped
 and `PYTHONNOUSERSITE=1`: **1338 passed, 2 skipped** (273 s). `tests/contracts` ran inside that
@@ -64,7 +64,7 @@ for it: `test_the_report_separates_every_state_so_value_and_loss_are_not_confuse
 Ten cases from the stored level-fitness runs of 2026-11-24 (five from `...T123451`, five from
 `...T114627`, including `...T123451-05`, the ticket's case). Records read from `data/testops.db`
 opened **read-only**; ledger and cache in a throwaway store. Model `deepseek-flash`, endpoint
-`https://testops-resource.services.ai.azure.com/openai/v1/chat/completions`, token from the local
+`https://<account>.services.ai.azure.com/openai/v1/chat/completions`, token from the local
 `az login`. Script: `factory/reports/2026-11-24/tes90_measure.py`; raw data, including every
 model reply: `factory/reports/2026-11-24/tes90-measurement.json`.
 

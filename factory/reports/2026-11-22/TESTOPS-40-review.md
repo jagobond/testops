@@ -2,7 +2,7 @@
 
 Reviewer, 2026-11-22. Branch `factory/testops-40-decision-cover`, worktree clean apart from this
 report. Full suite, run as required:
-`env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q`
+`env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q`
 → **540 passed in 87.08s** (gitignored CotW store present in this worktree, so the corpus pins ran,
 not skipped). Every behavioural result below is from my own probes and live pipeline runs over a
 throwaway store, not taken from the build report.

@@ -1,7 +1,7 @@
 # TESTOPS-42A review — reviewer, 23 November 2026
 
 Everything below was verified from this worktree with
-`env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe`,
+`env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe`,
 against the store copy in `data/`. Full suite: **579 passed in 99.6s**.
 
 ## Verdict

@@ -66,7 +66,7 @@ directions, so the copy cannot drift.
 ## Exact numbers
 
 - `env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q`
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q`
   → **534 passed, 11 skipped** in 90.66s. The 15 tests in `tests/test_verdict_trigger.py` are new;
   the one existing change is the version assertion in `tests/test_sources_assessed.py`.
 - `tests/test_verdict_trigger.py`: 15 collected, 15 passed. `tests/test_verdict_vocabulary.py`: 6

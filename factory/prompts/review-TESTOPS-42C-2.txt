@@ -1,11 +1,11 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-42C-2 - part 2 of 3: per-command layer inference.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t42c2 (branch `factory/testops-42c2-inference`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t42c2 (branch `factory/testops-42c2-inference`). Work only here.
 Store copy in `data/` (gitignored) - read blobs via `tools/ecosystem_inventory_counts.load_files`.
 Ticket:  factory/tickets/TESTOPS-42C-2.md
 Build:   factory/reports/2026-11-23/TESTOPS-42C-2-build.md
 Prior review: factory/reports/2026-11-23/TESTOPS-42C-1-review.md (the concatenation finding is carried item A).
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Run the suite from this worktree with the interpreter above.

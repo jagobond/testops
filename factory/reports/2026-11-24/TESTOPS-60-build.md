@@ -1,6 +1,6 @@
 # TESTOPS-60 - The unplaced section: grouped, folded, and structurally anchored
 
-Worktree: `C:/Users/Chester/Projects/testops-t60`, branch
+Worktree: `C:/Users/<name>/Projects/testops-t60`, branch
 `factory/testops-60-unplaced-volume`. TESTOPS-57's review (`## Zero and many`, `## Three sharpest
 concerns`) was read from the `testops-t57` worktree; it is not present in this one. Store copy
 built under `tmp_path` in tests; the live store was never opened and port 8791 never contacted.

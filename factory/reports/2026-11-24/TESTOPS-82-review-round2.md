@@ -1,6 +1,6 @@
 # TESTOPS-82 review, round 2 — the second mark reads both ways
 
-2026-11-24, reviewer. Worktree `C:/Users/Chester/Projects/testops-t82`, branch
+2026-11-24, reviewer. Worktree `C:/Users/<name>/Projects/testops-t82`, branch
 `factory/testops-82-quoted-entity`, head `f2fc2f8` (the amendment). Everything below was derived
 offline from direct calls into `testops/analysers/level_fitness.py` v0.15 with the review corpora
 (the round-1 fixtures in `tests/test_product_evidence.py`) and from the stored snapshot

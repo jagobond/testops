@@ -1,6 +1,6 @@
 # TESTOPS-72 build — the product is evidence
 
-2026-11-24, branch `factory/testops-72-product-evidence`, worktree `C:/Users/Chester/Projects/testops-t72`.
+2026-11-24, branch `factory/testops-72-product-evidence`, worktree `C:/Users/<name>/Projects/testops-t72`.
 `level_fitness` 0.10.3 → **0.11**; store `schema_version` 6 → **7**.
 
 Suite, from the project `.venv` with `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV`/`CONDA_PREFIX` stripped and
@@ -239,7 +239,7 @@ identical to the pre-amendment table.
 
 ### 2. AC7 rebuilt from a snapshot this worktree actually holds
 
-Store: `C:/Users/Chester/Projects/testops-t72/data/testops.db` (the gitignored local copy; the live
+Store: `C:/Users/<name>/Projects/testops-t72/data/testops.db` (the gitignored local copy; the live
 store and port 8791 were not touched). It holds exactly these restful-booker snapshots:
 `restfulbooker-levels-20261122-262404a9`, `-r2`, `-r3`, `restfulbooker-20261122-262404a9`, and
 `restfulbooker-levels-20261123-fe8537db`. **No snapshot or run named

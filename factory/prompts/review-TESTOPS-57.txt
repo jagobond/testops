@@ -2,9 +2,9 @@ You are the reviewer on the TestOps factory. Judge TESTOPS-57 - the claims the t
 of their own, and the soft tone gets its first witness on a served page. This is the ticket that decides whether "I could
 not tell" is visible at all, so the bar is that a reader can act on it and that nothing about it implies a conclusion.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t57 (branch `factory/testops-57-unplaced-section`). Only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t57 (branch `factory/testops-57-unplaced-section`). Only here.
 Ticket: factory/tickets/TESTOPS-57.md ; Build: factory/reports/2026-11-24/TESTOPS-57-build.md
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Never write to the live store or contact port 8791. Copy `data/`, serve on a free port.

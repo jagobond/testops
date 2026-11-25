@@ -26,6 +26,24 @@ env:
   PYTHONNOUSERSITE: "1"
 
 jobs:
+  identifiers:
+    # TESTOPS-102 AC6. Its own job, so a commit that reintroduces a subscription id, a home path, a
+    # tailnet address or a credential fails a check called "no identifiers" and not a test among
+    # fourteen hundred. No install step: the check is stdlib plus the repository's own screen.
+    name: no identifiers
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Scan the tracked tree
+        run: env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
+             python scripts/check_no_secrets.py
+
   suite:
     # The interpreter is in the check's own name, so a red check on a PR says which floor broke
     # without anyone opening the Actions tab (AC4).

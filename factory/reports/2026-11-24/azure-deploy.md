@@ -1,20 +1,20 @@
 # TestOps on Azure
 
-**Live: https://testops.wittymeadow-14b0c4c7.eastus.azurecontainerapps.io/**
+**Live: https://<container-app-domain>.azurecontainerapps.io/**
 
 Deployed 2026-11-24 for a team walkthrough. Nothing in this deployment touches the FoundryVTT stack
-in `rg-foundry-prod`; it has its own resource group and its own registry.
+in `<foundry-resource-group>`; it has its own resource group and its own registry.
 
 ## What exists
 
 | resource | name | notes |
 |---|---|---|
-| resource group | `rg-testops-demo` | `eastus`. Its own group, so the demo can be deleted in one command |
-| container registry | `testopsdemo30562` | Basic tier, admin credentials enabled for the pull secret |
-| container apps environment | `testops-env` | default domain `wittymeadow-14b0c4c7.eastus.azurecontainerapps.io` |
+| resource group | `<app-resource-group>` | `eastus`. Its own group, so the demo can be deleted in one command |
+| container registry | `<registry>` | Basic tier, admin credentials enabled for the pull secret |
+| container apps environment | `<container-apps-environment>` | default domain `<container-app-domain>.azurecontainerapps.io` |
 | container app | `testops` | 0.25 vCPU / 0.5 Gi, external ingress on port 8080, replicas 1..1 |
-| storage account | `testopsdata20426` | Standard_LRS, share `testopsdata` mounted at `/app/data` |
-| Log Analytics | `workspace-rgtestopsdemoTazJ` | container stdout |
+| storage account | `<storage-account>` | Standard_LRS, share `<file-share>` mounted at `/app/data` |
+| Log Analytics | `<log-analytics-workspace>` | container stdout |
 
 ## Why these choices
 
@@ -27,9 +27,9 @@ in `rg-foundry-prod`; it has its own resource group and its own registry.
 - **`min-replicas 1` for the demo.** Scale-to-zero would add several seconds of cold start to the
   first page a colleague opens. While the minimum is 1 the app costs on the order of pennies a day;
   drop it back to 0 with
-  `az containerapp update -n testops -g rg-testops-demo --min-replicas 0` when the demo is over.
+  `az containerapp update -n testops -g <app-resource-group> --min-replicas 0` when the demo is over.
 - **The store is on Azure Files, so the ledger survives a restart.** The image still ships a seeded store, but
-  `/app/data` is mounted from `testopsdata20426`, so views, calls, cached explanations and votes outlive a revision
+  `/app/data` is mounted from `<storage-account>`, so views, calls, cached explanations and votes outlive a revision
   restart. Verified: a vote was cast, the revision restarted, and the report still showed `Helped 1`, 4 views, 4,028
   tokens. Without the mount, the whole A/B would reset every deploy.
 - **Managed identity is assigned but IMDS is unreachable from this container** (`Errno 111 Connection refused` to
@@ -51,7 +51,7 @@ in `rg-foundry-prod`; it has its own resource group and its own registry.
 ## Redeploying
 
 ```bash
-RG=rg-testops-demo ACR=testopsdemo30562 ./scripts/deploy_azure.sh
+RG=<app-resource-group> ACR=<registry> ./scripts/deploy_azure.sh
 ```
 
 The script registers the resource providers, creates the registry if absent, builds
@@ -60,7 +60,7 @@ The script registers the resource providers, creates the registry if absent, bui
 ## Tearing it down
 
 ```bash
-az group delete -n rg-testops-demo --yes --no-wait
+az group delete -n <app-resource-group> --yes --no-wait
 ```
 
 
@@ -81,7 +81,7 @@ are unchanged. Verified live at 19:5x:
 |---|---|---|
 | `TESTOPS_FOUNDRY_ENDPOINT` | `.../openai/v1/chat/completions` | the **model** route; once renamed to the project base it 404s |
 | `TESTOPS_AGENT_TOKEN` | secret `testops-agent-token` | api-key for the hosted agent's responses endpoint |
-| `TESTOPS_AGENT_PROJECT` | `testops` | the **project** name, which is not the account name - the code's default derived `projects/testops-resource` and every call 404'd |
+| `TESTOPS_AGENT_PROJECT` | `testops` | the **project** name, which is not the account name - the code's default derived `projects/<foundry-account>` and every call 404'd |
 | `TESTOPS_AGENT_ROUTE_ENDPOINT` | full agent responses URL | the explicit override; the derived form was wrong for this account/project pair |
 | `TESTOPS_AGENT_TIMEOUT` | `60` | the agent's first call in a fresh session can take far longer than the 20 s default |
 

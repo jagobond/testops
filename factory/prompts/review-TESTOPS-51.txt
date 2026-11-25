@@ -2,19 +2,19 @@ You are the reviewer on the TestOps factory. Judge TESTOPS-51 - the credential s
 project delete route. This one is security-adjacent: it must stop a password being stored AND must not start refusing
 ordinary words, because a screen that cries wolf gets switched off.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t51 (branch `factory/testops-51-credential-screen`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t51 (branch `factory/testops-51-credential-screen`). Work only here.
 Ticket: factory/tickets/TESTOPS-51.md ; Build: factory/reports/2026-11-23/TESTOPS-51-build.md
 Evidence: factory/reports/2026-11-23/TESTOPS-7-author-report.md (the blind author's P23 finding)
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
-- **Never touch the live store** (`C:/Users/Chester/Projects/testops/data/testops.db`) or the live server on 8791. Copy
+- **Never touch the live store** (`C:/Users/<name>/Projects/testops/data/testops.db`) or the live server on 8791. Copy
   `data/`, set `TESTOPS_DATA` to the copy, serve on a free port, set `TESTOPS_BASE` for the contract suite.
 - **The screen is a shape, not a word list:** read `_looks_like_secret` and decide whether it is a shape you can reason
   about, or a pile of special cases that will miss the next format. Say which.
 - **False positives are the main risk.** Verify by hand over HTTP on your copy - not from the build's table - that all of
   these are accepted: `jagobond/cotw-continuity`, `Jira board COTW`, `RuckoldtAndRylander`, `cotw-continuity pipeline #2`,
-  `mwinteringham/restful-booker-platform`, `100.121.128.21`, `localhost:8791`, `https://github.com/org/repo.git`, `COTW`,
+  `mwinteringham/restful-booker-platform`, `<tailnet-address>`, `localhost:8791`, `https://github.com/org/repo.git`, `COTW`,
   `TOPS`, `test password reset flow`. Then push on the boundary yourself with at least ten values of your own invention
   that a real user might type - product names, a repo called `password-manager/tool`, a board called `secrets-service`, a
   host named `vault.internal`, a description like `Bearer token rotation work`, a path like `docs/token-refresh.md`. For

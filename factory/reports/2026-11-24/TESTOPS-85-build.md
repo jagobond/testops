@@ -1,7 +1,7 @@
 # TESTOPS-85 build — refusing costs too
 
 2026-11-24, branch `factory/testops-85-refusals`, worktree
-`C:/Users/Chester/Projects/testops-t85`. `level_fitness` 0.15 → **0.16**. No store schema change.
+`C:/Users/<name>/Projects/testops-t85`. `level_fitness` 0.15 → **0.16**. No store schema change.
 
 Suite, from the project `.venv` with `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV`/`CONDA_PREFIX`
 stripped and `PYTHONNOUSERSITE=1`: **1282 passed, 2 skipped** (174.0 s). Contract suite alone

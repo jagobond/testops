@@ -5,14 +5,17 @@
 # deploy works whether or not a Docker daemon is running locally. That is deliberate - the first
 # attempt failed for exactly that reason.
 #
-# Everything lands in its own resource group. The FoundryVTT stack in rg-foundry-prod is not
-# touched, named, or queried by this script.
+# Everything lands in its own resource group. The neighbouring FoundryVTT stack is a different
+# resource group and is not touched, named, or queried by this script.
 set -euo pipefail
 
-RG="${RG:-rg-testops-demo}"
+# No defaults for the three identity-bearing names: an unset variable stops the script with the
+# sentence below, so this file names no resource group, registry or environment of its own.
+# A region is not an identity, so LOCATION keeps its default.
+: "${RG:?set RG to the target resource group}"
 LOCATION="${LOCATION:-eastus}"          # eastus, not uksouth: uksouth had no capacity for this
-ACR="${ACR:-testopsdemo30562}"
-ENVNAME="${ENVNAME:-testops-env}"
+: "${ACR:?set ACR to the container registry name}"
+: "${ENVNAME:?set ENVNAME to the container apps environment name}"
 APP="${APP:-testops}"
 TAG="${TAG:-$(date +%Y%m%d-%H%M%S)}"
 IMAGE="$ACR.azurecr.io/testops:$TAG"

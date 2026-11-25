@@ -1,6 +1,6 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-39.
 
-Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-39-second-specimen`, tree clean.
+Repository: C:/Users/<name>/Projects/testops, branch `factory/testops-39-second-specimen`, tree clean.
 Ticket:     factory/tickets/TESTOPS-39.md
 Assessment under review: factory/reports/2026-11-22/TESTOPS-39-assessment.md
 Diff:       git diff main..HEAD

@@ -1,10 +1,10 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-9.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t9 (branch `factory/testops-9-vocabulary`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t9 (branch `factory/testops-9-vocabulary`). Work only here.
 Ticket: factory/tickets/TESTOPS-9.md
 Build: factory/reports/2026-11-22/TESTOPS-9-build.md
 
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 The ticket claims the verdict vocabulary in schema.sql, the Claim docstring and analysers/base.py now matches what the
 analysers emit, with a test that fails in both directions, and that no data was touched.

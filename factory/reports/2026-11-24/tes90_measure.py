@@ -5,7 +5,7 @@ cache are written to a throwaway store, so measuring never touches the product's
 is whatever the deployment resolves at call time - here the local ``az`` token and ``deepseek-flash``.
 
     env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-      C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe \
+      C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe \
       factory/reports/2026-11-24/tes90_measure.py
 
 Writes ``factory/reports/2026-11-24/tes90-measurement.json`` and prints one line per case.

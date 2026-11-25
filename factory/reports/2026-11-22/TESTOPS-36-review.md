@@ -4,7 +4,7 @@ Reviewed: commit 1013366 (the tip commit; `origin/feature/f1..HEAD` also contain
 TESTOPS-33/34 work from the f1 branch that is not this ticket's change — see concerns).
 Tests: `pytest` from the worktree root with the shared `.venv`, env stripped per AGENTS.md —
 373 passed, 7 skipped; `testops.__file__` confirmed inside this worktree
-(`C:\Users\Chester\Projects\testops-t36\testops\__init__.py`).
+(`C:\Users\<name>\Projects\testops-t36\testops\__init__.py`).
 
 ## Verdict
 
@@ -34,7 +34,7 @@ and the one sentence I would reword is not false, merely narrower than the situa
 
 ## Links
 
-The real store (`C:/Users/Chester/Projects/testops/data/testops.db`, copied read-only) contains
+The real store (`C:/Users/<name>/Projects/testops/data/testops.db`, copied read-only) contains
 **zero** cross-analyser shared coordinates — no path+line+commit, and not even path+line, is
 claimed by both `level_fitness` and `duplication`. So no cross-reference is generated on the real
 corpus; all 184 case pages were rendered and none contains `<aside class="xref">`. The brief's

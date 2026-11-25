@@ -1,11 +1,11 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-42C-3 - the ticket where cucumber-js becomes supported and
 the number Harry will judge the whole of T42C by appears.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t42c3 (branch `factory/testops-42c3-placement`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t42c3 (branch `factory/testops-42c3-placement`). Work only here.
 Store copy in `data/` (gitignored) - read blobs via `tools/ecosystem_inventory_counts.load_files`.
 Ticket:  factory/tickets/TESTOPS-42C-3.md
 Build:   factory/reports/2026-11-23/TESTOPS-42C-3-build.md
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Run the suite from this worktree with the interpreter above.

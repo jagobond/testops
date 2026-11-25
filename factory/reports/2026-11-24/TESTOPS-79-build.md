@@ -1,7 +1,7 @@
 # TESTOPS-79 build — display copy is not the subject of the claim
 
 2026-11-24, branch `factory/testops-79-quoted-copy`, worktree
-`C:/Users/Chester/Projects/testops-t79`. `level_fitness` 0.12 → **0.13**. No store schema change.
+`C:/Users/<name>/Projects/testops-t79`. `level_fitness` 0.12 → **0.13**. No store schema change.
 Eight verdicts moved, all of them the wrong repeats this ticket was written to refuse; nothing else
 moved.
 

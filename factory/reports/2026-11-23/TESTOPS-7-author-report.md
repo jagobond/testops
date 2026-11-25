@@ -13,20 +13,20 @@ softened to green; one harness bug was fixed and one *stricter* P23 test was add
 Given (one line each):
 
 - "The brief is `brief/page-contracts.md`. It is the whole specification." — README.md
-- "The application is running at http://100.121.128.21:8791/ (also reachable as http://localhost:8791/)." — README.md
-- "Python with pytest and requests: C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe" — README.md
+- "The application is running at http://<tailnet-address>:8791/ (also reachable as http://localhost:8791/)." — README.md
+- "Python with pytest and requests: C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe" — README.md
 - "This is the whole brief. If you read the application's source, its templates, its goldens or its existing page tests, this suite stops being independent evidence — so don't." — brief/page-contracts.md
-- "do NOT open the application's source at C:/Users/Chester/Projects/testops, and do not open its tests/, factory/reports/ or any golden file." — task brief
+- "do NOT open the application's source at C:/Users/<name>/Projects/testops, and do not open its tests/, factory/reports/ or any golden file." — task brief
 
 Environment note: `requests` is **not** installed in that venv (pytest 9.2.0 is). The suite uses
 `urllib.request` from the standard library. `http://localhost:8791/` refused the connection; the
-`100.121.128.21:8791` address served every page (HTTP 200).
+`<tailnet-address>:8791` address served every page (HTTP 200).
 
 Deliberately **not** opened:
 
-- `C:/Users/Chester/Projects/testops/src/` (the application source) and the rest of the product tree.
-- `C:/Users/Chester/Projects/testops/tests/`, `factory/reports/`, and any golden file.
-- `C:/Users/Chester/Projects/cotw-continuity/src/`.
+- `C:/Users/<name>/Projects/testops/src/` (the application source) and the rest of the product tree.
+- `C:/Users/<name>/Projects/testops/tests/`, `factory/reports/`, and any golden file.
+- `C:/Users/<name>/Projects/cotw-continuity/src/`.
 - Any pre-existing page test or Gherkin scenario in either repository.
 
 What I *did* read is the artefact under test: the HTML and inline public CSS served by the running
@@ -99,7 +99,7 @@ from the brief; none of it was taken from source.
 ## (c) First run of the delivered suite (full output below)
 
 Summary: **6 failed, 20 passed, 3 skipped**, exit 1. Commands:
-`C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest tests -v -p no:cacheprovider`
+`C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest tests -v -p no:cacheprovider`
 
 ### Failure-by-failure
 
@@ -163,8 +163,8 @@ Summary: **6 failed, 20 passed, 3 skipped**, exit 1. Commands:
 
 ```text
 ============================= test session starts =============================
-platform win32 -- Python 3.12.5, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\Chester\Projects\testops\.venv\Scripts\python.exe
-rootdir: C:\Users\Chester\Projects\testops-contract-author
+platform win32 -- Python 3.12.5, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\<name>\Projects\testops\.venv\Scripts\python.exe
+rootdir: C:\Users\<name>\Projects\testops-contract-author
 collecting ... collected 29 items
 
 tests/test_page_contracts.py::test_P01_a_run_that_found_nothing_says_so PASSED [  3%]

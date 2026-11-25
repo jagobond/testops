@@ -59,7 +59,7 @@ what it could not check; the shorthand never appears in text a reader sees.
 ## Verification
 
 ```
-cd C:/Users/Chester/Projects/testops
+cd C:/Users/<name>/Projects/testops
 env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
   .venv/Scripts/python.exe -m pytest -q
 ```

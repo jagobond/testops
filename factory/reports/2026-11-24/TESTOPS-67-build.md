@@ -1,9 +1,9 @@
 # TESTOPS-67 build - no green zeros, no swallowed git failure, no mixed alphabets
 
-Branch `factory/testops-67-honest-zero`, worktree `C:/Users/Chester/Projects/testops-t67`.
+Branch `factory/testops-67-honest-zero`, worktree `C:/Users/<name>/Projects/testops-t67`.
 The live store and port 8791 were never touched. The corruption probe used a disposable git
 repository under pytest's `tmp_path`. The TESTOPS-66 review was read from
-`C:/Users/Chester/Projects/testops-t66/factory/reports/2026-11-24/TESTOPS-66-review.md` (it is
+`C:/Users/<name>/Projects/testops-t66/factory/reports/2026-11-24/TESTOPS-66-review.md` (it is
 untracked there and absent from this worktree).
 
 ## What changed
@@ -51,7 +51,7 @@ normal, ignored and git-unreadable states.
 ## Verification
 
 Interpreter: `env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
-C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q`.
+C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q`.
 
 - Targeted guard + isolation tests: **15 passed**.
 - Full suite: **941 passed, 2 skipped** (162.86s).

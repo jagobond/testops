@@ -1,10 +1,10 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-48 - the last known hole in the packaging proof.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t48 (branch `factory/testops-48-wheel-coverage`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t48 (branch `factory/testops-48-wheel-coverage`). Work only here.
 Ticket:  factory/tickets/TESTOPS-48.md
 Build:   factory/reports/2026-11-23/TESTOPS-48-build.md
 Prior review: factory/reports/2026-11-23/TESTOPS-8-review.md, concern 1 - the evidence.
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Run the suite from this worktree with the interpreter above.

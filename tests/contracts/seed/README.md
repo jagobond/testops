@@ -20,7 +20,7 @@ Contents:
 Regenerate with the generator, from a store the product has written, **read-only**:
 
 ```
-python tests/contracts/seed/make_seed.py C:/Users/Chester/Projects/testops/data/testops.db
+python tests/contracts/seed/make_seed.py <path-to-the-product-store>
 ```
 
 The generator opens the store with `mode=ro`, takes only the rows named in `RUNS`/`PROJECTS`, and

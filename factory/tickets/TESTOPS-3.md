@@ -61,7 +61,7 @@ web UI (TESTOPS-6), and any source adapter (TESTOPS-5).
 ## Verification
 
 ```
-cd C:/Users/Chester/Projects/testops
+cd C:/Users/<name>/Projects/testops
 env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
   .venv/Scripts/python.exe -m pytest -q
 ```

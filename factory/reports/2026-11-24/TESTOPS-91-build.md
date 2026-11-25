@@ -1,6 +1,6 @@
 # TESTOPS-91 build — the reply that is 90 percent of an answer is repaired, not discarded
 
-2026-11-24, worktree `C:/Users/Chester/Projects/testops-t91`, branch
+2026-11-24, worktree `C:/Users/<name>/Projects/testops-t91`, branch
 `factory/testops-91-repair-citations`, implementation commit `62117ab`.
 
 Suite, from the project `.venv` with `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV`/`CONDA_PREFIX` stripped
@@ -66,7 +66,7 @@ would be a guess, and no guess is bought.
 
 Same ten cases and the same conditions as TESTOPS-90, so the two runs are comparable. Records read
 from `data/testops.db` opened **read-only** (`?mode=ro`); ledger and cache in a throwaway store. Model
-`deepseek-flash`, endpoint `https://testops-resource.services.ai.azure.com/openai/v1/chat/completions`,
+`deepseek-flash`, endpoint `https://<account>.services.ai.azure.com/openai/v1/chat/completions`,
 token from the local `az login`, 8 s between cases (the endpoint throttles a burst). Script:
 `factory/reports/2026-11-24/tes91_measure.py`; raw data including every model reply:
 `factory/reports/2026-11-24/tes91-measurement.json`.

@@ -2,15 +2,15 @@ You are the reviewer on the TestOps factory. Judge TESTOPS-58 - pinning the trus
 it, so the suite's "disposable store" guarantee stops being self-referential. You proved the original attack; now prove
 this fix closes it without breaking clean runs.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t58 (branch `factory/testops-58-pinned-temp-root`). Only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t58 (branch `factory/testops-58-pinned-temp-root`). Only here.
 Ticket: factory/tickets/TESTOPS-58.md ; Build: factory/reports/2026-11-24/TESTOPS-58-build.md
 Your earlier finding: factory/reports/2026-11-23/TESTOPS-53-review.md, section "Can the store be redirected".
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
-- Never write to the live store (`C:/Users/Chester/Projects/testops/data/testops.db`) or contact port 8791. Reading it
+- Never write to the live store (`C:/Users/<name>/Projects/testops/data/testops.db`) or contact port 8791. Reading it
   `mode=ro` for the before/after comparison is fine.
-- **Re-run your exact original attack:** `TMPDIR=C:/Users/Chester/Projects/attack-tmp` (directory pre-created), then
+- **Re-run your exact original attack:** `TMPDIR=C:/Users/<name>/Projects/attack-tmp` (directory pre-created), then
   `pytest tests/contracts -q -rs`. It must SKIP with a reason naming TMPDIR and the path, and must leave no `.db` under
   `attack-tmp`. Report the skip line verbatim. Then delete nothing - just say what you created, if anything.
 - **Try to move the root another way:** `TEMP`, `TMP`, all three at once, a relative `TMPDIR` (`TMPDIR=../attack`), a

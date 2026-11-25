@@ -2,9 +2,9 @@ You are the reviewer on the TestOps factory. Judge TESTOPS-55 - the two counting
 exists, and a run page must say what was read per kind, including explicit zeroes. Counting is where a tool lies most
 easily, so the bar is that every number is derived from the store and that a zero is a fact, not a silence.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t55 (branch `factory/testops-55-counts`). Only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t55 (branch `factory/testops-55-counts`). Only here.
 Ticket: factory/tickets/TESTOPS-55.md ; Build: factory/reports/2026-11-24/TESTOPS-55-build.md
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Never write to the live store or contact port 8791. Copy `data/`, serve on a free port (or use the suite's own server).

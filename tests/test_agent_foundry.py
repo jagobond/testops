@@ -124,7 +124,7 @@ def _good_reply(conn) -> str:
 def _config(base: str, *, fallback: str = "", timeout: float = 5.0,
             agent_token: str = TOKEN, model_token: str = "model-token-value",
             agent_name: str = "testops-narrator") -> agent.Config:
-    return agent.Config(project="testops-resource", endpoint=CHAT_ENDPOINT,
+    return agent.Config(project="example-project", endpoint=CHAT_ENDPOINT,
                         model="deepseek-flash", token=model_token,
                         agent_name=agent_name, agent_endpoint=base,
                         agent_token=agent_token, agent_timeout=timeout, fallback=fallback)
@@ -375,6 +375,9 @@ def test_the_fallback_is_configuration_and_the_credential_is_the_environment(mon
     monkeypatch.setenv("TESTOPS_AGENT_NAME", "testops-narrator")
     monkeypatch.setenv("TESTOPS_AGENT_ROUTE_ENDPOINT", "http://127.0.0.1:9/agent")
     monkeypatch.setenv("TESTOPS_AGENT_FALLBACK", "model")
+    # TESTOPS-102: the derived model address is configuration, so this test configures it.
+    monkeypatch.setenv("TESTOPS_FOUNDRY_ACCOUNT", "example-account")
+    monkeypatch.setenv("TESTOPS_AGENT_PROJECT", "example-project")
     try:
         cfg = agent.config()
     finally:

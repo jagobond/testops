@@ -1,6 +1,6 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-41.
 
-Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-41-skipped-is-not-consulted`, tree clean.
+Repository: C:/Users/<name>/Projects/testops, branch `factory/testops-41-skipped-is-not-consulted`, tree clean.
 Ticket:     factory/tickets/TESTOPS-41.md
 Build report: factory/reports/2026-11-22/TESTOPS-41-build.md
 

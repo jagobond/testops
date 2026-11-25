@@ -95,7 +95,7 @@ first acceptance criterion of whichever ticket closes it.
 
 ## Live store, read-only verification
 
-Opened `C:/Users/Chester/Projects/testops/data/testops.db` with `mode=ro` (URI-flagged; no write
+Opened `C:/Users/<name>/Projects/testops/data/testops.db` with `mode=ro` (URI-flagged; no write
 possible):
 
 - `project` holds exactly **4 rows: `cotw`, `testops`, `reqoverflow`, `restfulbooker`** — the two

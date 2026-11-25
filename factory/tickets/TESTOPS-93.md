@@ -14,7 +14,7 @@ depends_on: TESTOPS-92
 A **hosted agent** is deployed in the Foundry project and answers:
 
 ```
-POST https://testops-resource.services.ai.azure.com/api/projects/testops/agents/testops-narrator/endpoint/protocols/openai/responses?api-version=v1
+POST https://<account>.services.ai.azure.com/api/projects/testops/agents/testops-narrator/endpoint/protocols/openai/responses?api-version=v1
 header: api-key: <the same Cognitive Services key the app already holds as the secret testops-agent-token>
 body:   {"input": "{\"system\": \"...\", \"user\": \"...\"}"}
 ```

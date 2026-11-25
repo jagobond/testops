@@ -2,9 +2,9 @@ You are the reviewer on the TestOps factory. Judge TESTOPS-60 - the unplaced sec
 is readable at hundreds of entries, with anchors that survive pruning. The risk this ticket creates is that folding hides
 the thing a cited link points at, and that a "count" and a "folded" number stop agreeing once groups exist.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t60 (branch `factory/testops-60-unplaced-volume`). Only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t60 (branch `factory/testops-60-unplaced-volume`). Only here.
 Ticket: factory/tickets/TESTOPS-60.md ; Build: factory/reports/2026-11-24/TESTOPS-60-build.md
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 HARD RULES
 - Never write to the live store or contact port 8791. Copy `data/`, serve on a free port.

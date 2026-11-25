@@ -133,7 +133,7 @@ Both mutations were reverted; `git diff` shows only the intended changes. A thir
 
 ```
 $ env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 \
-    C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+    C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 514 passed in 97.40s (0:01:37)
 ```
 

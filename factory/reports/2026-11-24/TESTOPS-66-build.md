@@ -1,6 +1,6 @@
 # TESTOPS-66 build - the guard attributes only what it can prove
 
-Branch `factory/testops-66-guard-content`, worktree `C:/Users/Chester/Projects/testops-t66`.
+Branch `factory/testops-66-guard-content`, worktree `C:/Users/<name>/Projects/testops-t66`.
 The live store and port 8791 were never touched. Every probe ran in a disposable scratch repository.
 
 ## What changed
@@ -45,7 +45,7 @@ staged class and the unreadable class.
 ## Verification
 
 Interpreter: `env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
-C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q`.
+C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q`.
 
 - Targeted guard tests: **12 passed**.
 - Full suite: **938 passed, 2 skipped** (158s).

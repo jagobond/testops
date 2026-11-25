@@ -1,7 +1,7 @@
 # TESTOPS-82 build — a quoted entity is not display copy
 
 2026-11-24, branch `factory/testops-82-quoted-entity`, worktree
-`C:/Users/Chester/Projects/testops-t82`. `level_fitness` 0.13 → **0.14**. No store schema change.
+`C:/Users/<name>/Projects/testops-t82`. `level_fitness` 0.13 → **0.14**. No store schema change.
 
 Suite, from the project `.venv` with `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV`/`CONDA_PREFIX`
 stripped and `PYTHONNOUSERSITE=1`: **1252 passed, 2 skipped** (180.7 s). Contract suite alone

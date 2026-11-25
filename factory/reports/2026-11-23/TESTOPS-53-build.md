@@ -2,7 +2,7 @@
 
 Date: 2026-11-23 (the ticket asked for 2026-11-24; the machine clock reads 23 Nov 2026, so this is
 filed under its own date). Branch: `factory/testops-53-self-contained-contracts`. Worktree:
-`C:/Users/Chester/Projects/testops-t53`. Dependency: TESTOPS-52 (see AC5/AC6 — this branch does
+`C:/Users/<name>/Projects/testops-t53`. Dependency: TESTOPS-52 (see AC5/AC6 — this branch does
 not contain the 52 merge, which matters for one contract promise).
 
 ## What changed
@@ -14,7 +14,7 @@ not contain the 52 merge, which matters for one contract promise).
 | `tests/contracts/conftest.py` | **new.** Session autouse fixture: start the server or `pytest.skip(reason)`. |
 | `tests/contracts/test_contract_harness.py` | **new.** Six tests pinning AC1/AC2/AC3. |
 | `tests/contracts/seed/{seed.json,blobs/,README.md,make_seed.py}` | **new.** 3 runs, 103 claims, 21 cases, 96 artefacts, 110 observations, 48 blobs (575 KB); generator opens a store `mode=ro`. |
-| `tests/contracts/test_page_contracts.py` | setup only: `BASE = os.environ.get("TESTOPS_BASE", "http://100.121.128.21:8791")` removed; `get`/`post` use `base_url()` from the started server; `front`/`runs` depend on the session fixture. **No assertion or test body was edited.** |
+| `tests/contracts/test_page_contracts.py` | setup only: `BASE = os.environ.get("TESTOPS_BASE", "http://<tailnet-address>:8791")` removed; `get`/`post` use `base_url()` from the started server; `front`/`runs` depend on the session fixture. **No assertion or test body was edited.** |
 | `.github/workflows/ci.yml` | comment on the whole-suite step + a named "Page-contract gate" step. |
 | `tests/README.md` | documents the owned server, the seed and regeneration. |
 
@@ -33,7 +33,7 @@ not contain the 52 merge, which matters for one contract promise).
   unrelated `cotw.panel` processes had bound 8811 and received requests meant for a test server -
   the pages served were another store's, not the one under test).
 - Demonstration in the suite: `test_an_inherited_store_variable_cannot_redirect_the_server` sets
-  `TESTOPS_DATA=<repo>/data` and `TESTOPS_BASE=http://100.121.128.21:8791` in the parent, starts the
+  `TESTOPS_DATA=<repo>/data` and `TESTOPS_BASE=http://<tailnet-address>:8791` in the parent, starts the
   suite's server, and asserts `/runs` shows `restfulbooker` and **not** `cotw` (the live store's
   project). It passes.
 
@@ -64,7 +64,7 @@ own server: the server process did not report a port (exit 1). Its output: canno
    and for `~/testops-data`;
 4. an inherited `TESTOPS_DATA`/`TESTOPS_BASE` cannot redirect the child (above);
 5. a server that cannot start raises `ServerUnavailable`, never a URL;
-6. **source scan of `test_page_contracts.py`**: fails if `100.121.128.21`, `8791` or `TESTOPS_BASE`
+6. **source scan of `test_page_contracts.py`**: fails if `<tailnet-address>`, `8791` or `TESTOPS_BASE`
    appear in it again. This is the test that fails if a live default is reintroduced.
 
 ## AC4 — the live store is byte-identical before and after the full suite
@@ -73,10 +73,10 @@ Command run (the ticket's interpreter, from the worktree):
 
 ```
 env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 ```
 
-- sha256 of `C:/Users/Chester/Projects/testops/data/testops.db`, before **and** after:
+- sha256 of `C:/Users/<name>/Projects/testops/data/testops.db`, before **and** after:
   `6b0d38bd11e4b2ffe3ab8b677a9ebd20a3b61937db82f4eef1779d0e92e4c47c`
 - project list, before **and** after (read-only URI `file:...?mode=ro`):
   `cotw`, `reqoverflow`, `restfulbooker`, `testops` — `diff` of the two lists is empty.

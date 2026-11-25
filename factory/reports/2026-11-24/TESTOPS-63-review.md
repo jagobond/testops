@@ -1,6 +1,6 @@
 # TESTOPS-63 review - `key` as a credential word by qualification
 
-Reviewer: independent review, run in worktree `C:/Users/Chester/Projects/testops-t63`
+Reviewer: independent review, run in worktree `C:/Users/<name>/Projects/testops-t63`
 (branch `factory/testops-63-key`). The live store and port 8791 were never contacted: a
 copy of `data/testops.db` was served on port 8799 with `TESTOPS_DATA` pointed at the
 reviewer's scratch directory, and every probe below went over HTTP through the real form

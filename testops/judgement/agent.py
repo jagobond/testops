@@ -172,10 +172,14 @@ class Config:
     agent_token: str = ""
     agent_timeout: float = client.DEFAULT_AGENT_TIMEOUT
     fallback: str = ""
+    # TESTOPS-102. The environment variable that kept a derived address unconfigured, or "" when
+    # every address this deployment needs was supplied. A route with no address is unconfigured,
+    # and the sentence says which setting is absent rather than inventing an address to blame.
+    missing: str = ""
 
     @property
     def configured(self) -> bool:
-        return bool(self.token)
+        return bool(self.token and self.endpoint)
 
     @property
     def foundry_configured(self) -> bool:
@@ -183,8 +187,11 @@ class Config:
 
     @property
     def why_not(self) -> str:
-        if self.token:
+        if self.token and self.endpoint:
             return ""
+        if self.missing:
+            return (f"The model-written explanation is not available: this deployment has no "
+                    f"{self.missing} and no explicit endpoint, so it has no address to ask.")
         return ("The model-written explanation is not available: this deployment has no token from "
                 "TESTOPS_AGENT_TOKEN, a managed identity or the az CLI.")
 
@@ -194,6 +201,9 @@ class Config:
             return ("The Foundry-hosted explanation is not available: this deployment has no "
                     "credential in TESTOPS_AGENT_TOKEN.")
         if not self.agent_endpoint:
+            if self.missing:
+                return ("The Foundry-hosted explanation is not available: this deployment has no "
+                        f"{self.missing} and no agent route endpoint, so it has no address to ask.")
             return ("The Foundry-hosted explanation is not available: this deployment has no agent "
                     "endpoint.")
         return ""
@@ -295,7 +305,7 @@ def config(environ: Mapping[str, str] | None = None, now: float | None = None) -
     site serves agent-off pages - it does not fail to start, and it does not pretend.
     """
     env = os.environ if environ is None else environ
-    project = (env.get("TESTOPS_AGENT_PROJECT") or "").strip() or client.DEFAULT_PROJECT
+    project = client.project_name(env)
     clock = time.monotonic() if now is None else now
     token, _source = _resolve(env, clock)
     return Config(project=project, endpoint=client.endpoint(env, project),
@@ -304,7 +314,8 @@ def config(environ: Mapping[str, str] | None = None, now: float | None = None) -
                   agent_endpoint=client.agent_endpoint(env, project),
                   agent_token=client.agent_token(env),
                   agent_timeout=client.agent_timeout(env),
-                  fallback=(env.get(FALLBACK_VARIABLE) or "").strip().lower())
+                  fallback=(env.get(FALLBACK_VARIABLE) or "").strip().lower(),
+                  missing=client.missing_variable(env, project))
 
 
 # How each source of a token is named to a reader.
@@ -320,7 +331,7 @@ def diagnosis(environ: Mapping[str, str] | None = None, now: float | None = None
     yes/no: the value never enters this dictionary (AC3).
     """
     env = os.environ if environ is None else environ
-    project = (env.get("TESTOPS_AGENT_PROJECT") or "").strip() or client.DEFAULT_PROJECT
+    project = client.project_name(env)
     clock = time.monotonic() if now is None else now
     token, source = _resolve(env, clock)
     imds = _as_dict(_TOKEN_CACHE.get("imds")) or client.last_identity_probe()
@@ -328,6 +339,14 @@ def diagnosis(environ: Mapping[str, str] | None = None, now: float | None = None
     return {
         "endpoint": client.endpoint(env, project),
         "endpoint_variable": client.endpoint_variable(env),
+        # TESTOPS-102: which variable supplied each half of a derived address, so the page can say
+        # it - and the one that is absent when the address is unconfigured rather than guessed.
+        "account": client.foundry_account(env),
+        "account_variable": (client.FOUNDRY_ACCOUNT_VARIABLE
+                             if client.foundry_account(env) else ""),
+        "project": project,
+        "project_variable": client.PROJECT_VARIABLE if project else "",
+        "unconfigured": client.missing_variable(env, project),
         "model": client.model_name(env),
         "model_variable": "TESTOPS_AGENT_MODEL" if (env.get("TESTOPS_AGENT_MODEL") or "").strip() else "",
         "environment_token": bool((env.get("TESTOPS_AGENT_TOKEN") or "").strip()),
@@ -358,6 +377,9 @@ def served_sentence(diag: dict) -> str:
     Built from the diagnosis rather than from a fresh probe, so it says what the process knows at
     the moment it is asked. It never names a token, only where one would come from.
     """
+    if diag.get("unconfigured") and not diag.get("endpoint"):
+        return (f"No explanation would be served right now: this deployment has no "
+                f"{diag.get('unconfigured')} and no explicit endpoint, so it has no address to ask.")
     if diag.get("token_obtained"):
         origin = TOKEN_SOURCE_LABEL.get(str(diag.get("token_source") or ""), "a token")
         return f"An explanation would be served right now: this process holds a token from {origin}."
@@ -1230,7 +1252,7 @@ def describe_agent(environ: Mapping[str, str] | None = None,
     cannot print one.
     """
     env = os.environ if environ is None else environ
-    project = (env.get("TESTOPS_AGENT_PROJECT") or "").strip() or client.DEFAULT_PROJECT
+    project = client.project_name(env)
     return {"agent_name": client.agent_name(env),
             "agent_endpoint": client.agent_endpoint(env, project),
             "agent_route_variable": (client.AGENT_ROUTE_VARIABLE
@@ -1248,6 +1270,9 @@ def foundry_sentence(diag: dict) -> str:
     if not diag.get("agent_token"):
         return ("No explanation would be served by the Foundry-hosted agent: this deployment has no "
                 "credential in TESTOPS_AGENT_TOKEN.")
+    if diag.get("unconfigured"):
+        return ("No explanation would be served by the Foundry-hosted agent: this deployment has no "
+                f"{diag.get('unconfigured')} and no agent route endpoint, so it has no address to ask.")
     return ("No explanation would be served by the Foundry-hosted agent: this deployment has no "
             "agent endpoint.")
 

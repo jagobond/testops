@@ -11,7 +11,7 @@ depends_on: TESTOPS-93
 
 ## Evidence
 
-The hosted Foundry agent's runtime shows `IDENTITY_ENDPOINT=http://100.64.100.2/msi/token` and `IDENTITY_HEADER`
+The hosted Foundry agent's runtime shows `IDENTITY_ENDPOINT=http://<tailnet-address>/msi/token` and `IDENTITY_HEADER`
 (44 chars), and `DefaultAzureCredential` obtained a working token from it. The TestOps container app tried only
 `169.254.169.254`, which answers `Connection refused`, and then fell back to a stored key.
 

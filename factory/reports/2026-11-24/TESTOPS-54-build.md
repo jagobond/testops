@@ -1,8 +1,8 @@
 # TESTOPS-54 — build: every page leads somewhere
 
-Delivered branch: `factory/testops-54-navigation` (worktree `C:/Users/Chester/Projects/testops-t54`).
+Delivered branch: `factory/testops-54-navigation` (worktree `C:/Users/<name>/Projects/testops-t54`).
 Build run: 2026-11-23 (system clock); report filed under the path the brief named.
-Interpreters: `C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe` with `PYTHONPATH`,
+Interpreters: `C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe` with `PYTHONPATH`,
 `VIRTUAL_ENV`, `CONDA_PREFIX` stripped and `PYTHONNOUSERSITE=1`.
 
 ## What changed
@@ -56,7 +56,7 @@ every internal href, then checks the hrefs of front, runs, run, case and config 
 requires HTTP 200 for each. External (GitHub) hrefs are out of scope, as the brief says.
 
 **AC5 — contract suite.** TESTOPS-53 has **not** landed (the suite still defaults to
-`http://100.121.128.21:8791`), so the suite was run only with `TESTOPS_BASE` pointed at a **copy of
+`http://<tailnet-address>:8791`), so the suite was run only with `TESTOPS_BASE` pointed at a **copy of
 the store in a scratch directory served on an ephemeral port**. Baseline and branch were run against
 the *same* copy, at 63970 (HEAD) and 63796 (this branch):
 

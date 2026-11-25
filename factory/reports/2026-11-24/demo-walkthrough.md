@@ -1,6 +1,6 @@
 # TestOps - walkthrough for the team, 25 November 2026
 
-**https://testops.wittymeadow-14b0c4c7.eastus.azurecontainerapps.io/**
+**https://<container-app-domain>.azurecontainerapps.io/**
 
 Seven minutes, five pages, one point: *a finding is evidence, and you can check it without trusting us.*
 
@@ -71,7 +71,7 @@ Plain page: endpoint, model, whether a token exists (never its value), and the a
 
 **"Why isn't this in Foundry?"**
 Foundry hosts models and agents behind an API. This is a website; it runs on Container Apps. The model it calls **is** in
-Foundry - project `testops-resource`, deployment `deepseek-flash`. Same subscription, two different services doing what each
+Foundry - project `<foundry-account>`, deployment `deepseek-flash`. Same subscription, two different services doing what each
 is for.
 
 **"Is the verdict the model's opinion?"**

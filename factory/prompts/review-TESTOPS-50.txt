@@ -1,12 +1,12 @@
 You are the reviewer on the TestOps factory. Judge TESTOPS-50 - the ticket that had to make every number in the
 inventory derivable or plainly corrected.
 
-Repository: worktree C:/Users/Chester/Projects/testops-t50 (branch `factory/testops-50-derivable`). Work only here.
+Repository: worktree C:/Users/<name>/Projects/testops-t50 (branch `factory/testops-50-derivable`). Work only here.
 A store copy is in `data/` (gitignored) so the blobs are readable.
 Ticket:  factory/tickets/TESTOPS-50.md
 Build:   factory/reports/2026-11-23/TESTOPS-50-build.md
 Prior review: factory/reports/2026-11-23/TESTOPS-42A-review.md, "The inventory, spot-checked" - your own earlier findings.
-Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 The build's answer to "46 of 76 reproduces under no rule" is: it reproduces under the repository's own
 `pattern_to_regex` (every `{name}` becomes one permissive `(.+?)`, parentheses literal), while YOUR numbers (38, 21) come

@@ -1,9 +1,9 @@
 # TESTOPS-56 build — tune the credential screen without opening it
 
-Builder run, 2026-11-24. Worktree `C:/Users/Chester/Projects/testops-t56`, branch
+Builder run, 2026-11-24. Worktree `C:/Users/<name>/Projects/testops-t56`, branch
 `factory/testops-56-screen-tuning`. Interpreter, everywhere below:
 
-    env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe
+    env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe
 
 No product code was edited outside this ticket, no contract test was edited, no case-page golden
 changed (`git status` shows exactly `testops/services.py`, `testops/web/app.py`,

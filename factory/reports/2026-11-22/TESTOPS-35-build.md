@@ -1,7 +1,7 @@
 # TESTOPS-35 — build report
 
 Verdict: **implemented and rehearsed on a copy**. Nothing in this report was run against the live
-store at `C:/Users/Chester/Projects/testops/data`.
+store at `C:/Users/<name>/Projects/testops/data`.
 
 ## What changed
 
@@ -64,15 +64,15 @@ worktree with
 
 ```
 env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 PYTHONPATH=. \
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 ```
 
-`import testops` resolves to `C:\Users\Chester\Projects\testops-t35\testops\__init__.py`.
+`import testops` resolves to `C:\Users\<name>\Projects\testops-t35\testops\__init__.py`.
 
 ## What the Product Owner has to run
 
 ```
-cd C:/Users/Chester/Projects/testops
+cd C:/Users/<name>/Projects/testops
 .venv/Scripts/python.exe -m testops.cli scrub-fixtures --dry-run
 .venv/Scripts/python.exe -m testops.cli scrub-fixtures --yes
 ```

@@ -1,7 +1,7 @@
 # TESTOPS-68 build - the line boundary, the camel fragment, and the URL floor
 
 Ticket: `factory/tickets/TESTOPS-68.md`. Branch: `factory/testops-68-seams`, built in the linked
-worktree `C:/Users/Chester/Projects/testops-t68`. The live store and port 8791 were never contacted:
+worktree `C:/Users/<name>/Projects/testops-t68`. The live store and port 8791 were never contacted:
 every probe is a direct call to `testops.services`, plus the existing in-process HTTP test.
 
 Note on sources: `factory/reports/2026-11-24/TESTOPS-65-review.md` does not exist in this worktree or
@@ -89,7 +89,7 @@ source and fails if either statement is edited away.
 
 ```
 env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-  C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+  C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 1097 passed, 2 skipped in 157.78s
 
 env ... -m pytest -q tests/contracts

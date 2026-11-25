@@ -2,7 +2,7 @@
 
 Reviewed 22 Nov 2026, branch `factory/testops-38-projects-services`, HEAD 0b30832.
 Every check below ran against copies under
-`C:/Users/Chester/AppData/Local/hermes/profiles/reviewer/cache/scratch/t38/`.
+`C:/Users/<name>/AppData/Local/hermes/profiles/reviewer/cache/scratch/t38/`.
 The build report named in the dispatch (`factory/reports/2026-11-22/TESTOPS-38-build.md`)
 **does not exist** — the directory holds no TESTOPS-38 build report. This review therefore
 sits on first-hand evidence only, which is as it should be.

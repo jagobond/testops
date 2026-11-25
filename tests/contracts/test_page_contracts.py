@@ -12,7 +12,7 @@ distinguishability (e.g. whether two verdicts share a styling marker), not on a
 particular colour.
 
 Run:
-    C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest tests -v
+    .venv/Scripts/python.exe -m pytest tests -v
 
 The suite starts and owns the server it talks to (TESTOPS-53): ``conftest.py`` launches the product
 in a child process on a port the kernel chooses, over a disposable store built under a temp

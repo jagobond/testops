@@ -1,6 +1,6 @@
 # TESTOPS-82 review — a quoted entity is not display copy
 
-2026-11-24, reviewer. Worktree `C:/Users/Chester/Projects/testops-t82`, branch
+2026-11-24, reviewer. Worktree `C:/Users/<name>/Projects/testops-t82`, branch
 `factory/testops-82-quoted-entity`, head `c8973fc`. Everything below was derived offline from the
 stored snapshot `restfulbooker-levels-20261124-fe8537db-r2` and from direct calls into
 `testops/analysers/level_fitness.py` v0.14 with a Restful-booker-shaped surface corpus. No live

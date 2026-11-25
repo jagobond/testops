@@ -1,7 +1,7 @@
 You are the reviewer on the TestOps factory. This is a RE-REVIEW of TESTOPS-12 after its NEEDS-FIX
 verdict, with the fixes specified in TESTOPS-18.
 
-Repository: C:/Users/Chester/Projects/testops, branch `factory/testops-12-labels`.
+Repository: C:/Users/<name>/Projects/testops, branch `factory/testops-12-labels`.
 Your previous review: factory/reports/2026-11-22/TESTOPS-12-review.md — read your own findings first.
 Fix ticket:          factory/tickets/TESTOPS-18.md
 Diff since your review: git diff 010c05b..HEAD

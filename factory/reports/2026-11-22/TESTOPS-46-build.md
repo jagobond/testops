@@ -89,7 +89,7 @@ a store cannot be reconstituted from its own history — which is the defect thi
 
 ```
 $ env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
-    C:/Users/Chester/Projects/testops/.venv/Scripts/python.exe -m pytest -q
+    C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q
 548 passed in 88.67s
 ```
 
