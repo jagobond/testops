@@ -13,7 +13,7 @@ depends_on: TESTOPS-93
 
 `agent_endpoint()` defaults the project to `DEFAULT_PROJECT` and builds
 `https://{project}.services.ai.azure.com/api/projects/{project}/...`. On this subscription the account is
-`testops-resource` and the project is `testops`, so the derived URL was wrong and every `?agent=foundry` call 404'd until
+`<foundry-account>` and the project is `testops`, so the derived URL was wrong and every `?agent=foundry` call 404'd until
 `TESTOPS_AGENT_ROUTE_ENDPOINT` was set by hand. `/agent-check` said "derived from the project and the agent name" while
 being wrong, which reads as authoritative.
 

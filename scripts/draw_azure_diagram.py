@@ -1,8 +1,10 @@
 """Draw the deployed TestOps architecture as a PNG. Second pass: layout faults fixed.
 
-TESTOPS-102: the subscription id is read from ``AZURE_SUBSCRIPTION_ID``, and the output path is
+TESTOPS-102: every name on the drawing is read from the environment - ``AZURE_SUBSCRIPTION_ID``,
+``AZURE_SUBSCRIPTION_NAME``, ``RG``, ``ACR``, ``ENVNAME``, ``APP``, ``LOG_ANALYTICS_WORKSPACE``,
+``FOUNDRY_RG`` - and the placeholders are drawn when a variable is unset. The output path is
 whatever the caller passes (default: ``testops-azure-components.png`` in the working directory).
-Nothing here names a subscription or a home directory of its own.
+Nothing here names a subscription, a resource or a home directory of its own.
 """
 import math
 import os
@@ -32,6 +34,24 @@ F_BOX = f("segoeuib.ttf", 20)
 F_BODY = f("segoeui.ttf", 16)
 F_SMALL = f("segoeui.ttf", 14)
 F_MONO = f("consola.ttf", 15)
+
+
+def setting(name: str, placeholder: str) -> str:
+    """The value of ``name``, or the placeholder that says "put yours here"."""
+    return (os.environ.get(name) or "").strip() or placeholder
+
+
+# Every name on this drawing comes from the environment: it is a picture of one deployment, so it
+# must be regenerated per deployment rather than committed with somebody's resource names in it.
+# With nothing configured it draws the placeholders, which is the only version that belongs in git.
+SUBSCRIPTION = setting("AZURE_SUBSCRIPTION_ID", "(subscription id not set)")
+SUBSCRIPTION_NAME = setting("AZURE_SUBSCRIPTION_NAME", "<subscription>")
+RG_NAME = setting("RG", "<resource-group>")
+ACR_NAME = setting("ACR", "<registry>")
+ENV_NAME = setting("ENVNAME", "<container-apps-environment>")
+APP_NAME = setting("APP", "testops")
+LA_NAME = setting("LOG_ANALYTICS_WORKSPACE", "<log-analytics-workspace>")
+NEIGHBOUR_RG = setting("FOUNDRY_RG", "<foundry-resource-group>")
 
 img = Image.new("RGB", (W, H), BG)
 d = ImageDraw.Draw(img)
@@ -107,7 +127,7 @@ def label(xy, s, font=F_SMALL, fill=MUTED, bg=BG, anchor="la"):
 
 
 text((48, 34), "TestOps on Azure - what is actually running", F_TITLE, NAVY)
-text((48, 80), "Traced from az resource list -g rg-testops-demo on 24 November 2026. Every box is a resource; every arrow is a direction of control, not a wish.",
+text((48, 80), f"Traced from az resource list -g {RG_NAME} on 24 November 2026. Every box is a resource; every arrow is a direction of control, not a wish.",
      F_SUB, MUTED)
 
 # outside
@@ -124,21 +144,20 @@ arrow(1274, 190, 1070, 190, color=GREY, width=2, dash=True)
 label((706, 176), "hyperlinks to files at a commit - fetched by the browser, never by the app", F_SMALL, MUTED)
 
 # subscription
-SUBSCRIPTION = (os.environ.get("AZURE_SUBSCRIPTION_ID") or "").strip() or "(subscription id not set)"
 SUB = (48, 292, 1712, 1100)
 rbox(SUB, r=18, fill=(247, 249, 252), outline=AZURE, width=3)
-text((70, 306), f"Azure subscription: Foundry  ·  {SUBSCRIPTION}", F_ZONE, AZURE)
+text((70, 306), f"Azure subscription: {SUBSCRIPTION_NAME}  ·  {SUBSCRIPTION}", F_ZONE, AZURE)
 
 # resource group
 RG = (70, 356, 1300, 1074)
 rbox(RG, r=16, fill=(255, 255, 255), outline=NAVY, width=3)
-text((1278, 372), "Resource group: rg-testops-demo  ·  eastus", F_ZONE, NAVY, anchor="ra")
+text((1278, 372), f"Resource group: {RG_NAME}  ·  eastus", F_ZONE, NAVY, anchor="ra")
 text((1278, 400), "Created for this deployment. Deleting it removes everything below in one command.", F_SMALL, MUTED, anchor="ra")
 
 # environment
 ENV = (92, 442, 1220, 816)
 rbox(ENV, r=14, fill=(252, 253, 255), outline=BROWN, width=3, dash=True)
-text((1198, 456), "Container Apps environment: testops-env", F_ZONE, BROWN, anchor="ra")
+text((1198, 456), f"Container Apps environment: {ENV_NAME}", F_ZONE, BROWN, anchor="ra")
 text((1198, 482), "Shared network and logging boundary.", F_SMALL, MUTED, anchor="ra")
 
 # ingress
@@ -151,7 +170,7 @@ text((136, 580), "Public. No auth, no IP restriction.", F_SMALL, MUTED)
 # container app
 APP = (116, 644, 1196, 802)
 rbox(APP, fill=(244, 249, 255), outline=AZURE, width=3)
-text((136, 656), "Container app: testops", F_BOX, NAVY)
+text((136, 656), f"Container app: {APP_NAME}", F_BOX, NAVY)
 text((136, 682), "0.25 vCPU · 0.5 GiB · replicas 1..1  (min 1 for the demo, scaled to 0 after 12:30)", F_SMALL, MUTED)
 
 IX, IY = 136, 708
@@ -175,7 +194,7 @@ for title_s, body_s, w in boxes:
 # registry
 ACR = (92, 836, 600, 952)
 rbox(ACR, fill=(255, 255, 255), outline=NAVY, width=3)
-text((112, 850), "Container registry: testopsdemo30562", F_BOX, NAVY)
+text((112, 850), f"Container registry: {ACR_NAME}", F_BOX, NAVY)
 text((112, 880), "Basic tier · admin credentials on", F_SMALL, MUTED)
 text((112, 900), "testops:v1   (digest sha256:769a516e...)", F_MONO, INK)
 text((112, 924), "Built in Azure by ACR Tasks - no local Docker needed.", F_SMALL, MUTED)
@@ -183,15 +202,15 @@ text((112, 924), "Built in Azure by ACR Tasks - no local Docker needed.", F_SMAL
 # log analytics
 LA = (640, 836, 1220, 952)
 rbox(LA, fill=(255, 255, 255), outline=NAVY, width=3)
-text((660, 850), "Log Analytics: workspace-rgtestopsdemoTazJ", F_BOX, NAVY)
+text((660, 850), f"Log Analytics: {LA_NAME}", F_BOX, NAVY)
 text((660, 880), "Auto-created with the environment (I did not name one).", F_SMALL, MUTED)
 text((660, 900), "Container stdout: the place to look if a page errors.", F_SMALL, MUTED)
-text((660, 924), "az containerapp logs show -n testops -g rg-testops-demo --tail 40", F_MONO, INK)
+text((660, 924), f"az containerapp logs show -n {APP_NAME} -g {RG_NAME} --tail 40", F_MONO, INK)
 
 # untouched neighbour
 FP = (1324, 356, 1690, 520)
 rbox(FP, fill=(246, 246, 246), outline=GREY, width=3, dash=True)
-text((1344, 372), "rg-foundry-prod", F_BOX, (90, 96, 104))
+text((1344, 372), NEIGHBOUR_RG, F_BOX, (90, 96, 104))
 para((1344, 404), "FoundryVTT: the Pathfinder server. Not touched, not queried, not redeployed - separate resource group, separate registry.",
      F_SMALL, (110, 116, 124), 326)
 

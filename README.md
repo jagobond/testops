@@ -317,7 +317,7 @@ Deterministic rules in `duplication.py` and `level_fitness.py` produce every ver
 
 TestOps already ships a working cloud demo deployment documented in [factory/reports/2026-11-24/azure-deploy.md](factory/reports/2026-11-24/azure-deploy.md) and [agents/narrator/README.md](agents/narrator/README.md):
 
-- **Container image:** [Dockerfile](Dockerfile) (`python:3.12-slim`, zero pip installs) built in the cloud via **ACR Tasks** (`scripts/deploy_azure.sh` → `az acr build` into `testopsdemo30562`) and deployed to **Azure Container Apps** (`rg-testops-demo` / `testops-env` / `testops`, `0.25 vCPU`, `0.5 Gi`, external ingress on port `8080`).
+- **Container image:** [Dockerfile](Dockerfile) (`python:3.12-slim`, zero pip installs) built in the cloud via **ACR Tasks** (`scripts/deploy_azure.sh` → `az acr build` into `<registry>`) and deployed to **Azure Container Apps** (`<app-resource-group>` / `<container-apps-environment>` / `testops`, `0.25 vCPU`, `0.5 Gi`, external ingress on port `8080`).
 - **Foundry integration:** Connects to an Azure AI Foundry project named by `TESTOPS_FOUNDRY_ACCOUNT` and `TESTOPS_AGENT_PROJECT` (with the `deepseek-flash` deployment) directly (`?agent=on`) and via the hosted Responses v2 agent `testops-narrator` (`?agent=foundry`, deployed from `agents/narrator/`).
 - **Key lessons discovered live in Azure (driving the production target below):**
   1. **SQLite over Azure Files (SMB) fails on schema migrations across warm revisions** (`database is locked`), so the demo currently serves a baked-in read-mostly store (decisions/votes reset on revision restart). Production requires managed PostgreSQL + Azure Blob Storage.

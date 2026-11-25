@@ -30,6 +30,21 @@ identifiers arrive from the environment, and the tree is checked for them on eve
 - `.gitignore` keeps `.env`, `*.log`, `.tmp/`, `*.zip`, `*.bak` and `export/` out of the tree in the
   first place.
 
+## What the check cannot see
+
+`check_no_secrets.py` detects **shapes** - a GUID, an absolute home path, an Azure host name, a
+tailnet address, a credential format. It is not a list of the deployment's real names, and it could
+not be: a resource group, registry or storage account called something unremarkable, typed into a
+sentence, matches none of those shapes, so the script reads past it and a green run means "no
+shapes were found", never "no identifiers were found". In this ticket's first pass exactly that
+happened - thirty hand-typed names sat in prose while the check passed. The guard against the
+shapeless name is review: a reader who knows the placeholders (`<foundry-account>`,
+`<app-resource-group>`, `<foundry-resource-group>`, `<registry>`, `<storage-account>`,
+`<container-app-domain>`, `<log-analytics-workspace>`, `<container-apps-environment>`,
+`<file-share>`) and who treats a bare name where a placeholder belongs as a defect. The shapes exist
+because the common accident is not a name typed into a sentence but a whole host, path or id pasted
+from a terminal, and the paste carries its shape with it.
+
 ## If a secret is committed
 
 1. **Revoke it first.** Rotate the token or key at its issuer. A commit can be rewritten; a leaked

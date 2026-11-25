@@ -10,7 +10,7 @@ timeout, and threw the exception away. Whatever the deployment replied, the tool
 
 ## The cause in the deployed container (AC4) - determined, not narrowed
 
-A new revision was deployed (`testops--0000004`, image `testopsdemo30562.azurecr.io/testops:20261124-161320`)
+A new revision was deployed (`testops--0000004`, image `<registry>.azurecr.io/testops:20261124-161320`)
 carrying this change, and `/agent-check` was read from the live app. Its own words:
 
     No explanation would be served right now: the metadata service did not answer (unreachable)

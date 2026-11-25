@@ -107,7 +107,7 @@ view is a cache hit at zero tokens.
 **No price is asserted here.** The price per token depends on the Foundry deployment, the model's
 SKU and the customer's agreement, none of which this build reads or records. If a reader wants a
 money figure, it must be entered from the provider's own price list - for Azure Foundry models that
-is the Azure pricing page for the model deployed in `testops-resource`
+is the Azure pricing page for the model deployed in `<foundry-account>`
 (`https://azure.microsoft.com/en-us/pricing/details/`) - and any figure quoted in a later report is
 an **assumption with that source and the date it was read**, not a fact this tool measured.
 
@@ -132,7 +132,7 @@ the token counts, the wall time and the cache hits.
 | AC5 | `agent_explanation` keyed `(case, prompt_hash, model)`; the page says when it is showing a stored one. `test_a_second_view_is_served_from_the_store_and_says_so` proves the second view makes no model call, and `test_the_cache_key_is_case_prompt_hash_and_model` proves the model is in the key. |
 | AC6 | Two links on the explanation, no JS, no form, no cookie; one vote per view; `/agent-report` counts per variant. Three tests, including the refusal of a vote for an off view. |
 | AC7 | Six parametrised failure tests + unconfigured + no-finding, each the off page plus exactly one sentence and a cause in the ledger. |
-| AC8 | `client.py` resolves `az` with `shutil.which` (no host path, asserted), takes a token from `TESTOPS_AGENT_TOKEN` → managed identity (IMDS, `Metadata: true`, optional `TESTOPS_AGENT_CLIENT_ID`) → `az`; never stores, prints or returns a token. Endpoint and model default to `testops-resource` and `deepseek-flash`, overridable by `TESTOPS_AGENT_PROJECT`/`TESTOPS_AGENT_ENDPOINT`/`TESTOPS_AGENT_MODEL`. `test_no_credential_reaches_the_page_or_the_ledger` renders with a token and asserts it appears in neither. |
+| AC8 | `client.py` resolves `az` with `shutil.which` (no host path, asserted), takes a token from `TESTOPS_AGENT_TOKEN` → managed identity (IMDS, `Metadata: true`, optional `TESTOPS_AGENT_CLIENT_ID`) → `az`; never stores, prints or returns a token. Endpoint and model default to `<foundry-account>` and `deepseek-flash`, overridable by `TESTOPS_AGENT_PROJECT`/`TESTOPS_AGENT_ENDPOINT`/`TESTOPS_AGENT_MODEL`. `test_no_credential_reaches_the_page_or_the_ledger` renders with a token and asserts it appears in neither. |
 | AC9 | Full suite **1321 passed, 2 skipped**; the analysis and contract suites unchanged; no test reaches the network. |
 | AC10 | Above; the report page prints tokens and no currency, and this report marks every price as an assumption with its source. |
 

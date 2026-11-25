@@ -131,7 +131,7 @@ Read the path: `TESTOPS_AGENT_TOKEN` first, then the managed identity over IMDS
 (`http://169.254.169.254/metadata/identity/oauth2/token`, `Metadata: true`, optional
 `TESTOPS_AGENT_CLIENT_ID` for a user-assigned identity), then `az account get-access-token`
 resolved with `shutil.which("az")`. No `C:` literal in `client.py` (asserted by regex and by
-reading it); endpoint and model default to `testops-resource` / `deepseek-flash` and are
+reading it); endpoint and model default to `<foundry-account>` / `deepseek-flash` and are
 overridable by environment.
 
 Tried to make it print the token: set `TESTOPS_AGENT_TOKEN`, walked every render and failure
