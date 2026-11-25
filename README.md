@@ -51,12 +51,12 @@ python3 -m venv .venv
 python -m testops.cli serve --host 127.0.0.1 --port 8787
 
 # Run deterministic analyses against a configured project slug (requires GITHUB_PAT in .env)
-python -m testops.cli levels --project cotw
-python -m testops.cli duplicate --project reqoverflow
+python -m testops.cli levels --project demo-product
+python -m testops.cli duplicate --project demo-service
 
 # Inspect runs and cases, or record a human decision
-python -m testops.cli runs --project cotw
-python -m testops.cli cases --project cotw
+python -m testops.cli runs --project demo-product
+python -m testops.cli cases --project demo-product
 python -m testops.cli case-set <case_id> --state resolved --actor <name> --note "Fixed in PR #42"
 
 # Store maintenance & integrity checks
@@ -92,7 +92,7 @@ The repository is organised into **five zones**:
 |---|---|---|
 | **1. Product Package** | `testops/` | Zero-dependency Python application: CLI, web UI, collectors, extractors, surface discovery, pure analysers, optional narrator client, and SQLite/blob storage. |
 | **2. Hosted Foundry Agent & Container** | `Dockerfile`, `.dockerignore`, `agents/narrator/`, `scripts/deploy_azure.sh` | Container image build (ACR Tasks), Container Apps deployment script, and the `testops-narrator` hosted Azure AI Foundry agent. |
-| **3. Tests & Page Contracts** | `tests/`, `tests/contracts/`, `tests/fixtures/` | ~80 invariant/unit test suites, real-repo fixtures (`reqoverflow`, pre-migration DBs), and a blind black-box HTTP/HTML contract suite running on an isolated port-0 child server. |
+| **3. Tests & Page Contracts** | `tests/`, `tests/contracts/`, `tests/fixtures/` | ~80 invariant/unit test suites, real-repo fixtures (`demo-service`, pre-migration DBs), and a blind black-box HTTP/HTML contract suite running on an isolated port-0 child server. |
 | **4. Governance, Docs & Factory** | `AGENTS.md`, `PRODUCT.md`, `ROLES.md`, `docs/`, `factory/` | Multi-agent factory rules, ADRs ([docs/ADR-1-projects-and-services.md](docs/ADR-1-projects-and-services.md)), ecosystem inventories, tickets, prompts, and build/review/deploy reports. |
 | **5. Probes, Dev Scripts & CI** | `scripts/`, `tools/`, `.github/workflows/ci.yml`, `hello/`, `cost_probe.py` | CI pipeline (including the no-identifiers scan), exploratory inspection scripts, diagram generators, and the cost probe. |
 

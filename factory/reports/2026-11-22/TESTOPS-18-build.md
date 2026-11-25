@@ -57,7 +57,7 @@ PYTHONNOUSERSITE=1`):
 - 3.11.15 (uv interpreter): 194 passed, 4 skipped, 16.23s. The four skips are the pre-3.12 checks
   that were already skipped on this interpreter.
 
-Corpus replay, snapshot `cotw-levels-20261122-a3f19853-r4`, `scripts/replay_levels.py
+Corpus replay, snapshot `demo-product-levels-20261122-a3f19853-r4`, `scripts/replay_levels.py
 --acceptance`: 94 claims, 90 distinct, 1 unplaced, 1 gap, 2 review, 41 scenarios, 2 explaining more
 than one label — PASS. Label values found verbatim in any statement: 0 (checked against every label
 `_label` can produce).

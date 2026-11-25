@@ -12,10 +12,10 @@ HARD RULES
 - Run the suite from this worktree with the interpreter above. A copy of the live store is in `data/` (gitignored) so the
   real-corpus tests run rather than skip - keep it there for your probes.
 - **AC5 is the ticket's soul: cucumber-js must still be unsupported.** Call the cucumber_js module directly and confirm
-  `bindings()` and `drivers()` RAISE rather than return `[]`, and that a run on the restfulbooker corpus produces
+  `bindings()` and `drivers()` RAISE rather than return `[]`, and that a run on the demo-booking corpus produces
   `not_assessable` with ZERO claims. Then grep the rendered page and the run sentence for the two banned phrases ("no
   layers found", "could not be tied to a layer"). If either appears, fail.
-- **AC3 by absence of change:** rebuild CotW levels and ReqOverflow duplication from the stored blobs and compare claim
+- **AC3 by absence of change:** rebuild Demo Product levels and DemoService duplication from the stored blobs and compare claim
   counts and verdict splits against the stored runs (94/90/1/1/2 and 17/17). Compare case-page goldens byte-for-byte.
   Report the exact numbers you get.
 - **AC1 registry honesty:** prove it raises on a duplicate name, on ambiguity, and on no match. Then register a fake

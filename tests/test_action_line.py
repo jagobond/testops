@@ -179,13 +179,13 @@ def test_the_step_is_referred_to_rather_than_quoted_twice_and_nothing_else_is_sh
 # verbatim: the renderer's contract is with what is stored, never with what today's analyser writes.
 
 DUPLICATE = ("Raise this with the team: this copy calls the HTTP client to establish what "
-             "ReqOverflow.Specs.Controller/Features/Home.feature:7 settles in-process; keep one.")
+             "DemoService.Specs.Controller/Features/Home.feature:7 settles in-process; keep one.")
 
 
 def test_the_duplicate_claims_own_action_reaches_the_reader_whole():
     visible = app.action_line({"proposed_action": DUPLICATE, "provenance": {}}, None)
     assert visible == ("Raise this with the team: this copy calls the HTTP client to establish what "
-                       "ReqOverflow.Specs.Controller/Features/Home.feature:7 settles in-process. "
+                       "DemoService.Specs.Controller/Features/Home.feature:7 settles in-process. "
                        "Keep one."), visible
 
 

@@ -179,33 +179,33 @@ class Project:
 # the store. It is data a migration reads once (``store/migrate.py``), not configuration a running
 # build resolves: after the migration, adding or changing a project is a row, never an edit here.
 LEGACY_PROJECTS: dict[str, Project] = {
-    "cotw": Project(
-        key="cotw",
-        product=Repo("jagobond", "cotw-continuity"),
-        test=Repo("jagobond", "cotw-bdd"),
-        jira_key="COTW",
-        ado_org="RuckoldtAndRylander",
-        ado_project="cotw-continuity",
+    "demo-product": Project(
+        key="demo-product",
+        product=Repo("example-org", "demo-product"),
+        test=Repo("example-org", "demo-product-tests"),
+        jira_key="DEMO",
+        ado_org="ExampleAndCo",
+        ado_project="demo-product",
         ado_pipeline_ids=(2, 4),
     ),
     "testops": Project(
         key="testops",
-        product=Repo("jagobond", "testops"),
-        test=Repo("jagobond", "testops"),
+        product=Repo("example-org", "testops"),
+        test=Repo("example-org", "testops"),
         jira_key="TOPS",
     ),
     # External positive control: the answer is known to be "nine WebUI scenarios duplicate lower layers".
-    "reqoverflow": Project(
-        key="reqoverflow",
-        product=Repo("reqnroll", "Sample-ReqOverflow"),
-        test=Repo("reqnroll", "Sample-ReqOverflow"),
+    "demo-service": Project(
+        key="demo-service",
+        product=Repo("reqnroll", "demo-service"),
+        test=Repo("reqnroll", "demo-service"),
         jira_key="",
     ),
     # TESTOPS-39 second specimen: a different ecosystem and separate repositories. JavaScript
     # Cypress + Cucumber tests against a Java multi-service product, both public.
-    "restfulbooker": Project(
-        key="restfulbooker",
-        product=Repo("mwinteringham", "restful-booker-platform"),
+    "demo-booking": Project(
+        key="demo-booking",
+        product=Repo("example-org", "demo-booking-platform"),
         test=Repo("m-pujic-levi9-com", "cypress-cucumber-e2e-tests"),
         jira_key="",
     ),

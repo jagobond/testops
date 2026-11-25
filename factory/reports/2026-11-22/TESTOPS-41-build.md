@@ -15,13 +15,13 @@ repository, counted once for a source serving both capabilities. 142 `.java` fil
 a suffix list, and no product code file had been read.
 
 After, re-run on the same pinned commits (`cypress-cucumber-e2e-tests@262404a9`,
-`restful-booker-platform@efe2deb8`):
+`demo-booking-platform@efe2deb8`):
 
 > Cannot assess this claim: code was not read: 142 .java files in the product repository were skipped
 > because .java is not a kind this collector reads (unsupported kind), along with 169 more in 17 other
 > kinds, so no product code file was fetched; test code was consulted and returned 48 items.
 
-The page (`/run/restfulbooker-levels-20261122T204917`) also lists every skipped file by kind under
+The page (`/run/demo-booking-levels-20261122T204917`) also lists every skipped file by kind under
 *Files this run could not read*, and says under *What the surface reader could not read*: "the surface
 reader parses Python only, and the product repository holds no file it can read: 23 .ts, 4 .js. No
 surface was found and none was ruled out."
@@ -43,8 +43,8 @@ Re-run, not reconstructed:
 
 | corpus | verdicts | sentence |
 |---|---|---|
-| CotW (`cotw-levels-20261122T204947`) | 94 claims: 90 distinct / 1 unplaced / 1 gap / 2 review | *Assessed: code and test code were consulted and returned 95 items.* (unchanged) |
-| ReqOverflow (`reqoverflow-dup-20261122T205100`) | 17 claims / 17 cases | *Assessed: test code was consulted and returned 158 items.* (unchanged) |
+| Demo Product (`demo-product-levels-20261122T204947`) | 94 claims: 90 distinct / 1 unplaced / 1 gap / 2 review | *Assessed: code and test code were consulted and returned 95 items.* (unchanged) |
+| DemoService (`demo-service-dup-20261122T205100`) | 17 claims / 17 cases | *Assessed: test code was consulted and returned 158 items.* (unchanged) |
 
 Byte comparison: every page the store could serve before the change (index, `/runs`, 40 run pages,
 184 case pages — 228 files) was rendered with the pre-change code and again with the working tree,
@@ -53,21 +53,21 @@ second comparison an hour later differed on 16 pages by the relative-age text al
 "9 hours ago"); the HTML content was identical.
 
 With the fix in place, a fresh levels run re-reads `code` 45 from the product arm and `test_code` 50
-from the test arm for CotW — 95 in total, the same figure the old single count reported.
+from the test arm for Demo Product — 95 in total, the same figure the old single count reported.
 
 ## Decisions worth a reviewer's attention
 
 1. **A file is counted for the capability its *kind* serves, not the arm it came from.** A `.js`/`.ts`
    file is a step definition to this collector, so the product repository's 27 assets count as test
    code (21 from the test repository, 27 from the product repository — the arm split is recorded in
-   the reading's `arms`). That keeps the restfulbooker total at 48 and keeps `code` at zero, which is
+   the reading's `arms`). That keeps the demo-booking total at 48 and keeps `code` at zero, which is
    what AC4 asks for. It leaves TESTOPS-39's misfiling (product front-end files labelled `stepdef`) in
    place; fixing the vocabulary is not this ticket.
 2. **`not_assessable` is reached only when the tree held files outside the kinds.** An arm that
    fetched nothing *and* skipped nothing is a real zero: the reader looked and there was nothing.
 3. **The skip list is rendered on a run page only when it explains an unread capability.** Every run
    records it (AC1); a run that read all it needed is not made more truthful by a list of its
-   `README.md` files, and CotW's page is not turned into a wall of `.md`.
+   `README.md` files, and Demo Product's page is not turned into a wall of `.md`.
 4. **The surface reader still parses Python only.** AC3 asks it to say so, not to learn Java; a Java
    grammar is a separate decision.
 5. **TESTOPS-42 untouched.** The cucumber-js binding gap is unchanged: the 44 cucumber-js bindings in
@@ -76,6 +76,6 @@ from the test arm for CotW — 95 in total, the same figure the old single count
 ## Store
 
 Four new snapshots were written by the evidence runs (they add, they do not replace):
-`restfulbooker-levels-20261122T204834`, `restfulbooker-levels-20261122T204917`,
-`cotw-levels-20261122T204947`, `reqoverflow-dup-20261122T205100`. No snapshot, artefact or blob was
+`demo-booking-levels-20261122T204834`, `demo-booking-levels-20261122T204917`,
+`demo-product-levels-20261122T204947`, `demo-service-dup-20261122T205100`. No snapshot, artefact or blob was
 modified or deleted.

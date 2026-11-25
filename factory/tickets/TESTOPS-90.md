@@ -11,7 +11,7 @@ depends_on: TESTOPS-88
 
 ## The evidence
 
-`deepseek-flash` was called with the real prompt for case `case-restfulbooker-levels-20261124T123451-05`. It returned valid
+`deepseek-flash` was called with the real prompt for case `case-demo-booking-levels-20261124T123451-05`. It returned valid
 JSON with correct citations and four sentences of genuinely good prose. `parse_reply` accepted it. `violations` then
 rejected it for **one** reason:
 

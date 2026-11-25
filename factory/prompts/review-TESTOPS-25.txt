@@ -17,8 +17,8 @@ Diff:       git diff feature/f1..HEAD
 
 HARD RULES
 - Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
-- **Verify the licence, do not read it.** Fetch https://raw.githubusercontent.com/reqnroll/Sample-ReqOverflow/
-  main/LICENSE and diff it against tests/fixtures/reqoverflow/LICENSE. Byte equality or say what differs.
+- **Verify the licence, do not read it.** Fetch https://raw.githubusercontent.com/reqnroll/demo-service/
+  main/LICENSE and diff it against tests/fixtures/demo-service/LICENSE. Byte equality or say what differs.
 - **Verify the provenance claims one by one.** The commit hash, its date (2026-01-15), the file counts (108 = 18
   .feature + 90 .cs), the claim that no text was modified, and the claim that only a BOM differs on 21 files.
   Pick three files at random and compare each against the upstream blob at that commit. A provenance document

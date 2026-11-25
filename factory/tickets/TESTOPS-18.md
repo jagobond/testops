@@ -35,7 +35,7 @@ a handler can return cached state or computed values without touching the store,
 grants the response authority over the disk. As the reviewer put it: a disclosure the reader must undo is
 not a disclosure, it is the claim wearing its caveat as a footnote inside the same sentence.
 
-The honest wording already existed in this codebase — run `cotw-levels-20261121T230858` carried the label
+The honest wording already existed in this codebase — run `demo-product-levels-20261121T230858` carried the label
 "settled by the data as stored, read through the response the server sends" — and was dropped.
 
 ## Acceptance criteria

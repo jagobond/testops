@@ -14,27 +14,27 @@ Full suite re-run by this review: **622 passed in 116.71s**.
 ## 17 of 43, independently produced (round 1's result, restated)
 
 Reproduced as a persisted run (not just a test assertion) — run
-`restfulbooker-levels-20261123T132004` in a scratch store, from the stored blobs of
+`demo-booking-levels-20261123T132004` in a scratch store, from the stored blobs of
 `m-pujic-levi9-com/cypress-cucumber-e2e-tests@262404a9` and product arm
-`mwinteringham/restful-booker-platform@efe2deb`. Claims: 43 — 13 distinct, 4 review, 26 unplaced.
+`example-org/demo-booking-platform@efe2deb`. Claims: 43 — 13 distinct, 4 review, 26 unplaced.
 Placement record: `asserting 43, placed 17, unplaced 26, layers {ui: 17}, unreadable []`.
 Rendered pages saved under `factory/reports/2026-11-23/`.
 
 ## AC7 baseline (main vs branch vs stored)
 
-Method: `rebuild.rebuild` of snapshot `cotw-levels-20261122-a3f19853-r11` run twice against copies
+Method: `rebuild.rebuild` of snapshot `demo-product-levels-20261122-a3f19853-r11` run twice against copies
 of the store — once with the branch code (`testops-t42c3`, 09c99da), once with main's code
 (`C:/Users/<name>/Projects/testops`, d69881e, which does not contain T42C-3) — each compared
 claim-by-claim (subject_ref + assertion_line) with the `proposed_action`, `statement` and `verdict`
-rows of every stored cotw levels run.
+rows of every stored demo-product levels run.
 
 Result:
 
 - Branch rebuild vs main rebuild: **identical** (all 94 claims, byte-equal actions).
-- Branch and main vs the newest stored runs (`cotw-levels-20261122T120603` on snapshot r10,
-  `cotw-levels-20261122T204947` on r11): **0 differences in all 94 claims.**
-- Branch and main vs the older stored runs (`cotw-levels-20261122T011316`, the pinned run, and
-  `cotw-levels-20261121T215534`): **all 94 actions differ**, in exactly the form round 1 saw:
+- Branch and main vs the newest stored runs (`demo-product-levels-20261122T120603` on snapshot r10,
+  `demo-product-levels-20261122T204947` on r11): **0 differences in all 94 claims.**
+- Branch and main vs the older stored runs (`demo-product-levels-20261122T011316`, the pinned run, and
+  `demo-product-levels-20261121T215534`): **all 94 actions differ**, in exactly the form round 1 saw:
   - stored: `No change: keep the step "…" where it is; this level is the cheapest one that
     establishes it.`
   - rebuilt: `No change: keep the step "…" at the cheapest level that establishes it.`
@@ -42,10 +42,10 @@ Result:
 Conclusion: **T42C-3 is innocent.** The prose change is commit bf13261 (TESTOPS-29, 2026-11-22
 11:55, present in main too) — "the action states the change, the statement states the reason" —
 and the stored runs at 01:13 and earlier were simply never re-run after it. The TESTOPS-29 build
-report itself records this ("the stored run `cotw-levels-20261122T011316` still holds 0.10.1's
+report itself records this ("the stored run `demo-product-levels-20261122T011316` still holds 0.10.1's
 strings"). What should be done: nothing in code — the two runs since TESTOPS-29 already carry the
 new prose — but the old runs are misleading as pinned baselines. Recommendation: a retention/
-migration note (or a re-run-and-supersede pass) marking pre-TESTOPS-29 cotw levels runs as
+migration note (or a re-run-and-supersede pass) marking pre-TESTOPS-29 demo-product levels runs as
 superseded so no future review or `measure_action_repetition.py` run picks `T011316` as "before".
 
 ## The persisted run, in the reader's words
@@ -133,9 +133,9 @@ store opens and analyses):
 - The 622-test suite passes (re-run by this review, 116.71s), but I did not re-verify the
   byte-identical .NET goldens line-by-line myself beyond what the suite pins.
 - The product arm's ecosystem sentence ("read as no ecosystem this build recognises") is accurate
-  for `restful-booker-platform` but I did not audit whether a Node backend could fairly be read
+  for `demo-booking-platform` but I did not audit whether a Node backend could fairly be read
   as anything; the ticket does not require it.
-- I did not verify the ReqOverflow corpus numbers (17/17) beyond the suite's pin.
+- I did not verify the DemoService corpus numbers (17/17) beyond the suite's pin.
 - The unplaced statements are visible in the store, not as individual pages; I did not test
   whether any other UI surface lists them (the runs index and run page do not).
 - I did not confirm whether the superseded-runs recommendation needs a ticket of its own; that is

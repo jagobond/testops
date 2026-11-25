@@ -48,7 +48,7 @@ Measured against the repository on 2026-11-23/24. Every line below was checked a
 | `docs/state/` | **does not exist** | Phase 1 creates it |
 | `.devcontainer/` | **does not exist** | Phase 2 creates it |
 | `.gitignore` | `.venv/`, `__pycache__/`, `*.egg-info/`, `build/`, `dist/`, `data/`, `*.log`, `.tmp/` — **no `.env`** | Phase 1 adds it. Do not assume it is ignored |
-| Remote | `github.com/jagobond/testops` | Already GitHub; the port is a mirror to a work remote |
+| Remote | `github.com/example-org/testops` | Already GitHub; the port is a mirror to a work remote |
 
 Two consequences worth stating plainly:
 
@@ -124,7 +124,7 @@ Invoked as `python factory/coordinator.py --once` from the repo root, everywhere
 ### 5.1 Mirror, don't re-init
 
 ```bash
-git clone --mirror https://github.com/jagobond/testops.git testops-mirror.git
+git clone --mirror https://github.com/example-org/testops.git testops-mirror.git
 cd testops-mirror.git
 git remote set-url origin https://github.com/<work-org>/testops.git
 git push --mirror origin

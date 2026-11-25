@@ -50,7 +50,7 @@ class Binding:
     layer: str
     # Step definitions live in per-suite files (BrowserSteps.cs, PanelSteps.cs, ...). Without this, a step text
     # defined in two suites resolves to whichever file was parsed first, and every scenario collapses to one
-    # instrument. That is what made all 154 CotW bindings look like API calls.
+    # instrument. That is what made all 154 Demo Product bindings look like API calls.
     suite: str = ""
     # 1-based line of the [Given("...")] attribute, so evidence can link to the binding itself. 0 means
     # the parser did not record it - never a line number it guessed.

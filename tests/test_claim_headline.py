@@ -56,14 +56,14 @@ JUDGEMENT = {
 
 # --------------------------------------------------------------------------- store fixtures
 
-def _seed_case(conn, *, case_id: str, project: str = "reqoverflow", verdict: str = "duplicate",
+def _seed_case(conn, *, case_id: str, project: str = "demo-service", verdict: str = "duplicate",
                scenario: str | None = SUGGESTIONS_TITLE, assertion: str = SUGGESTIONS,
                findings: int = 1, created_at: str = TS, analyser: str = "level_fitness") -> int:
     """One snapshot, one run, one claim and one case - the minimum a list row needs."""
     run_id = f"run-{case_id}"
     db.upsert_snapshot(conn, SNAP, "fixture", TS, {"owner/test": COMMIT}, schema_version=2)
     db.start_run(conn, run_id, project, SNAP, analyser, created_at)
-    subject = f"scenario:{PATH}#{scenario}" if scenario else f"issue:COTW-{case_id[-2:]}"
+    subject = f"scenario:{PATH}#{scenario}" if scenario else f"issue:DEMO-{case_id[-2:]}"
     claim_id = db.add_claim(
         conn, run_id, analyser, "0.8.0", subject,
         "This test asserts the step, and another scenario already asserts it.", verdict, 0.5, [],

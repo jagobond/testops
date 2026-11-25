@@ -38,7 +38,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STORED = ROOT / "data" / "testops.db"
 BLOB_DIR = ROOT / "data" / "blobs"
 
-CYPRESS_SNAPSHOT = "restfulbooker-20261122-262404a9"
+CYPRESS_SNAPSHOT = "demo-booking-20261122-262404a9"
 CYPRESS_TEST_REPO = ("m-pujic-levi9-com/cypress-cucumber-e2e-tests",
                      "262404a95784970315faeae6374ce8783ccbe598")
 

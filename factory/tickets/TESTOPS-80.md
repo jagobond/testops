@@ -11,10 +11,10 @@ depends_on: TESTOPS-73, TESTOPS-72
 
 ## Why this exists
 
-On `case-restfulbooker-levels-20261124T114627-05` the page reads, at the top:
+On `case-demo-booking-levels-20261124T114627-05` the page reads, at the top:
 
-    Product repository  mwinteringham/restful-booker-platform at commit efe2deb8   consulted
-    Product routes      mwinteringham/restful-booker-platform                       not consulted
+    Product repository  example-org/demo-booking-platform at commit efe2deb8   consulted
+    Product routes      example-org/demo-booking-platform                       not consulted
                         none of the 3 ecosystems this build knows was recognised in the 169 files read
                         (reqnroll, python-bdd, cucumber-js)
 

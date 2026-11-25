@@ -1,4 +1,4 @@
-"""Draft an interaction-based re-annotation of the cotw-eval key.
+"""Draft an interaction-based re-annotation of the demo-product-eval key.
 
 Every row records what the repository actually says: which step files bind the scenario's steps, and
 therefore which instrument runs. The verdict is derived from the claim and the instrument, not chosen.
@@ -87,7 +87,7 @@ def claim_rows(sc, instrument, span):
     return rows
 
 
-def draft(key_path: str, out_path: str, project_key: str = "cotw") -> dict:
+def draft(key_path: str, out_path: str, project_key: str = "demo-product") -> dict:
     bindings, scenarios, commit = collect(project_key)
     key = json.loads(Path(key_path).read_text(encoding="utf-8"))
     rows = key["scenarios"] if isinstance(key, dict) else key
@@ -144,7 +144,7 @@ def main(argv=None) -> int:
     ap.add_argument("--key", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--md", default=None)
-    ap.add_argument("--project", default="cotw")
+    ap.add_argument("--project", default="demo-product")
     a = ap.parse_args(argv)
     doc = draft(a.key, a.out, a.project)
     if a.md:

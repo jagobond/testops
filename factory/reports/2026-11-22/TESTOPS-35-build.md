@@ -30,7 +30,7 @@ registered    duplication, level_fitness
 fixture cases 1
 
   rev-duplicate
-    project=review analyser='x' run=reqoverflow-dup-20261122T090439 findings=1
+    project=review analyser='x' run=demo-service-dup-20261122T090439 findings=1
     finding 601 fingerprint 00000000000000000000000000001606
 
 rows to remove: case_ 1 · finding 1 · case_state 0 · suppression 0

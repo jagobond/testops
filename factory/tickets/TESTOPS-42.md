@@ -33,7 +33,7 @@ to a team outside those two ecosystems.
 
 **B. A pluggable binding layer.** Step-binding extractors and layer vocabularies become per-ecosystem modules
 (cucumber-js, pytest-bdd, Java/Cucumber-JVM, Reqnroll), selected from what the repository contains and recorded per
-run. Weeks of work, and it is the difference between a tool for CotW and a tool a Quilter team can adopt.
+run. Weeks of work, and it is the difference between a tool for Demo Product and a tool a Quilter team can adopt.
 
 **C. B, but only cucumber-js first**, to prove the seam with the corpus already in hand.
 
@@ -44,7 +44,7 @@ run. Weeks of work, and it is the difference between a tool for CotW and a tool 
 | AC1 | Whatever the answer, a corpus in an unsupported ecosystem never renders "none of its steps could be tied to a layer" as though the tool had looked. |
 | AC2 | The detected ecosystem is recorded per run and shown on the run page. |
 | AC3 | If B/C: each extractor declares the ecosystems it handles, is selected automatically, and reports its own refusals with reasons. |
-| AC4 | If B/C: the TESTOPS-39 corpus must produce a real verdict distribution, not 43 unplaced — and the assessment's seven CotW-specific faults become the acceptance checklist. |
+| AC4 | If B/C: the TESTOPS-39 corpus must produce a real verdict distribution, not 43 unplaced — and the assessment's seven Demo Product-specific faults become the acceptance checklist. |
 
 ## Notes
 

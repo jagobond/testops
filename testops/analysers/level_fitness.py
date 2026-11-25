@@ -240,7 +240,7 @@ v0.8 adds restraint, after v0.7 wrote the failure itself:
   * one verification pass yields one label. The instrument a claim is settled by now decides the
     reader's phrase, from one table that also feeds the statement: a suite with no server behind it
     (engine, storage) cannot tell a reader that "the response the server sends" settles anything, so
-    every claim in such a suite is labelled by the answer the instrument itself gives. The CotW
+    every claim in such a suite is labelled by the answer the instrument itself gives. The Demo Product
     verification feature's twelve claims - "the pass fails", "the overall result is a failure",
     "the clean store exits with the success status" and their siblings - now carry one label
     instead of three wordings, while their interaction codes stay what the words and the binding
@@ -249,7 +249,7 @@ v0.8 adds restraint, after v0.7 wrote the failure itself:
     statement cannot describe different instruments. A page claim in a browser suite no longer
     tells the reader the response settles it.
 
-v0.7 answers the coverage miss v0.6 left: on the real CotW repository pair it classified 48 of 94
+v0.7 answers the coverage miss v0.6 left: on the real Demo Product repository pair it classified 48 of 94
 claims `unplaced`, because the vocabulary only knew a handful of nouns. A person classified every
 one of them at once. The ruling this version implements:
 
@@ -418,7 +418,7 @@ NEEDS_BROWSER = {"I3", "I4"}
 # A word in this list names the act of testing or the kind of thing, not the thing tested. "the
 # data", "the result", "the page", "should", "correct", "displayed" appear in almost any assertion,
 # and a match on one of them would be proximity dressed as evidence - the failure that scored v0.1 at
-# precision 0.118. The UI and code vocabulary below earned its place the same way: on the CotW corpus
+# precision 0.118. The UI and code vocabulary below earned its place the same way: on the Demo Product corpus
 # "class" matched a docstring's ``:class:`` reference and "accessible" matched a test name in the
 # product repository, and neither said the product publishes what the assertion checks.
 PRODUCT_STOP = frozenset("""
@@ -1045,7 +1045,7 @@ def _surface_reading(surface) -> tuple[str, str, tuple, set[str], set[str], set[
 
     Only a target that *is* a route contributes route words. An engine surface's target is a file
     path, and a module's name is not an address the product publishes anything at: matching
-    ``src/cotw/citation.py`` on the word "citation" would say the product exposes citations, when all
+    ``src/demo-product/citation.py`` on the word "citation" would say the product exposes citations, when all
     it says is that a file is called that. Such a surface can still be evidence through its claims,
     which are its own words.
     """

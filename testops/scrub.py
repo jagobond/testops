@@ -10,7 +10,7 @@ What a fixture costs the store, and what it does not:
   * the case row, its findings and its recorded decisions were written by the harness, so they go;
     a case page is an argument, and an argument nobody can reproduce is noise with an id;
   * the run, the snapshot, the artefacts, the observations and the claims stay. A fixture case is
-    usually pinned to a real run (``rev-duplicate`` pointed at a real reqoverflow duplication run),
+    usually pinned to a real run (``rev-duplicate`` pointed at a real demo-service duplication run),
     and deleting the run would destroy the evidence the other eighteen cases rest on. Deleting the
     claims the fixture pointed at would do the same: claims belong to the run, not to the case that
     borrowed them;

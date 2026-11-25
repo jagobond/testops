@@ -4,7 +4,7 @@ from testops.collectors import github
 from testops.config import load_env, project
 from testops.extract import gherkin, stepbindings
 
-env = load_env(); p = project("reqoverflow")
+env = load_env(); p = project("demo-service")
 c = github.collect(p.product, env["GITHUB_PAT"], role="test")
 texts = {path: blobs.text(sha) for path, (sha, k) in c.files.items()}
 feats = [gherkin.parse(path, t) for path, t in texts.items() if c.files[path][1] == "feature"]

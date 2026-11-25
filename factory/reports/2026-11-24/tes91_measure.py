@@ -35,16 +35,16 @@ OUT = Path(__file__).with_name("tes91-measurement.json")
 
 # The same ten cases TESTOPS-90 measured, so before/after is a comparison and not a new sample.
 CASES = (
-    "case-restfulbooker-levels-20261124T123451-01",
-    "case-restfulbooker-levels-20261124T123451-02",
-    "case-restfulbooker-levels-20261124T123451-03",
-    "case-restfulbooker-levels-20261124T123451-04",
-    "case-restfulbooker-levels-20261124T123451-05",
-    "case-restfulbooker-levels-20261124T114627-01",
-    "case-restfulbooker-levels-20261124T114627-02",
-    "case-restfulbooker-levels-20261124T114627-03",
-    "case-restfulbooker-levels-20261124T114627-04",
-    "case-restfulbooker-levels-20261124T114627-05",
+    "case-demo-booking-levels-20261124T123451-01",
+    "case-demo-booking-levels-20261124T123451-02",
+    "case-demo-booking-levels-20261124T123451-03",
+    "case-demo-booking-levels-20261124T123451-04",
+    "case-demo-booking-levels-20261124T123451-05",
+    "case-demo-booking-levels-20261124T114627-01",
+    "case-demo-booking-levels-20261124T114627-02",
+    "case-demo-booking-levels-20261124T114627-03",
+    "case-demo-booking-levels-20261124T114627-04",
+    "case-demo-booking-levels-20261124T114627-05",
 )
 
 

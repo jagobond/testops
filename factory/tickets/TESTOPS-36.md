@@ -11,7 +11,7 @@ depends_on: TESTOPS-35
 
 ## Finding (Product Owner)
 
-> "case/rev-duplicate has the same issues as case-cotw-levels-...-03 … are these the duplicate claims of each
+> "case/rev-duplicate has the same issues as case-demo-product-levels-...-03 … are these the duplicate claims of each
 > other? If not, then much more information is needed on both cases; if so, then this should be a single claim
 > evidencing both tests."
 

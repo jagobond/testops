@@ -12,7 +12,7 @@ depends_on: TESTOPS-34
 ## Finding
 
 `/case/rev-duplicate` renders on the live server. Its case row is `{id: rev-duplicate, run_id:
-reqoverflow-dup-20261122T090439, analyser: "x"}` — a case written by a review session, with an analyser name that
+demo-service-dup-20261122T090439, analyser: "x"}` — a case written by a review session, with an analyser name that
 does not exist, reachable from the Product Owner's dashboard. The Product Owner opened it and asked whether it was
 one of his own claims.
 

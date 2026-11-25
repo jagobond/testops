@@ -11,27 +11,27 @@ renders both facts without confusing them.
 | AC | Verdict | Evidence |
 |----|---------|----------|
 | AC1 | HOLDS | Quiet page heading is "No findings in this run" plus one sentence of what was analysed (`case_page` → `quiet_run_block`, `analysed_sentence`). `display_state` no longer maps (0 findings, open) to "Resolved". |
-| AC2 | HOLDS | "Resolved" is rendered only by `decision_block`, reached only when `latest_decision` returns a `case_state` row. Real store page for `case-cotw-levels-20261121T173046` reads "Resolved by harry 15 hours ago. The note recorded with that decision: "smoke test"." |
+| AC2 | HOLDS | "Resolved" is rendered only by `decision_block`, reached only when `latest_decision` returns a `case_state` row. Real store page for `case-demo-product-levels-20261121T173046` reads "Resolved by harry 15 hours ago. The note recorded with that decision: "smoke test"." |
 | AC3 | HOLDS | Features, scenarios, exclusion patterns and the analyser's claim count all derive from the case's own snapshot rows (see The counts). |
 | AC4 | HOLDS | `run_analysis` reads `snapshot.meta` joined through the run row (`queries.py:350`); the never touches `sources.registry()`. Adversarially proven below. |
-| AC5 | HOLDS | Freshness line ("Analysed 37 hours ago at cotw-bdd@a3f19853, cotw-continuity@b901ea4d") and "Duplication" analyser name present on the live quiet page. |
+| AC5 | HOLDS | Freshness line ("Analysed 37 hours ago at demo-product-tests@a3f19853, demo-product@b901ea4d") and "Duplication" analyser name present on the live quiet page. |
 | AC6 | HOLDS | `test_a_quiet_run_and_a_resolved_case_never_share_wording` asserts heading, badge and body all differ between the two pages, both built from stored rows in one store. |
 | AC7 | HOLDS | Diff touches `queries.py`, `web/app.py` and tests only — no analyser code. Latest level-fitness run in the store: 94 claims → distinct 90, gap 1, review 2, unplaced 1. |
 | AC8 | WEAK | Suite green on the prescribed `.venv` (3.12.5): 228 passed. A second interpreter is not available as a venv on this branch, so the "both interpreters" half is the builder's claim, not independently verified. |
 
 ## The counts
 
-Live quiet page: `case-cotw-dup-20261120T194032`. Each claim traced to the store:
+Live quiet page: `case-demo-product-dup-20261120T194032`. Each claim traced to the store:
 
 - "6 feature files" — `run_analysis` counts 6 of 27 feature artefacts as active under the stored
-  `CotwBdd.csproj` patterns (snapshot `cotw-20261120-a3f19853`).
+  `DemoProductTests.csproj` patterns (snapshot `demo-product-20261120-a3f19853`).
 - "41 scenarios" — 41 `observation` rows with `key LIKE 'scenario:%'` recorded against those 6
   active artefacts (207 observations exist overall; dormant files' 166 are correctly excluded).
-- "17 exclusion patterns read from CotwBdd.csproj" — 17 patterns parsed from the build artefact's
+- "17 exclusion patterns read from DemoProductTests.csproj" — 17 patterns parsed from the build artefact's
   stored blob (`.lead-draft/**/*.feature`, 14 named features, `.lead-draft/*`, `*/bin/*`, `*/obj/*`).
 - "21 of 27 stored feature files outside the build" — 27 feature artefacts in the snapshot, 21
   inactive. Matches the case summary's `dormant_features: 21`.
-- "recorded no claim about any of them" — 0 claim rows for run `cotw-dup-20261120T194032`.
+- "recorded no claim about any of them" — 0 claim rows for run `demo-product-dup-20261120T194032`.
 - "What this run could not consult: This run recorded no source registry" — snapshot meta is `{}`,
   so `registry_recorded` is False. Correct: that snapshot predates registry recording.
 
@@ -86,5 +86,5 @@ decision, and "Resolved" never appears on a page without a `case_state` row. The
   is unfixable after the fact.
 - Where to look: `testops/queries.py:437` (`latest_decision`, `run_analysis`),
   `testops/web/app.py:551` (`analysed_sentence`, `quiet_run_block`, `decision_block`),
-  `tests/test_quiet_run.py`, live pages `case-cotw-dup-20261120T194032` (quiet) and
-  `case-cotw-levels-20261121T173046` (resolved, names harry / 15 hours ago / "smoke test").
+  `tests/test_quiet_run.py`, live pages `case-demo-product-dup-20261120T194032` (quiet) and
+  `case-demo-product-levels-20261121T173046` (resolved, names harry / 15 hours ago / "smoke test").

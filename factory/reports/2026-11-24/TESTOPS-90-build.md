@@ -24,7 +24,7 @@ against a record whose claim is 2405:
 
 - before: `['the number 2405, which no cited fact holds']`
 - after: `[]`
-- and re-checked against the **real** record of `case-restfulbooker-levels-20261124T123451-05` in the
+- and re-checked against the **real** record of `case-demo-booking-levels-20261124T123451-05` in the
   product store: `[]`. The old scan read `[('2405', 2405)]` from that sentence.
 
 The mask is the identifier, not the sentence: `the number 7` beside a valid `claim:2405` citation

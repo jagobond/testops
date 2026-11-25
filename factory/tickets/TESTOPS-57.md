@@ -35,6 +35,6 @@ Option (b), not (a):
 | AC1 | A run page gives the unplaced claims **a section of their own**, not a sentence: each listed with the step's words, the two nearest patterns, and a stable anchor a reader can cite (`/run/<id>#unplaced-<n>` or a per-claim URL). |
 | AC2 | Each entry carries the **soft** tone - the dashed, dimmed treatment - so an unplaced claim is visibly less settled than a placed one, satisfying P20 where unplaced claims are actually shown. This is the first place the soft badge is rendered on a served page; a test asserts the class is present and is NOT the alarm class. |
 | AC3 | The count on the run page and the number of entries in the section are the same number, derived - a test renders a run with a known unplaced count and asserts they agree. |
-| AC4 | Nothing about placed claims, verdicts or case pages changes: case-page goldens byte-identical, CotW 94/90/1/1/2 and ReqOverflow 17/17 unchanged. |
+| AC4 | Nothing about placed claims, verdicts or case pages changes: case-page goldens byte-identical, Demo Product 94/90/1/1/2 and DemoService 17/17 unchanged. |
 | AC5 | The section is honest about what a reader can do: it says these are not assessed rather than merely absent, and where the nearest patterns are known it says why they did not match. No banned phrases, no "unsupported ecosystem". |
 | AC6 | Contract suite: P20 passes where it applies; every other contract test unchanged in outcome (no new failures). Full suite green. |

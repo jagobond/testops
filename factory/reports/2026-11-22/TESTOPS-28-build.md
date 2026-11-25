@@ -37,7 +37,7 @@ unchanged.
 | AC1 | Met. `action_line` returns the full stored action, sentence-split, nothing removed. `tests/test_action_line.py::test_every_content_word_of_the_stored_action_reaches_the_page` runs the property over 23 hand-written actions: the reviewer's 15 probes plus 8 more shapes from the two passes. Asserts no content word missing and that the input's content words are a *subsequence* of the output, so nothing is reordered or dropped. |
 | AC2 | Met in product and test code: `git grep -n 'INSTRUCTION_VERBS\|CONTINUATION_OPENERS\|second_half_is_instruction' -- testops tests scripts` returns nothing (exit 1). See "For the Lead" below for the two historical report files that still name them. |
 | AC3 | Met, and deliberately visible. Every one of the 94 actions grew; total rendered action text went from 3,733 to 8,659 characters (+132%). Median action 38 → 90 characters. No action lost a character it had. Examples and the requested scan block below. |
-| AC4 | No firings. The T26 no-repeat lint (`lint.repeated_clause`, 6-word clause) fires 0 times across the 94 scan blocks of `cotw-levels-20261122T011316`, as does the plain-English lint. Nothing to record as a follow-up finding; the lint is untouched, and no cut was reintroduced to appease it (it had nothing to complain about). Measured directly against the block `argument_block` builds, and again through the page in `test_the_stored_cotw_corpus_keeps_its_verdicts_and_passes_the_lint`, which passes. |
+| AC4 | No firings. The T26 no-repeat lint (`lint.repeated_clause`, 6-word clause) fires 0 times across the 94 scan blocks of `demo-product-levels-20261122T011316`, as does the plain-English lint. Nothing to record as a follow-up finding; the lint is untouched, and no cut was reintroduced to appease it (it had nothing to complain about). Measured directly against the block `argument_block` builds, and again through the page in `test_the_stored_demo-product_corpus_keeps_its_verdicts_and_passes_the_lint`, which passes. |
 | AC5 | Met. Sentence-splitting, capitalisation and full stops only. Two sentences with one full stop each, never a run-on; three-clause actions become three sentences. `action_line` with no semicolon returns the stored string unchanged. |
 | AC6 | Met. Verdicts on the pinned run: 94 claims — 90 distinct, 1 unplaced, 1 gap, 2 review. Suite green on both interpreters (below). |
 
@@ -81,7 +81,7 @@ NEW: Move this step into a test that drives a browser, or delete it. At this lev
 This is the trade the ticket asks for: the analyser wrote the tail, so the reader sees the tail.
 The fix belongs to the analyser's `proposed_action` strings in a follow-up ticket, not here.
 
-## The rendered scan block, `case-cotw-levels-20261122T011316-03`
+## The rendered scan block, `case-demo-product-levels-20261122T011316-03`
 
 Reader text (what the Lead sees on the page):
 
@@ -122,7 +122,7 @@ apply above 3.11, not failures. The first 3.11 attempt borrowed the 3.12 `site-p
 clean-environment subprocess, so the borrowed pytest disappeared. The throwaway venv removes that
 artefact.
 
-Verdicts read from the store, not from test output: `cotw-levels-20261122T011316` → 94 claims,
+Verdicts read from the store, not from test output: `demo-product-levels-20261122T011316` → 94 claims,
 `{'distinct': 90, 'gap': 1, 'review': 2, 'unplaced': 1}`.
 
 ## For the Lead

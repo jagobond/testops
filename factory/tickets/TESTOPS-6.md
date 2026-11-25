@@ -62,5 +62,5 @@ TestOps.
 - Nothing behind a disclosure: a reason a scanning lead has to click for is a reason they will not
   read.
 - Keep it ugly-but-legible if you must choose. No framework, no build step.
-- The specimen to develop against is in the store: run `cotw-levels-20261121T215534` and the current
+- The specimen to develop against is in the store: run `demo-product-levels-20261121T215534` and the current
   replay output, which include the accessibility `gap` and the two `review` claims.

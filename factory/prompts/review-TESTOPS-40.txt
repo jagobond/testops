@@ -23,7 +23,7 @@ HARD RULES
   sentence. Report any golden where something else moved, and say whether that difference is legitimate.
 - **No line, no commit in the key:** grep the key construction; confirm a reformat of the file above the assertion does
   not change it (test it, don't read it).
-- **Counts:** CotW 94/90/1/1/2, ReqOverflow 17/17.
+- **Counts:** Demo Product 94/90/1/1/2, DemoService 17/17.
 - Do not edit product code or the ticket. Write exactly one file:
   factory/reports/2026-11-22/TESTOPS-40-review.md with: ## Verdict; ## The sentence vs behaviour (each case);
   ## Attacking @total; ## The 11 goldens; ## Key construction; ## Counts; ## Three sharpest concerns.

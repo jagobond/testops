@@ -1,6 +1,6 @@
 """TESTOPS-34: a case is a finding, and a run that raised nothing is a run.
 
-The Product Owner read `case-cotw-dup-20261120T194032` and asked what an open case telling him there
+The Product Owner read `case-demo-product-dup-20261120T194032` and asked what an open case telling him there
 were no findings was doing there. It was a defect: every analysis run used to leave a `case_` row
 behind, and the case list was padded with rows nobody could decide. A case carries a decision about
 a finding; no finding, no case.
@@ -35,7 +35,7 @@ DECIDED_SNAP = "snap-decided"
 DECIDED_RUN = "run-decided"
 DECIDED_CASE = "case-decided"
 COMMIT = "a" * 40
-CSPROJ = "CotwBdd.csproj"
+CSPROJ = "DemoProductTests.csproj"
 REMOVED = "features/old.feature"
 LIVE = "features/live.feature"
 
@@ -215,7 +215,7 @@ def test_the_quiet_run_page_survives_reached_by_run_id(tmp_path, monkeypatch):
     assert "No findings in this run" in text
     # The counts, from the stored project file and the recorded observations.
     assert "1 feature file and 3 scenarios" in text
-    assert "4 exclusion patterns read from CotwBdd.csproj" in text
+    assert "4 exclusion patterns read from DemoProductTests.csproj" in text
     assert "left 1 of 2 stored feature files outside the build" in text
     assert "recorded no claim about any of them" in text
     # The commit, the analyser and what the run could not consult.

@@ -18,7 +18,7 @@ the duplication analyser's own claims, and the suite is green with verdicts unch
 - AC3 — HOLDS. Kept tail renders as two sentences (`… in-process. Keep one.`), dropped tail as
   one; both shapes have helper tests and a test through `argument_block`.
 - AC4 — HOLDS. `test_no_action_on_the_real_run_is_cut_into_a_stub` walks the pinned 94-claim run
-  (`cotw-levels-20261122T011316`, 90/1/1/2), asserts kept ≥ 40 unless the whole action was
+  (`demo-product-levels-20261122T011316`, 90/1/1/2), asserts kept ≥ 40 unless the whole action was
   shorter, and proves the "this step" reference is the only shortening. Min kept length in the
   run: 53 characters. It bites: under a mutate-to-always-keep patch the reference-swap assertion
   fails. (It does not bite under always-drop — the cut length is unchanged by dropping; over-drop

@@ -13,7 +13,7 @@
  },
  "rows": [
   {
-   "case": "case-restfulbooker-levels-20261124T123451-01",
+   "case": "case-demo-booking-levels-20261124T123451-01",
    "state": "failed_unavailable",
    "accepted": false,
    "repairs": 0,
@@ -27,7 +27,7 @@
    "cause": "malformed"
   },
   {
-   "case": "case-restfulbooker-levels-20261124T123451-02",
+   "case": "case-demo-booking-levels-20261124T123451-02",
    "state": "failed_unavailable",
    "accepted": false,
    "repairs": 0,
@@ -41,7 +41,7 @@
    "cause": "malformed"
   },
   {
-   "case": "case-restfulbooker-levels-20261124T123451-03",
+   "case": "case-demo-booking-levels-20261124T123451-03",
    "state": "fresh",
    "accepted": true,
    "repairs": 0,
@@ -55,7 +55,7 @@
    "cause": ""
   },
   {
-   "case": "case-restfulbooker-levels-20261124T123451-04",
+   "case": "case-demo-booking-levels-20261124T123451-04",
    "state": "fresh",
    "accepted": true,
    "repairs": 0,
@@ -69,7 +69,7 @@
    "cause": ""
   },
   {
-   "case": "case-restfulbooker-levels-20261124T123451-05",
+   "case": "case-demo-booking-levels-20261124T123451-05",
    "state": "fresh",
    "accepted": true,
    "repairs": 0,
@@ -83,7 +83,7 @@
    "cause": ""
   },
   {
-   "case": "case-restfulbooker-levels-20261124T114627-01",
+   "case": "case-demo-booking-levels-20261124T114627-01",
    "state": "fresh",
    "accepted": true,
    "repairs": 0,
@@ -97,7 +97,7 @@
    "cause": ""
   },
   {
-   "case": "case-restfulbooker-levels-20261124T114627-02",
+   "case": "case-demo-booking-levels-20261124T114627-02",
    "state": "fresh",
    "accepted": true,
    "repairs": 0,
@@ -111,7 +111,7 @@
    "cause": ""
   },
   {
-   "case": "case-restfulbooker-levels-20261124T114627-03",
+   "case": "case-demo-booking-levels-20261124T114627-03",
    "state": "fresh",
    "accepted": true,
    "repairs": 0,
@@ -125,7 +125,7 @@
    "cause": ""
   },
   {
-   "case": "case-restfulbooker-levels-20261124T114627-04",
+   "case": "case-demo-booking-levels-20261124T114627-04",
    "state": "fresh",
    "accepted": true,
    "repairs": 0,
@@ -139,7 +139,7 @@
    "cause": ""
   },
   {
-   "case": "case-restfulbooker-levels-20261124T114627-05",
+   "case": "case-demo-booking-levels-20261124T114627-05",
    "state": "failed_unavailable",
    "accepted": false,
    "repairs": 0,

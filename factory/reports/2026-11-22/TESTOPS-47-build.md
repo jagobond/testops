@@ -118,8 +118,8 @@ So each golden's diff is the cover sentence and nothing else. `case-page-03` and
 the level sentence to the duplication one; the other nine keep the level contract in its new
 identity wording.
 
-Corpus counts are untouched: CotW **94 claims / 90 distinct / 1 unplaced / 1 gap / 2 review**,
-ReqOverflow **17 claims / 17 cases**, pinned by the existing count tests, which pass. Only page text
+Corpus counts are untouched: Demo Product **94 claims / 90 distinct / 1 unplaced / 1 gap / 2 review**,
+DemoService **17 claims / 17 cases**, pinned by the existing count tests, which pass. Only page text
 and a declaration changed; no verdict, key or fingerprint moved.
 
 ## Test suite
@@ -130,7 +130,7 @@ env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=
 561 passed in 94.23s
 ```
 
-8 new tests; before this ticket the same tree collected 553. Run against a copy of the CotW build
+8 new tests; before this ticket the same tree collected 553. Run against a copy of the Demo Product build
 store placed in this worktree's gitignored `data/` (copied read-only from the main checkout's store),
 so the corpus pins ran rather than skipped.
 

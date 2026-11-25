@@ -6,13 +6,13 @@ written, migrated or deleted.
 
 ## What the defect actually was
 
-The Product Owner read `case-cotw-dup-20261120T194032` and asked what an open case telling him there
+The Product Owner read `case-demo-product-dup-20261120T194032` and asked what an open case telling him there
 were no findings was doing there. Two separate things were true:
 
 1. **The creation path was already gated.** Since TESTOPS-4 the pipeline writes one case per
    *actionable* claim, so a run that raises nothing writes no `case_` row. The four rows the Product
-   Owner named (`case-cotw-dup-20261120T153507`, `case-cotw-dup-20261120T194032`,
-   `case-cotw-levels-20261121T173120`, `case-cotw-levels-20261121T173223`) are legacy rows from the
+   Owner named (`case-demo-product-dup-20261120T153507`, `case-demo-product-dup-20261120T194032`,
+   `case-demo-product-levels-20261121T173120`, `case-demo-product-levels-20261121T173223`) are legacy rows from the
    older one-case-per-run shape: no `-01` suffix, one row per run.
 2. **The read path had no rule.** `cases.list_cases` returned every `case_` row, so those legacy rows
    were still listed as open cases waiting for a decision. A case exists to carry a decision about a
@@ -52,10 +52,10 @@ and the new one side by side.
 BEFORE (old query): 184 rows; 4 with zero findings
 AFTER  (new query): 180 rows; 0 with zero findings
 
-case-cotw-dup-20261120T153507     before=True  after=False  row_still_in_store=True  run=cotw-dup-20261120T153507
-case-cotw-dup-20261120T194032     before=True  after=False  row_still_in_store=True  run=cotw-dup-20261120T194032
-case-cotw-levels-20261121T173120  before=True  after=False  row_still_in_store=True  run=cotw-levels-20261121T173120
-case-cotw-levels-20261121T173223  before=True  after=False  row_still_in_store=True  run=cotw-levels-20261121T173223
+case-demo-product-dup-20261120T153507     before=True  after=False  row_still_in_store=True  run=demo-product-dup-20261120T153507
+case-demo-product-dup-20261120T194032     before=True  after=False  row_still_in_store=True  run=demo-product-dup-20261120T194032
+case-demo-product-levels-20261121T173120  before=True  after=False  row_still_in_store=True  run=demo-product-levels-20261121T173120
+case-demo-product-levels-20261121T173223  before=True  after=False  row_still_in_store=True  run=demo-product-levels-20261121T173223
 
 Totals: case_ 184 | finding 683 | claim 2070 | run 40   (unchanged)
 Claims by verdict: distinct 1536, duplicate 143, gap 28, necessary 25, optimal 36,
@@ -69,11 +69,11 @@ Three ways, all read from the store:
 1. **`/runs`** (or `testops runs`): every run, newest first, with its claims, its findings, its
    cases, the commit it looked at and what it could not consult. The four rows above appear here as
    runs, with `No findings`.
-2. **`/run/<run_id>`** — e.g. `/run/cotw-dup-20261120T194032`. This is the TESTOPS-22 page,
+2. **`/run/<run_id>`** — e.g. `/run/demo-product-dup-20261120T194032`. This is the TESTOPS-22 page,
    addressed by the run. The run id is printed in the page header.
-3. **The old case URL still works**: `/case/case-cotw-dup-20261120T194032` renders the same honest
+3. **The old case URL still works**: `/case/case-demo-product-dup-20261120T194032` renders the same honest
    page and says "This row raised no finding, so it is not a case. The run it recorded is
-   cotw-dup-20261120T194032", linking to `/run/...`. A shared or bookmarked URL is not broken by
+   demo-product-dup-20261120T194032", linking to `/run/...`. A shared or bookmarked URL is not broken by
    the row ceasing to be a case.
 
 ## Rehearsal (copy at the scratch dir, `TESTOPS_HOME` pointed at it)
@@ -84,19 +84,19 @@ Three ways, all read from the store:
 `testops runs` — 40 runs, e.g.:
 
 ```
-reqoverflow-dup-20261122T164254   ok   claims=17  findings=17  cases=17  duplication
-cotw-levels-20261122T120603       ok   claims=94  findings=3   cases=3   level_fitness
+demo-service-dup-20261122T164254   ok   claims=17  findings=17  cases=17  duplication
+demo-product-levels-20261122T120603       ok   claims=94  findings=3   cases=3   level_fitness
 ```
 
 All 40 run pages render 200 (no missing-blob or bad-meta failures). The Product Owner's example:
 
 ```
-GET /run/cotw-dup-20261120T194032 -> 200
-← all cases · all runs   cotw · Duplication   No findings · Ran 45 hours ago at
-cotw-bdd@a3f19853, cotw-continuity@b901ea4d · cotw-dup-20261120T194032
+GET /run/demo-product-dup-20261120T194032 -> 200
+← all cases · all runs   demo-product · Duplication   No findings · Ran 45 hours ago at
+demo-product-tests@a3f19853, demo-product@b901ea4d · demo-product-dup-20261120T194032
 No findings in this run
 This run analysed 6 feature files and 41 scenarios: 17 exclusion patterns read from
-CotwBdd.csproj left 21 of 27 stored feature files outside the build, and the duplication analyser
+DemoProductTests.csproj left 21 of 27 stored feature files outside the build, and the duplication analyser
 recorded no claim about any of them.
 What this run could not consult
 This run recorded no source registry, so it cannot say which sources it could not consult.
@@ -108,10 +108,10 @@ itself is the record, and it stays in the store with the counts above.
 And a run whose findings were all closed, for the contrast:
 
 ```
-GET /run/cotw-levels-20261121T173046 -> 200
-cotw · Level fitness   All decided · Ran 23 hours ago ... · cotw-levels-20261121T173046
+GET /run/demo-product-levels-20261121T173046 -> 200
+demo-product · Level fitness   All decided · Ran 23 hours ago ... · demo-product-levels-20261121T173046
 This run raised 42 findings
-... [the case: Resolved, 42 findings, case-cotw-levels-20261121T173046]
+... [the case: Resolved, 42 findings, case-demo-product-levels-20261121T173046]
 Every case this run raised has been decided, so its findings are closed. The run still recorded
 them: a closed finding is evidence, not a clean bill.
 ```

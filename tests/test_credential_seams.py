@@ -49,7 +49,7 @@ LINE_BOUND_PROSE_ACCEPTED = [
     "sort_keys=True",
     "sorting_keys=asc",
     "primary_key=id",
-    "board_keys=COTW",
+    "board_keys=DEMO",
 ]
 
 

@@ -20,7 +20,7 @@ reservations below are about durability, not correctness.
 | AC6 | HOLDS | Context steps are one introduced group; the intro says they are not evidence. |
 | AC7 | HOLDS | Labels: "Checked", "Checked, but over-tested…", "Not proved — nothing runs a browser", "Cannot tell". Zero codes on the page; the footnote keeps the shorthand. |
 | AC8 | HOLDS | The lint runs as a test over the real fixture pipeline run and over the stored 94-claim corpus; 0 failures, and my seeded violations (below) fail it. |
-| AC9 | HOLDS | Store query confirms `cotw-levels-20261122T011316`: 90 distinct, 1 unplaced, 1 gap, 2 review. |
+| AC9 | HOLDS | Store query confirms `demo-product-levels-20261122T011316`: 90 distinct, 1 unplaced, 1 gap, 2 review. |
 | AC10 | HOLDS | 273 passed on `.venv` (re-run by reviewer); 269 passed, 4 skipped on 3.11 (re-run by reviewer); the 4 skips are the pre-existing pre-3.12 checks. |
 
 **TESTOPS-26**
@@ -41,7 +41,7 @@ reservations below are about durability, not correctness.
 
 ## Four cases, read aloud
 
-Taken from the stored run `cotw-levels-20261122T011316`, rendered through `app.case_page` into a
+Taken from the stored run `demo-product-levels-20261122T011316`, rendered through `app.case_page` into a
 scratch copy of the store (the product store was never written). One of each verdict; opening
 blocks verbatim, comma after the code span as the markup holds it.
 
@@ -113,7 +113,7 @@ restatement. The margin of safety: a writer could paraphrase in 5-word windows a
 3. **AC11 is trusted, not verified, by this review.** The screenshots exist and the CSS carries the
    measured numbers with the reason, but I had no way to view the images in this session. Whoever
    merges should look once at
-   `C:\Users\<name>\Pictures\testops-screenshots\TESTOPS-26-case-cotw-levels-20261122T011316-03-scan-block-2x.png`.
+   `C:\Users\<name>\Pictures\testops-screenshots\TESTOPS-26-case-demo-product-levels-20261122T011316-03-scan-block-2x.png`.
 
 ## Demo
 
@@ -132,7 +132,7 @@ comma sits against the word, and the action box's padding is measured, not even 
 
 **How we know it works.** 273 passed / 269 passed + 4 skipped on the two interpreters, re-run by
 this reviewer with the clean invocation. The store query reproduces 90/1/1/2 for
-`cotw-levels-20261122T011316`. All 94 rendered pages pass both lints, and both lints were
+`demo-product-levels-20261122T011316`. All 94 rendered pages pass both lints, and both lints were
 demonstrated to fail on seeded violations (above). Four cases — one per verdict — were read aloud
 as a reader; each states a judgement, an argument and an action, with the `distinct` case saying
 plainly that nothing needs doing.
@@ -146,4 +146,4 @@ numbers are font-dependent.
 **Where to look.** `testops/web/app.py` (`verdict_label`, `wrong_sentence`, `argument_block`,
 `action_line`, `code.ident` and `p.action` in the CSS), `testops/web/lint.py`,
 `tests/test_case_argument.py`, `tests/test_case_scan.py`, and the stored run
-`cotw-levels-20261122T011316` in `data/testops.db`.
+`demo-product-levels-20261122T011316` in `data/testops.db`.

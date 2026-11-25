@@ -5,7 +5,7 @@ separate repositories, chosen so the analyses either generalise or are shown not
 
 - tests: `m-pujic-levi9-com/cypress-cucumber-e2e-tests` — JavaScript, Cypress + Cucumber, `.feature` files
   bound by `.stepdef.js` files.
-- product: `mwinteringham/restful-booker-platform` — Java, multi-service platform.
+- product: `example-org/demo-booking-platform` — Java, multi-service platform.
 
 Both were read through the existing GitHub collector at the commits below. Nothing in either upstream
 repository was modified; nothing was cloned into a source tree. The only product change is a `Project`
@@ -14,10 +14,10 @@ literal in `testops/config.py` — no analyser, extractor or collector was touch
 | arm | repository | pinned commit |
 |---|---|---|
 | test | m-pujic-levi9-com/cypress-cucumber-e2e-tests | `262404a95784970315faeae6374ce8783ccbe598` |
-| product | mwinteringham/restful-booker-platform | `efe2deb8ce02db541adbf9d3a6604caf5fbdaae6` |
+| product | example-org/demo-booking-platform | `efe2deb8ce02db541adbf9d3a6604caf5fbdaae6` |
 
-Runs: `restfulbooker-levels-20261122T201853` (snapshot `restfulbooker-levels-20261122-262404a9`) and
-`restfulbooker-dup-20261122T201909` (snapshot `restfulbooker-20261122-262404a9`). Both exited 0. Neither
+Runs: `demo-booking-levels-20261122T201853` (snapshot `demo-booking-levels-20261122-262404a9`) and
+`demo-booking-dup-20261122T201909` (snapshot `demo-booking-20261122-262404a9`). Both exited 0. Neither
 crashed. The suite: 417 passed.
 
 ## Sample sizes, honestly
@@ -81,7 +81,7 @@ Consequence, and it is total for this corpus: no bindings means no `layer`, no `
 `inspect` falls to `unknown` and every one of the 43 claims is `unplaced`. A 33-scenario UI suite scores
 identically to a repository with no tests at all.
 
-## What is CotW-specific and would mislead another team
+## What is Demo Product-specific and would mislead another team
 
 1. **The layer vocabulary is .NET.** `SIGNALS` (`stepbindings.py:27-41`) names `IPage`, `IWebDriver`,
    `HttpClient`, `IMediator`, `DbContext`, `EngineClient`, `RunDriverAsync`, `continuity_driver`. There is
@@ -103,7 +103,7 @@ identically to a repository with no tests at all.
    simply false about the instrument.
 6. **`csproj.excluded_patterns`** is an MSBuild idea. It is harmless when absent, but it means "every
    feature is active" is the silent default for any team that does not build with a `.csproj` — the
-   protection that stopped CotW reporting 141 scenarios instead of 43 does not exist off .NET.
+   protection that stopped Demo Product reporting 141 scenarios instead of 43 does not exist off .NET.
 7. **`duplication._suite`** takes the first path segment (`duplication.py:105`); every file here is in the
    suite `cypress`, so per-suite scoping degenerates to global. It did not bite only because nothing matched.
 
@@ -132,8 +132,8 @@ Zero. Detail, because "zero errors" is only meaningful with what was actually re
 |---|---|
 | `/` (index) | 6,568 bytes, 200, no exception |
 | `/runs` | 22,565 bytes, 200, no exception |
-| `/run/restfulbooker-levels-…` | 200, 6,664 bytes |
-| `/run/restfulbooker-dup-…` | 200, 6,649 bytes |
+| `/run/demo-booking-levels-…` | 200, 6,664 bytes |
+| `/run/demo-booking-dup-…` | 200, 6,649 bytes |
 | `/case/…` | none exist — 0 cases |
 | claim rendering | 43/43 stored claims passed through `queries.claim_read` → `web.claim_sections` with no exception |
 

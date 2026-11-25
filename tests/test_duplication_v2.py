@@ -1,6 +1,6 @@
 """TESTOPS-21: duplication claims carry their own subject.
 
-The Product Owner opened ``case-reqoverflow-dup-20261120T153431`` and saw eighteen findings that looked
+The Product Owner opened ``case-demo-service-dup-20261120T153431`` and saw eighteen findings that looked
 identical and presented no finding. He was right. These tests pin the fix against the real corpus that
 run analysed:
 
@@ -15,7 +15,7 @@ run analysed:
     condemning the test or recommending deletion;
   * AC5 - the evidence resolves from the claim's coordinates and the asserting step is shown inline.
 
-The corpus is the stored run's own 108 test-suite files (see ``reqoverflow_fixtures``), so the numbers
+The corpus is the stored run's own 108 test-suite files (see ``demo-service_fixtures``), so the numbers
 are the Product Owner's numbers: 18 claims, 18 cases. TESTOPS-31 corrected one of them: two
 QuestionSuggestions scenarios were declared duplicates on step text alone while their tables assert
 different lists, so the corrected signature yields 17 claims and 17 cases. See
@@ -27,7 +27,7 @@ import html as htmllib
 import json
 import re
 
-import reqoverflow_fixtures as corpus
+import demo_service_fixtures as corpus
 
 CODE = re.compile(r"\b(I[1-4]|KP)\b")
 CONDEMN = re.compile(r"\b(delete|remove|condemn|waste|redundant|should not exist)\b", re.I)
@@ -36,9 +36,9 @@ CONDEMN = re.compile(r"\b(delete|remove|condemn|waste|redundant|should not exist
 def _project():
     from testops.config import Project, Repo
 
-    return Project(key="reqoverflow",
-                   product=Repo("reqnroll", "Sample-ReqOverflow"),
-                   test=Repo("reqnroll", "Sample-ReqOverflow"),
+    return Project(key="demo-service",
+                   product=Repo("reqnroll", "demo-service"),
+                   test=Repo("reqnroll", "demo-service"),
                    jira_key="")
 
 
@@ -131,7 +131,7 @@ def test_the_two_copies_of_one_claim_say_what_each_actually_does(tmp_path, monke
     try:
         rows = conn.execute(
             "SELECT statement FROM claim WHERE subject_ref LIKE ? ORDER BY id",
-            ("%ReqOverflow.Specs.API/Features/Authentication.feature#%",)).fetchall()
+            ("%DemoService.Specs.API/Features/Authentication.feature#%",)).fetchall()
     finally:
         conn.close()
 
@@ -139,7 +139,7 @@ def test_the_two_copies_of_one_claim_say_what_each_actually_does(tmp_path, monke
     statement = rows[0]["statement"]
     assert "calls the HTTP client" in statement
     assert "the login attempt should be successful" in statement
-    assert "ReqOverflow.Specs.Controller/Features/Authentication.feature:8" in statement
+    assert "DemoService.Specs.Controller/Features/Authentication.feature:8" in statement
     assert "this copy drives api" not in statement
 
 
@@ -292,20 +292,20 @@ def test_a_v1_duplication_case_keeps_the_recorded_before_provenance_wording(tmp_
     from testops.web import app
 
     conn = db.connect(tmp_path / "legacy.db")
-    db.upsert_snapshot(conn, "snap-legacy", "reqoverflow", "2026-11-20T15:34:30+00:00",
+    db.upsert_snapshot(conn, "snap-legacy", "demo-service", "2026-11-20T15:34:30+00:00",
                        {corpus.REPO_SLUG: corpus.COMMIT}, schema_version=1,
                        meta={"sources_missing": ["jira"]})
-    db.start_run(conn, "run-legacy", "reqoverflow", "snap-legacy", "duplication",
+    db.start_run(conn, "run-legacy", "demo-service", "snap-legacy", "duplication",
                  "2026-11-20T15:34:31+00:00")
     statement = ("asserts the same claim as 1 cheaper copy(ies) at controller; this copy drives api")
     claim_id = db.add_claim(conn, "run-legacy", "duplication", "1.1.0",
-                            "scenario:ReqOverflow.Specs.API/Features/Authentication.feature"
+                            "scenario:DemoService.Specs.API/Features/Authentication.feature"
                             "#User logs in with valid credentials",
                             statement, "duplicate", 0.9, [], schema_version=1,
                             sources_assessed=True, sources_missing=["jira"])
     conn.execute("INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at, summary)"
                  " VALUES (?,?,?,?,?,?,?)",
-                 ("case-legacy", "run-legacy", "reqoverflow", "duplication", "snap-legacy",
+                 ("case-legacy", "run-legacy", "demo-service", "duplication", "snap-legacy",
                   "2026-11-20T15:34:31+00:00", "{}"))
     conn.execute("INSERT INTO finding (case_id, title, severity, fingerprint, claim_ids)"
                  " VALUES (?,?,?,?,?)",

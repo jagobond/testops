@@ -20,13 +20,13 @@ not contacted.
 | AC1 | Met. The run page has `<h2>What this run could not place</h2>` and one `<li id="unplaced-<n>">` per claim, each listing the step's words and the two nearest declared patterns. The anchor is the run page's own fragment: `/run/<id>#unplaced-<n>`. Ordering by claim id keeps existing anchors stable when a new claim is appended. |
 | AC2 | Met. Every entry renders `verdict_badge({"verdict": "unplaced"})`, which produces `class="badge verdict soft"` (the dashed, dimmed CSS at `app.py:136`). A test asserts the class is present and `badge verdict hot` is absent. This is the first served page that renders the soft tone. |
 | AC3 | Met. The sentence's count and the list are both `len(entries)` from the same query result. A test renders 3 then 4 claims on one run and asserts both numbers move together. |
-| AC4 | Met. No case-page path changed. `test_every_case_page_and_the_indexes_are_byte_identical_after_the_migration` passed; `test_the_corpus_still_carries_the_verdicts_the_ticket_pins` (94/90/1/1/2) and the ReqOverflow duplication tests (17/17) passed. |
+| AC4 | Met. No case-page path changed. `test_every_case_page_and_the_indexes_are_byte_identical_after_the_migration` passed; `test_the_corpus_still_carries_the_verdicts_the_ticket_pins` (94/90/1/1/2) and the DemoService duplication tests (17/17) passed. |
 | AC5 | Met. The section says the steps "were not assessed ... not absent from the run", states that "no binding matches these words", and when nearest patterns exist says "none of them matches these words, so no binding places the step". No banned phrases; no resolution or action is invented. |
 | AC6 | Met. Contract suite: 37 passed, 2 skipped (the two pre-existing skips); P20 passes. Full suite: **806 passed, 2 skipped** with `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_ENV` and `CONDA_PREFIX` stripped and `PYTHONNOUSERSITE=1`. |
 
 ## Evidence from the store copy
 
-Rendered `run_response` for `restfulbooker-levels-20261123T132456` against `data/testops.db` opened
+Rendered `run_response` for `demo-booking-levels-20261123T132456` against `data/testops.db` opened
 `mode=ro`:
 
 - 26 `<li id="unplaced-N">` entries, 26 `class="badge verdict soft"` badges, no `hot`.

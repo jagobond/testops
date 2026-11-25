@@ -14,13 +14,13 @@ were not contacted; every check rendered the worktree's copied store.
 | `testops/services.py` | `credential_reason()`: the existing credential-shape screen exposed as a question, so the read model withholds a declaration that matches a known shape without re-implementing the rules. |
 | `tests/test_case_product_line.py` | 14 tests: verbatim equality with the blob, the run's own commit (a decoy artefact at another commit is ignored), accessible marking, honest trimming of a 400-line handler, all five absences, credential withholding, markup escaping, no socket at render time, a Python route, and the checked-in not-located golden. |
 | `tests/test_case_summary_and_code.py` | One assertion added: the test line's caption names its commit (AC1). |
-| `tests/contracts/seed/make_seed.py`, `seed.json`, `blobs/`, `README.md` | Golden regenerated deliberately: the newest restfulbooker run (`restfulbooker-levels-20261124T123451`, five cases with product surfaces and their Java commits) is now part of the evidence slice, and the claims' inference rows travel with it (the product surface record lives there). 4 runs, 286 artefacts, 187 observations, 146 claims, 129 inferences, 26 cases, 187 blobs. |
+| `tests/contracts/seed/make_seed.py`, `seed.json`, `blobs/`, `README.md` | Golden regenerated deliberately: the newest demo-booking run (`demo-booking-levels-20261124T123451`, five cases with product surfaces and their Java commits) is now part of the evidence slice, and the claims' inference rows travel with it (the product surface record lives there). 4 runs, 286 artefacts, 187 observations, 146 claims, 129 inferences, 26 cases, 187 blobs. |
 | `tests/fixtures/projects_services/*.html`, `tests/fixtures/source_band/case-surfaces-band.html` | Regenerated for the shared stylesheet (the new `.sline.omission` rule is in every page). No page's content changed otherwise. |
 | `tests/fixtures/product_line/case-product-line-missing.html` | New golden: the one case where the product line could not be located, rendered with the clock frozen. |
 
 ## What the case page now shows
 
-`case-restfulbooker-levels-20261124T123451-05`, from the copied store:
+`case-demo-booking-levels-20261124T123451-05`, from the copied store:
 
     The product’s own declaration, with the word that decided the match marked:
     room/src/main/java/com/automationintesting/api/RoomController.java:42 at commit efe2deb8 —
@@ -34,7 +34,7 @@ Every `Room`/`room` occurrence in those lines is a `<mark role="mark" aria-label
 so the shared word that decided the match is visible as text and announced, not signalled by colour.
 The verdict sentence above it is unchanged: "the product already declares `POST /`".
 
-`case-restfulbooker-levels-20261124T123451-01` renders the same block for `GET /` —
+`case-demo-booking-levels-20261124T123451-01` renders the same block for `GET /` —
 `@RequestMapping(value = "/", method = RequestMethod.GET)` and
 `public ResponseEntity<Rooms> getRooms(...)` at `RoomController.java:22`.
 

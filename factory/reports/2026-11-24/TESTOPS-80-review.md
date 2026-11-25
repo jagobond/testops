@@ -10,10 +10,10 @@ was copied to scratch and served on 127.0.0.1:8793 (8791 never approached).
 
 The fix is the right fix: the band's routes tag is now computed from the snapshot's own
 `surfaces` record (`queries.product_routes_tag`), the test-ecosystem detector is out of the band,
-the count is the reader's own, and the real restfulbooker page — rendered by me on a copied store —
+the count is the reader's own, and the real demo-booking page — rendered by me on a copied store —
 says `142 .java parsed, 25 routes, consulted` with no `169` and no `reqnroll` anywhere. The
 contradiction the ticket was written for is gone on every case of run
-`restfulbooker-levels-20261124T114627`, and store-wide: zero case pages pair a repeats-product
+`demo-booking-levels-20261124T114627`, and store-wide: zero case pages pair a repeats-product
 sentence with a not-consulted routes tag.
 
 The defect: the block that appends the routes tag is indented **inside the `for claim in claims:`
@@ -34,7 +34,7 @@ zero-claim test. Everything else below is sound.
 Each state's sentence, as rendered by this branch (my own renders against constructed snapshots
 carrying the real-shaped `surfaces` record, and for `found` against the real store):
 
-- `found` — `Product routes | mwinteringham/restful-booker-platform | 142 .java parsed, 25 routes | consulted`
+- `found` — `Product routes | example-org/demo-booking-platform | 142 .java parsed, 25 routes | consulted`
 - `zero` — `Product routes | o/p | 142 .java parsed, no routes found | consulted`
 - `not_assessable` — dimmed `tag unconsulted`: `not consulted` + the reader's reason verbatim
   (`the product repository holds no file it can read: 23 .ts, 4 .js`)
@@ -58,11 +58,11 @@ not in this ticket.
 
 ## The real page
 
-Snapshot `restfulbooker-levels-20261124-fe8537db`, run `restfulbooker-levels-20261124T114627`,
+Snapshot `demo-booking-levels-20261124-fe8537db`, run `demo-booking-levels-20261124T114627`,
 13 cases, 1 claim each. Copied store served on port 8793;
-`/case/case-restfulbooker-levels-20261124T114627-05` renders:
+`/case/case-demo-booking-levels-20261124T114627-05` renders:
 
-    Product routes   mwinteringham/restful-booker-platform   142 .java parsed, 25 routes   consulted
+    Product routes   example-org/demo-booking-platform   142 .java parsed, 25 routes   consulted
 
 - The band's snapshot meta: `surfaces` = `{state: found, parsed: 142, surfaces: 25, languages:
   [.java 142, .ts 23, .js 4]}` — the tag's numbers are exactly the record's.
@@ -72,7 +72,7 @@ Snapshot `restfulbooker-levels-20261124-fe8537db`, run `restfulbooker-levels-202
   contradiction.
 - All 13 cases of the run: no repeats-product verdict beside a not-consulted routes tag. Store-wide
   sweep over every case in the copied store: zero contradictions. The 23 Nov run
-  (snapshot `restfulbooker-levels-20261123-fe8537db`, `surfaces` = `not_assessable`, the run the
+  (snapshot `demo-booking-levels-20261123-fe8537db`, `surfaces` = `not_assessable`, the run the
   reader could not parse Java on) renders the dimmed tag with the reader's own reason — honest, not
   the detector's sentence.
 
@@ -83,15 +83,15 @@ Snapshot `restfulbooker-levels-20261124-fe8537db`, run `restfulbooker-levels-202
 - **No product arm at all**: no routes tag, plus the sentence `Assessed against test code only: the
   product's routes could not be consulted, because the run recorded no product repository.`
   Honest — there is no routes fact to give.
-- **Pre-`surfaces` snapshot (the old CotW runs — 26 snapshots in this store)**: no routes tag at
+- **Pre-`surfaces` snapshot (the old Demo Product runs — 26 snapshots in this store)**: no routes tag at
   all. I swept every case on every such snapshot: none carries a repeats-product verdict today, so
   nothing in the store lies. The protection is the band's `absent_note` sentence; a future old
   snapshot whose verdict rests on routes would show the verdict with no routes fact beside it —
   silence, not a lie, and the design says so rather than inventing "not consulted". Defensible.
-- **CotW `a3f19853-r11` (has a record)**: renders `45 .py parsed, 47 routes`. The number is right
+- **Demo Product `a3f19853-r11` (has a record)**: renders `45 .py parsed, 47 routes`. The number is right
   and the word is not quite: `surfaces` in the record counts **engine-module surfaces too**
   (`discover.py:301` appends `modules` to the route list), so `47 routes` overstates routes. On
-  restfulbooker (25 pure API routes) the ticket's own wording happens to hold; on CotW it does not.
+  demo-booking (25 pure API routes) the ticket's own wording happens to hold; on Demo Product it does not.
   See concerns.
 
 ## One place
@@ -120,7 +120,7 @@ facts. AC4 holds.
    claims ≠ 1, so the suite is green and the store is clean purely by coincidence of shape. Fix and
    add the two shapes before merge.
 2. **"Routes" is said where the record counts surfaces.** `surfaces` = routes + engine modules
-   (`discover.py:301`); CotW renders `47 routes` for a count that includes module surfaces. The
+   (`discover.py:301`); Demo Product renders `47 routes` for a count that includes module surfaces. The
    band should say what the number is (surfaces), or the record should carry the split.
 3. **The three states have no golden coverage, and the fourth (no record) is the only one the
    goldens pin.** Combined with concern 1 — whose triggering shapes no test holds — the ticket's

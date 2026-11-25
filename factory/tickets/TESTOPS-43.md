@@ -29,7 +29,7 @@ TESTOPS-41 fixed the big lie. Three smaller ones remain, all in the sentence rat
 | AC1 | The sentence separates capabilities: a reader can tell which capability supplied which count, including when one supplied zero. It stays one readable sentence — no tables, no lists-in-prose. |
 | AC2 | When a capability is read but **partially** skipped, the sentence says so with the counts: how many files were read and how many kinds were skipped. "Consulted" alone is not enough. |
 | AC3 | Skips are always visible somewhere on the run page, even when no capability failed: a line under the source record stating kinds and counts, with the detail list reachable. A skip is never recorded in the store and absent from the page. |
-| AC4 | The CotW and ReqOverflow sentences do not change — both have zero skips, so neither gains noise. Pinned by test. |
+| AC4 | The Demo Product and DemoService sentences do not change — both have zero skips, so neither gains noise. Pinned by test. |
 | AC5 | Sentence construction stays in `sources.py` with the rest; no page template builds its own wording. |
 | AC6 | Prose lint applies: no repetition with the surrounding page, no vocabulary the reader must learn. |
 

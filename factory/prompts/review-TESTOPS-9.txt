@@ -18,8 +18,8 @@ HARD RULES
 - **The dangerous edit:** if the schema CHECK constraint was loosened or dropped rather than corrected, an invalid
   verdict could now be stored - test it by inserting a bogus verdict into a scratch copy and reporting whether the
   store refuses. A silently weaker constraint is worse than the stale comment it replaced.
-- **No data touched:** confirm no migration ran and the store schema version is unchanged; run CotW levels and
-  ReqOverflow duplication on scratch copies and report the verdict counts (expect 94/90/1/1/2 and 17/17).
+- **No data touched:** confirm no migration ran and the store schema version is unchanged; run Demo Product levels and
+  DemoService duplication on scratch copies and report the verdict counts (expect 94/90/1/1/2 and 17/17).
 - Do not edit product code or the ticket. Write exactly one file: factory/reports/2026-11-22/TESTOPS-9-review.md
   with: ## Verdict; ## Emitted vs documented (both sets); ## Does the test bite; ## The CHECK constraint; ## Counts.
 - Reply with the verdict and a summary under 250 words.

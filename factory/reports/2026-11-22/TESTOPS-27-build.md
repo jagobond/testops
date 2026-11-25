@@ -28,7 +28,7 @@ the cut happens, stated so a reviewer can point at a string and say "this one is
 
 ## What the real corpus holds
 
-`data/testops.db`, run `cotw-levels-*`: all 94 level-fitness claims. Three tail shapes exist, one
+`data/testops.db`, run `demo-product-levels-*`: all 94 level-fitness claims. Three tail shapes exist, one
 per verdict that writes a semicolon:
 
 ```

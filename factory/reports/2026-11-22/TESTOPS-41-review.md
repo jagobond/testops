@@ -9,7 +9,7 @@ read-only; none of it is copied from the build report.
 
 The old lie is gone from every path I could construct: a skipped file can no longer be counted as
 consulted, the three capability states render three different sentences, counts come only from
-fetched files, and CotW/ReqOverflow pages are byte-identical to the pre-change render.
+fetched files, and Demo Product/DemoService pages are byte-identical to the pre-change render.
 
 ## Sentences rendered — the four scenarios
 
@@ -38,28 +38,28 @@ pipeline `_readings`, then rendered `Registry.assess(...).sentence()`:
 5. **Backwards compatibility (the required fifth).** A registry record with no `readings` and
    `observed: 48` renders exactly the old sentence: "Assessed: code and test code were consulted
    and returned 48 items." An old snapshot renders as it always rendered; the store test pins the
-   same for the live CotW record.
+   same for the live Demo Product record.
 
 ## Arithmetic
 
-For snapshot `restfulbooker-levels-20261122-262404a9-r3` (run `restfulbooker-levels-20261122T204917`),
+For snapshot `demo-booking-levels-20261122-262404a9-r3` (run `demo-booking-levels-20261122T204917`),
 queried directly: the registry record holds `code` observed **None** with the `.java` skip attached
 (142 files, all named in the record) and `test_code` observed **48**, arms `{product: 27, test: 21}`.
 I then counted the artefacts the snapshot actually stored: 6 `feature` + 42 `stepdef` = **48** —
 the number in the sentence equals the artefacts actually fetched, not the tree (the tree also held
 142 `.java` and 169 other skipped files, none counted). The product arm's own record fetches 27
 files, all counted as `test_code`, and `code` is 0 — so no skipped or misfiled file leaks into the
-code count. CotW r11: `code` 45 (product) + `test_code` 50 (test) = 95, and the rendered sentence
+code count. Demo Product r11: `code` 45 (product) + `test_code` 50 (test) = 95, and the rendered sentence
 is "Assessed: code and test code were consulted and returned 95 items." — consistent.
 
 ## Nothing else moved
 
 I created a worktree at 2171e90 (pre-change) and rendered pages with **both** codebases from the
-same read-only store: index, /runs, three run pages (`cotw-levels-20261122T204947`,
-`reqoverflow-dup-20261122T164254`, `reqoverflow-dup-20261122T205100`) and three case pages
-(ReqOverflow cases 01–03) — 8 pages. After normalising only the relative-age string
+same read-only store: index, /runs, three run pages (`demo-product-levels-20261122T204947`,
+`demo-service-dup-20261122T164254`, `demo-service-dup-20261122T205100`) and three case pages
+(DemoService cases 01–03) — 8 pages. After normalising only the relative-age string
 ("N hours ago" → AGE), all 8 were **byte-identical** between old and new code. Verdict counts
-re-queried: CotW 94 claims = 90 distinct / 1 unplaced / 1 gap / 2 review; ReqOverflow 17 claims,
+re-queried: Demo Product 94 claims = 90 distinct / 1 unplaced / 1 gap / 2 review; DemoService 17 claims,
 17 cases — matching AC5.
 
 ## The confessed mislabelling

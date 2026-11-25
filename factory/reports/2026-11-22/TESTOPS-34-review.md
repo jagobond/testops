@@ -20,7 +20,7 @@ store with five shapes of run returns the right answer for each.
   (`state=resolved`) and "no findings" (absent from the list) are distinguishable in the output.
 - **AC3 HOLDS.** On the copy, before the suite: `case_ 184, finding 683, claim 2070, run 40`. After a
   full suite run: identical, plus the probe rows I inserted. All four legacy rows still present
-  (`case-cotw-dup-20261120T153507/-T194032`, `case-cotw-levels-20261121T173120/-T173223`), finding 683,
+  (`case-demo-product-dup-20261120T153507/-T194032`, `case-demo-product-levels-20261121T173120/-T173223`), finding 683,
   claim 2070 and run 40's rows all intact. A reader reaches the run via `/runs`, `/run/<run_id>`, or the
   link on the old case URL.
 - **AC4 HOLDS.** The quiet-run block is unchanged and reachable by run id; all TESTOPS-22 tests pass

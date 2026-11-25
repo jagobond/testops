@@ -394,8 +394,8 @@ def test_P07_front_page_states_what_analyses_and_how_much_exists(front):
 def test_P08_two_runs_of_one_project_at_different_commits_are_tellable_apart(runs):
     """P8: project, repositories+commits, when, and how much found, per run."""
     entries = _entries(runs, "run")
-    rb = [(u, t) for u, t in entries if "restfulbooker" in t.lower()]
-    assert len(rb) >= 2, "Not enough restfulbooker runs to compare"
+    rb = [(u, t) for u, t in entries if "demo-booking" in t.lower()]
+    assert len(rb) >= 2, "Not enough demo-booking runs to compare"
     commits = []
     for u, t in rb:
         for repo, sha in re.findall(r"([A-Za-z0-9_.-]+)@([0-9a-f]{7,40})", t):
@@ -404,7 +404,7 @@ def test_P08_two_runs_of_one_project_at_different_commits_are_tellable_apart(run
     assert len({sha for _, sha in distinct}) >= 2, (
         "No two runs of one project at different commits are present to distinguish"
     )
-    # Every restfulbooker entry must show a repository@commit, a time, and a finding count.
+    # Every demo-booking entry must show a repository@commit, a time, and a finding count.
     for u, t in rb:
         assert re.search(r"@[0-9a-f]{7,40}", t), "Run entry %s shows no commit" % u
         assert re.search(r"\d+\s+findings?\b|\bno findings?\b", t, re.I), (

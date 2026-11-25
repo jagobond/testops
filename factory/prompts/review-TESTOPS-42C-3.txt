@@ -25,7 +25,7 @@ HARD RULES
 - **AC6 duplication:** 0 claims - is that honest ("no two scenarios share a signature") or a silent failure? Verify by
   checking whether the corpus genuinely has no duplicate signature, and that the analyser would report one if it existed
   (construct a synthetic duplicate pair).
-- **AC7 .NET parity:** CotW 94/90/1/1/2, ReqOverflow 17/17, case-page goldens byte-identical. The new `extractor`/
+- **AC7 .NET parity:** Demo Product 94/90/1/1/2, DemoService 17/17, case-page goldens byte-identical. The new `extractor`/
   `unmatched` seam is optional - prove that supplying neither leaves .NET output byte-identical (not merely equal counts).
 - **Overclaiming:** read the run page and the claim statements for anything that promises more than was done.
 - Do not edit product code or the ticket. Write exactly one file:

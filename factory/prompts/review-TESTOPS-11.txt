@@ -20,8 +20,8 @@ HARD RULES
 - Run the suite and the corpus acceptance check yourself:
     env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
       .venv/Scripts/python.exe -m pytest -q
-    ... .venv/Scripts/python.exe scripts/replay_levels.py --snapshot cotw-levels-20261121-a3f19853 \
-          --baseline-run cotw-levels-20261121T215534 --acceptance
+    ... .venv/Scripts/python.exe scripts/replay_levels.py --snapshot demo-product-levels-20261121-a3f19853 \
+          --baseline-run demo-product-levels-20261121T215534 --acceptance
 - **Check the restraint rule is not a blanket.** 39 labels changed and 1 verdict moved. Read a sample
   of the relabelled claims and say whether any is now described in a way a developer would find
   misleading. A label is text on a page; it can be wrong even when the verdict is right.

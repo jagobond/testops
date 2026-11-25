@@ -9,7 +9,7 @@ fixture looks like.
 
 ## Criteria
 
-- **AC1 HOLDS.** `scripts/replay_levels.py --baseline-run cotw-levels-20261121T215534` (run by me,
+- **AC1 HOLDS.** `scripts/replay_levels.py --baseline-run demo-product-levels-20261121T215534` (run by me,
   this session): 94 claims, verdicts distinct 91 / review 2 / gap 1 / unplaced 0. Baseline was 43
   distinct / 48 unplaced / 2 review / 1 gap. 48 formerly-unplaced claims all reclassified; 47 show
   in the move list because two assertions share one text.
@@ -77,7 +77,7 @@ identifiable — the vocabulary genuinely carries them — except the count clai
 
 ## Demo
 
-**The problem.** On the real CotW pair, 48 of 94 claims said nothing: the keyword vocabulary knew
+**The problem.** On the real Demo Product pair, 48 of 94 claims said nothing: the keyword vocabulary knew
 a handful of nouns, so half the specimen was `unplaced` and any coverage report built on it
 understated the truth.
 

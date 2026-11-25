@@ -2,7 +2,7 @@ from testops import blobs
 from testops.collectors import github
 from testops.config import load_env, project
 env = load_env()
-c = github.collect(project("reqoverflow").product, env["GITHUB_PAT"], role="test")
+c = github.collect(project("demo-service").product, env["GITHUB_PAT"], role="test")
 web = [p for p in c.files if "WebUI" in p and p.endswith(".cs")]
 api = [p for p in c.files if "Specs.API" in p and p.endswith(".cs")]
 print("web cs files:", len(web), "api cs files:", len(api))

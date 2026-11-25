@@ -38,7 +38,7 @@ TESTOPS-79's job, and this is the honest statement that T78 does not do it.
 ## The real corpus, re-counted
 
 The worktree store holds 0 `.java` (the build's statement is true there); the copied live store holds
-`restfulbooker-levels-20261124-fe8537db` with 142 `.java`, so AC7 is re-established here: **9 of 43 claims are
+`demo-booking-levels-20261124-fe8537db` with 142 `.java`, so AC7 is re-established here: **9 of 43 claims are
 `repeats_product`, unchanged.** Quoted matches, all `GET /{id:[0-9]*}` with verb `get` agreeing:
 
 - "Visitor will get Booking Successful! message"

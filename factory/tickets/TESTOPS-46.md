@@ -39,7 +39,7 @@ Restoring history is not writing new history, and the store should treat them di
 | AC3 | New analysis runs still cannot write a retired name: the Python validator refuses it, and a test proves the analyser path is stricter than the trigger. State the distinction in the schema comment so the next reader does not re-collapse them. |
 | AC4 | `check-store` distinguishes three states: unknown verdict (never emitted), retired verdict (historical), current. Report counts for each. |
 | AC5 | The restore path is exercised by a test that copies a store containing all three states and verifies counts and hashes. |
-| AC6 | No behaviour change: CotW 94/90/1/1/2, ReqOverflow 17/17, pages unchanged, suite green. |
+| AC6 | No behaviour change: Demo Product 94/90/1/1/2, DemoService 17/17, pages unchanged, suite green. |
 
 ## Notes
 

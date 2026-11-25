@@ -15,7 +15,7 @@ HARD RULES
 - **Build the stores, do not trust the tests.** argv: construct a snapshot where `code` reads 0 of 40 (all unsupported)
   while `test code` reads 12; then one where code reads 40 and skips 500 `.sql`; then one where code reads 30 of 40.
   For each, quote the FULL sentence the page renders, and say whether a reader can name the loss without clicking.
-- **AC4 is absolute:** CotW and ReqOverflow today have zero skips. Diff the exact sentence strings before and after
+- **AC4 is absolute:** Demo Product and DemoService today have zero skips. Diff the exact sentence strings before and after
   (check out `main`'s sources.py into a temp file if needed) and quote both. Any change there is a fail.
 - **Prose:** read the rendered sentence aloud as a tired reader. Does it become a paragraph? Is "consulted" still used
   where it is now misleading? Is there vocabulary a reader must learn ("capability", "arm", "kind")?

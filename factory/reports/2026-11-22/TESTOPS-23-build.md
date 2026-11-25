@@ -1,7 +1,7 @@
 # TESTOPS-23 build report — 2026-11-22
 
 Branch `factory/testops-23-copy`, built from `feature/f1` at 18814b9. The Product Owner read
-`case-cotw-levels-20261122T011316-03` and said the verbiage was "still not right" but could not say
+`case-demo-product-levels-20261122T011316-03` and said the verbiage was "still not right" but could not say
 why. The ticket's answer is that the page narrated the analyser; this build makes it tell one
 argument, and makes the rule that produces that argument work for any claim.
 
@@ -68,7 +68,7 @@ verdict set cannot move.
 
 ## Verdicts unchanged
 
-`scripts/replay_levels.py --snapshot cotw-levels-20261122-a3f19853-r6 --acceptance`:
+`scripts/replay_levels.py --snapshot demo-product-levels-20261122-a3f19853-r6 --acceptance`:
 
 ```
 94 claims, 90 distinct, 1 unplaced, 1 gap, 2 review — PASS

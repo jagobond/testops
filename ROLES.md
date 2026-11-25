@@ -1,6 +1,6 @@
 # ROLES.md — TestOps
 
-Adapted from the CotW factory roster. Same division of labour, different subject matter.
+Adapted from the Demo Product factory roster. Same division of labour, different subject matter.
 
 ## Product Owner — Harry
 Vision, feature definition, demo sign-off. Does not read diffs and does not need to.

@@ -5,16 +5,16 @@
 The store is opened with ``mode=ro`` and nothing is written back. The seed is a *slice* of the
 evidence the contract suite needs, not a copy of a deployment:
 
-  * three restfulbooker runs - the newest (which raised five cases whose pages show the product
+  * three demo-booking runs - the newest (which raised five cases whose pages show the product
     line each verdict rests on, the evidence P6/P15..P19 walk), the run before the Java surface
     reader landed (four cases whose product arm was not assessable), and an earlier one that raised
     nothing (P1's no-findings run);
-  * the reqoverflow duplication run, whose cases are settled ("Checked, but this repeats another
-    test"). P4 needs a settled case to compare an uncertain one against; reqoverflow is a public
-    sample project (reqnroll/Sample-ReqOverflow), so its rows are safe to pin;
+  * the demo-service duplication run, whose cases are settled ("Checked, but this repeats another
+    test"). P4 needs a settled case to compare an uncertain one against; demo-service is a public
+    sample project (reqnroll/demo-service), so its rows are safe to pin;
   * the projects, services, snapshots, artefacts, observations and blob files those runs need.
 
-reqoverflow's artefacts and blobs are deliberately not included: P4 only needs the case page's
+demo-service's artefacts and blobs are deliberately not included: P4 only needs the case page's
 verdict block, and a page that says the source content is not in this store is a real rendered
 state, not a bug. That keeps the fixture at ~0.5 MB instead of ~2 MB.
 
@@ -29,13 +29,13 @@ import sqlite3
 import sys
 
 RUNS = (
-    "restfulbooker-levels-20261124T123451",
-    "restfulbooker-levels-20261123T132456",
-    "restfulbooker-levels-20261122T204917",
-    "reqoverflow-dup-20261122T205100",
+    "demo-booking-levels-20261124T123451",
+    "demo-booking-levels-20261123T132456",
+    "demo-booking-levels-20261122T204917",
+    "demo-service-dup-20261122T205100",
 )
-PROJECTS = ("restfulbooker", "reqoverflow")
-ARTEFACT_PROJECTS = ("restfulbooker",)   # the evidence pages P6/P15..P19 walk
+PROJECTS = ("demo-booking", "demo-service")
+ARTEFACT_PROJECTS = ("demo-booking",)   # the evidence pages P6/P15..P19 walk
 
 SEED_DIR = pathlib.Path(__file__).resolve().parent
 # A credential in a committed fixture would be the one thing worse than the fixture's size.

@@ -9,7 +9,7 @@ Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
 HARD RULES
 - Never write to the live store or contact port 8791. Copy `data/`, serve on a free port.
 - **Read the section cold, as a developer who has been told their tests are at the wrong level.** Quote it verbatim for the
-  restfulbooker run. Does it tell them what is wrong, which step, and what to do? Does any phrase imply the tool reached a
+  demo-booking run. Does it tell them what is wrong, which step, and what to do? Does any phrase imply the tool reached a
   conclusion it did not reach? "Not assessed" must not read like "passed" or like "absent".
 - **The nearest patterns:** are they genuinely the nearest, or decorative? Take five entries and rank the declared patterns
   yourself with your own similarity measure; if a nearer pattern exists than the two shown, that is a finding. Also check
@@ -21,7 +21,7 @@ HARD RULES
 - **The soft tone, witnessed:** confirm the served page carries `badge verdict soft` and NOT `hot`, and that the CSS rule
   it depends on actually produces a different look from the alarm class (read the served CSS, not the Python).
 - **AC3/AC4:** the count sentence and the number of entries must agree on a store you build with 0, 1 and many unplaced
-  claims (0 is the case that usually breaks). Case-page goldens byte-identical; CotW 94/90/1/1/2 and ReqOverflow 17/17.
+  claims (0 is the case that usually breaks). Case-page goldens byte-identical; Demo Product 94/90/1/1/2 and DemoService 17/17.
 - **P20 in the contract suite:** the build replaced P20's skip with a real assertion. Read that assertion and judge whether
   it tests the promise or merely that the word "unplaced" appears. A vacuous P20 is worse than a skip.
 - **Volume:** the store holds 351 unplaced claims. Render a run page for a hypothetical large run (or the real one) and

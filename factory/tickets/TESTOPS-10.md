@@ -11,7 +11,7 @@ depends_on: TESTOPS-4
 
 ## Why
 
-TESTOPS-4 shipped per-assertion claims. Run against the real CotW repository pair, the analyser
+TESTOPS-4 shipped per-assertion claims. Run against the real Demo Product repository pair, the analyser
 produced 94 claims from 41 scenarios:
 
 | verdict | count |
@@ -71,7 +71,7 @@ Words alone cannot carry this. Consider what is already available and currently 
 
 | id | criterion |
 |----|-----------|
-| AC1 | The real CotW run has ≤10 `unplaced` claims out of ≥90, measured by re-running the analyser over the same snapshot, not by assertion. |
+| AC1 | The real Demo Product run has ≤10 `unplaced` claims out of ≥90, measured by re-running the analyser over the same snapshot, not by assertion. |
 | AC2 | The run produces ≤3 more `gap` verdicts than the baseline (baseline: 1). Broadening may not invent findings. |
 | AC3 | A hand-labelled sample of 20 real assertions — recorded in the repo as a fixture with the expected interaction for each — agrees with the analyser at ≥85%. |
 | AC4 | Every reclassified claim names, in `established_by`, the rule that classified it, so a reader can see why. |
@@ -82,7 +82,7 @@ Words alone cannot carry this. Consider what is already available and currently 
 
 ## Notes
 
-- The baseline run id is `cotw-levels-20261121T215534`. Its claims are in the store; use them as the
+- The baseline run id is `demo-product-levels-20261121T215534`. Its claims are in the store; use them as the
   `before` side rather than re-deriving from memory.
 - Do not widen `NEEDS_BROWSER` to reduce `unplaced`. If a claim needs a browser, it needs one; the
   cheap way to shrink the number is to call everything a browser claim, and that would turn a

@@ -24,7 +24,7 @@ RUN = "run-quiet"
 QUIET = "case-quiet"
 RESOLVED = "case-resolved"
 COMMIT = "a" * 40
-CSPROJ = "CotwBdd.csproj"
+CSPROJ = "DemoProductTests.csproj"
 REMOVED = "features/old.feature"
 LIVE = "features/live.feature"
 
@@ -148,7 +148,7 @@ def test_a_quiet_run_says_what_it_analysed_with_counts_the_store_proves(tmp_path
     # 1 feature file kept, 3 of its scenarios; the removed file's 2 scenarios are not counted.
     assert "1 feature file and 3 scenarios" in text
     # 1 declared exclusion + the 3 built-in ignores, read from the stored project file.
-    assert "4 exclusion patterns read from CotwBdd.csproj" in text
+    assert "4 exclusion patterns read from DemoProductTests.csproj" in text
     assert "left 1 of 2 stored feature files outside the build" in text
     assert "recorded no claim about any of them" in text
     # AC5: the freshness line and the analyser name are still on the page.

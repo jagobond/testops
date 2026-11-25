@@ -3,7 +3,7 @@
 Reviewer, 2026-11-22. Branch `factory/testops-40-decision-cover`, worktree clean apart from this
 report. Full suite, run as required:
 `env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m pytest -q`
-→ **540 passed in 87.08s** (gitignored CotW store present in this worktree, so the corpus pins ran,
+→ **540 passed in 87.08s** (gitignored Demo Product store present in this worktree, so the corpus pins ran,
 not skipped). Every behavioural result below is from my own probes and live pipeline runs over a
 throwaway store, not taken from the build report.
 
@@ -103,8 +103,8 @@ fixture really moved the lines.
 
 ## Counts
 
-CotW **94 claims / 90 distinct / 1 unplaced / 1 gap / 2 review** — pinned and passing
-(`test_action_prose.py` AC5, `test_case_scan.py` pins over the real store). ReqOverflow
+Demo Product **94 claims / 90 distinct / 1 unplaced / 1 gap / 2 review** — pinned and passing
+(`test_action_prose.py` AC5, `test_case_scan.py` pins over the real store). DemoService
 **17 claims / 17 cases** — pinned and passing (`test_duplication_v2.py`). All 56 tests in the three
 count-pinning modules pass; the full suite is 540, matching the build.
 

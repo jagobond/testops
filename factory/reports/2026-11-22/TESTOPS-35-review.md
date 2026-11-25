@@ -21,12 +21,12 @@ copies, the registered case was never touched, and the live store is byte-identi
 - **AC4 — NOT INDEPENDENTLY EXERCISED (weak by omission, not by contradiction).** The prompt files exist and
   read plainly (REVIEW-WORKFLOW.txt + the standing rule in all 24 review-*.txt); I did not re-run a review
   against them to prove a reviewer would follow them. The guards make the failure mode hard regardless.
-- **AC5 — HOLDS.** A surviving case page (`case-cotw-dup-20261120T153507`) renders sha256-identical from a
+- **AC5 — HOLDS.** A surviving case page (`case-demo-product-dup-20261120T153507`) renders sha256-identical from a
   pristine copy of the live store and from the post-scrub probe copy (both `59941be8…`, 5,677 bytes).
 
 ## Deletion probes
 
-Planted in a copy of the live store (all pinned to the real `reqoverflow-dup-20261120T153431` run):
+Planted in a copy of the live store (all pinned to the real `demo-service-dup-20261120T153431` run):
 
 | case | analyser | findings | decision | suppressions |
 |------|----------|----------|----------|--------------|

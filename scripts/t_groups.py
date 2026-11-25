@@ -5,7 +5,7 @@ from testops.config import load_env, project
 from testops.extract import gherkin, stepbindings
 
 env = load_env()
-p = project("reqoverflow")
+p = project("demo-service")
 c = github.collect(p.product, env["GITHUB_PAT"], role="test")
 texts = {path: blobs.text(sha) for path, (sha, kind) in c.files.items()}
 dm = stepbindings.build_driver_map(texts)

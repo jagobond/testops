@@ -30,11 +30,11 @@ not contain the 52 merge, which matters for one contract promise).
   `TESTOPS_ENV` pointed at a non-existent temp path.
 - The child binds port **0** and prints `PORT n`; the parent connects only to that number. This is
   deliberate: a chosen port can be silently hijacked on Windows (observed during this build: two
-  unrelated `cotw.panel` processes had bound 8811 and received requests meant for a test server -
+  unrelated `demo-product.panel` processes had bound 8811 and received requests meant for a test server -
   the pages served were another store's, not the one under test).
 - Demonstration in the suite: `test_an_inherited_store_variable_cannot_redirect_the_server` sets
   `TESTOPS_DATA=<repo>/data` and `TESTOPS_BASE=http://<tailnet-address>:8791` in the parent, starts the
-  suite's server, and asserts `/runs` shows `restfulbooker` and **not** `cotw` (the live store's
+  suite's server, and asserts `/runs` shows `demo-booking` and **not** `demo-product` (the live store's
   project). It passes.
 
 ## AC2 — cannot start ⇒ skip with a reason; no fallback, no guessed host
@@ -79,7 +79,7 @@ env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1 \
 - sha256 of `C:/Users/<name>/Projects/testops/data/testops.db`, before **and** after:
   `6b0d38bd11e4b2ffe3ab8b677a9ebd20a3b61937db82f4eef1779d0e92e4c47c`
 - project list, before **and** after (read-only URI `file:...?mode=ro`):
-  `cotw`, `reqoverflow`, `restfulbooker`, `testops` — `diff` of the two lists is empty.
+  `demo-product`, `demo-service`, `demo-booking`, `testops` — `diff` of the two lists is empty.
 - Result: `5 failed, 703 passed, 3 skipped in 149.11s`. The five failures are all in
   `tests/contracts`; every non-contract test passed. The live server on 8791 was never contacted.
 
@@ -144,7 +144,7 @@ the dependency, not a fixture artefact.)
 
 ## The soft BADGE class / unplaced claims
 
-The fixture store **does contain** 18 `unplaced` claims (from `restfulbooker-levels-20261123T132456`),
+The fixture store **does contain** 18 `unplaced` claims (from `demo-booking-levels-20261123T132456`),
 but no case: the analyser raises no finding for a claim it could not place, and `app.verdict_badge`
 only renders `badge verdict soft` on a case-list row. So the seed cannot witness `.badge.verdict.soft`
 or the unplaced case tone without inventing a case the analyser never raised — a fixture that lies.
@@ -154,7 +154,7 @@ summary carrying the badge). On `main` this is written up as TESTOPS-57; it is n
 ## Limits
 
 - The seed is a pinned slice generated from the live store **read-only** on 23 Nov 2026
-  (`make_seed.py`), not a copy of it: 2 restfulbooker runs + 1 reqoverflow run, and no `inference`
+  (`make_seed.py`), not a copy of it: 2 demo-booking runs + 1 demo-service run, and no `inference`
   rows. Regeneration requires a populated store; CI does not regenerate.
 - P9 (failed run), P14 (credit) and P20 (unplaced looks less settled) remain skipped for the
   reasons the blind author gave; nothing in this ticket changes them.

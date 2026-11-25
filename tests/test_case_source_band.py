@@ -199,7 +199,7 @@ def test_a_case_with_a_product_does_not_claim_to_rest_on_test_code_alone(tmp_pat
 # suite could be parsed. The count is the one that reader read, not the snapshot's artefact total.
 
 def _found() -> dict:
-    """What the surface reader recorded for restfulbooker: 142 .java parsed, 25 surfaces.
+    """What the surface reader recorded for demo-booking: 142 .java parsed, 25 surfaces.
 
     ``surfaces`` is the routes the reader resolved *plus* the engine modules it found
     (``discover.py:301``), so the tag says the count is surfaces, never routes.

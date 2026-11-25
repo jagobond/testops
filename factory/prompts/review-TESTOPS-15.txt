@@ -14,7 +14,7 @@ it — never hand-edit SQLite. The full workflow is factory/prompts/REVIEW-WORKF
 Repository: C:/Users/<name>/Projects/testops, branch `factory/testops-15-ci-floor`.
 Ticket:     factory/tickets/TESTOPS-15.md
 Diff:       git diff feature/f1..HEAD
-CI:         gh run list --repo jagobond/testops --branch factory/testops-15-ci-floor
+CI:         gh run list --repo example-org/testops --branch factory/testops-15-ci-floor
 
 HARD RULES
 - Read the workflow, then verify the claims with `gh`: the runs must be real, green, and on this branch.

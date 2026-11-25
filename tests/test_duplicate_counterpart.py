@@ -5,7 +5,7 @@ The Product Owner's finding: for a duplicate claim the statement names a counter
 steps in the claim's *own* scenario - which is correctly labelled as not evidence. The page withheld
 the one piece of evidence the claim rests on.
 
-These tests render the real corpus run (``reqoverflow_fixtures``), so the page is read from the
+These tests render the real corpus run (``demo-service_fixtures``), so the page is read from the
 blobs and rows that run recorded, and not from a hand-written copy of a feature file.
 """
 from __future__ import annotations
@@ -13,25 +13,25 @@ from __future__ import annotations
 import html as htmllib
 import re
 
-import reqoverflow_fixtures as corpus
+import demo_service_fixtures as corpus
 
 COPY_HEADING = "The copy this claim names"
 CONTEXT_HEADING = "The other steps in this scenario, for context"
 
 # The claim this test reads: the API copy of "The latest question is shown on home page with
 # details", which names the Controller copy at this line.
-CLAIM_PATH = "ReqOverflow.Specs.API/Features/Home.feature"
+CLAIM_PATH = "DemoService.Specs.API/Features/Home.feature"
 CLAIM_LINE = 24
-COPY_WHERE = "ReqOverflow.Specs.Controller/Features/Home.feature:23"
+COPY_WHERE = "DemoService.Specs.Controller/Features/Home.feature:23"
 COPY_ROW = "How to write better BDD scenarios?"
 
 
 def _project():
     from testops.config import Project, Repo
 
-    return Project(key="reqoverflow",
-                   product=Repo("reqnroll", "Sample-ReqOverflow"),
-                   test=Repo("reqnroll", "Sample-ReqOverflow"),
+    return Project(key="demo-service",
+                   product=Repo("reqnroll", "demo-service"),
+                   test=Repo("reqnroll", "demo-service"),
                    jira_key="")
 
 

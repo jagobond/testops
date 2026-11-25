@@ -55,7 +55,7 @@ PYTHONNOUSERSITE=1`):
 - 3.11.15 (`uv run --no-project --python 3.11 --with pytest`): 206 passed, 4 skipped, 18.28s.
   The four skips are the pre-existing pre-3.12 checks.
 
-Corpus replay, snapshot `cotw-levels-20261122-a3f19853-r6`, `scripts/replay_levels.py
+Corpus replay, snapshot `demo-product-levels-20261122-a3f19853-r6`, `scripts/replay_levels.py
 --acceptance`: 94 claims, 90 distinct, 1 unplaced, 1 gap, 2 review, 41 scenarios, 2 explaining more
 than one label — PASS.
 

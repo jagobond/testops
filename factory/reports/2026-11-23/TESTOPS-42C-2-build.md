@@ -2,7 +2,7 @@
 
 Branch `factory/testops-42c2-inference`. Part 2 of 3: the layer where it happens — commands,
 one level of module-local helper, and `cy.*`, resolved **per command**. Still no placement: the
-ecosystem stays `supported = False`, so the pipeline keeps the restfulbooker run `not_assessable`
+ecosystem stays `supported = False`, so the pipeline keeps the demo-booking run `not_assessable`
 with zero claims. Analysers, pipeline and `.NET`/Python readers are untouched.
 
 ## Changes
@@ -110,7 +110,7 @@ env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=
 615 passed in 123.29s
 ```
 
-596 before, 19 new. .NET pinned proofs (CotW, ReqOverflow, case-page goldens) are in that run and
+596 before, 19 new. .NET pinned proofs (Demo Product, DemoService, case-page goldens) are in that run and
 unchanged; `test_the_reqnroll_module_is_the_old_extractor` compares module rows to the old
 extractor row-for-row.
 

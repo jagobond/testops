@@ -20,14 +20,14 @@ under a deliberate orphan attempt.
 | AC1 | HOLDS. Two real duplication runs on a store copy: 274 blob files / 2,215,928 B before each run, +0 files / +0 bytes after each; rows did grow (+385 each). |
 | AC2 | HOLDS with one caveat. I measured +385 rows / +167,936 db bytes / +0 blob bytes for the first duplication run — exact match to the build table. The second run added 159,744 db bytes, not the 167,936 the build claims for both runs (8 KB = page-allocation variance). Direction and magnitude reproduce; the build's claim of identical byte adds for the two identical runs is not stable. I did not re-run a levels run; its half of the table is unverified by me. |
 | AC3 | HOLDS. Report prints age, rows, bytes, decision and suppression per snapshot; verified on the copy and unchanged row counts confirm it is read-only. |
-| AC4 | HOLDS. Refusals verified by hand (below). Newest-run-per-analyser protection verified live: after keep-2 prune, `cotw-levels-20261122-a3f19853-r8` (level_fitness) and `reqoverflow-20261122-78153818-r5` (duplication) both survived. `--keep` is per project, which deletes strictly fewer than the ticket's global reading — a defensible subset, argued in the build report. |
+| AC4 | HOLDS. Refusals verified by hand (below). Newest-run-per-analyser protection verified live: after keep-2 prune, `demo-product-levels-20261122-a3f19853-r8` (level_fitness) and `demo-service-20261122-78153818-r5` (duplication) both survived. `--keep` is per project, which deletes strictly fewer than the ticket's global reading — a defensible subset, argued in the build report. |
 | AC5 | HOLDS. After `--keep 2 --yes`: 12 snapshots / 5,444 rows deleted (my deltas: snapshot −12, run −15, artefact −1,274, observation −1,950, claim −970, case −65 — matching the build). Three cases rendered before: 5,679 / 5,679 / 56,186 B. After, the two dup cases rendered byte-identical; the levels case was itself deleted (it existed in the deleted set), so its page is correctly gone, not broken. |
 | AC6 | HOLDS, both directions. Shared-blob orphan attempt: keep-2 prune deleted 0 blob files, all 274 referenced shas still on disk, survivors render. Unique-blob orphan attempt (synthetic snapshot + blob referenced by nothing else): prune deleted exactly that blob (420 B) and its rows, left all 274 shared files untouched — disk 275/2,216,348 → 274/2,215,928. |
 | AC7 | HOLDS. Plain `retention` exited 0 with the database mtime unchanged. `--prune` without `--keep` exited 2; `--prune --keep 2` exited 2 with "Refusing to prune without --yes"; all table counts identical after both refusals. Grep finds no cron/schedule/timer anywhere in the tree; `retention.py` has no import-time action. |
 | AC8 | HOLDS. 288 passed (.venv 3.12), 284 passed + 4 skipped (3.11), both with env stripped. |
 
-Verdict counts re-verified from the store: newest levels run `cotw-levels-20261122T111056` in
-snapshot `cotw-levels-20261122-a3f19853-r8` holds 94 claims → distinct 90, unplaced 1, gap 1,
+Verdict counts re-verified from the store: newest levels run `demo-product-levels-20261122T111056` in
+snapshot `demo-product-levels-20261122-a3f19853-r8` holds 94 claims → distinct 90, unplaced 1, gap 1,
 review 2. Exact.
 
 ## Refusals — what I did, what it did
@@ -41,7 +41,7 @@ review 2. Exact.
 4. Newest run per analyser. After `--keep 2 --yes` on a copy, checked the newest level_fitness
    snapshot (r8) and newest duplication snapshot (r5) — both survived even though older snapshots
    in their projects were deleted.
-5. Decided case. Snapshot `cotw-levels-20261121-a3f19853` (decision: yes in the report) survived
+5. Decided case. Snapshot `demo-product-levels-20261121-a3f19853` (decision: yes in the report) survived
    the same prune.
 6. Shared blob. Attacked by pruning every snapshot that shares blobs (keep-1 on a second copy,
    then keep-2 on the synthetic-blob copy): zero blobs referenced by surviving artefacts ever

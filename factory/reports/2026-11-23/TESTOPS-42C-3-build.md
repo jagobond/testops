@@ -5,7 +5,7 @@ followed, and a layer placed where the call graph reaches one.
 
 ## The number
 
-**On the restfulbooker corpus the level-fitness run places 17 of 43 asserting steps and leaves 26
+**On the demo-booking corpus the level-fitness run places 17 of 43 asserting steps and leaves 26
 unplaced.** The run's own `placement` record says `asserting 43, placed 17, unplaced 26, layers
 {ui: 17}`; the claim set is 43 claims (13 distinct, 4 review, 26 unplaced). I measured 17/43 before
 writing any wiring and it did not move afterwards; no tuning was done to reach it.
@@ -53,7 +53,7 @@ statements, and the run page carries no cucumber-js-is-unsupported sentence.
 | AC4 | claim detail names `cucumber-js` and the binding; the scenario chain is walkable, e.g. background `background.stepdef.js:30` → `cy.createRoomViaApi()` at `custom-commands/room-management.js:99` → `cy.request` |
 | AC5 | a `cy.request` command in a UI-named file is `api`; a mixed file yields both layers; static guard forbids the .NET per-file path |
 | AC6 | duplication runs, 0 claims, extractor/suite recorded; cross-suite fixture pairs each copy with its own suite's steps |
-| AC7 | CotW 94/90/1/1/2, ReqOverflow 17 claims/17 cases/17 findings, case-page goldens byte-identical, **622 passed** |
+| AC7 | Demo Product 94/90/1/1/2, DemoService 17 claims/17 cases/17 findings, case-page goldens byte-identical, **622 passed** |
 | AC8 | 17/43 placed, 26/43 unplaced — corpus problem, stated above |
 | AC9 | record-and-continue for regex/concat/unterminated; **0 unreadable declarations in this corpus**; synthetic run with 2 shows `2 declarations could not be read` with both `path:line`s and the readable step still claimed |
 | AC10 | 11 `Step(this, …)` delegations remain `unknown`, all 11 When-steps, reason recorded; they do not touch 17/43 |

@@ -44,7 +44,7 @@ Yes. Branch `review/testops-15-fail-proof` (commit cb45655) added
 a 3.11-only runtime break that slips past the compile guard — and pushed as PR #11 against
 `feature/f1`.
 
-Run: https://github.com/jagobond/testops/actions/runs/44962212770
+Run: https://github.com/example-org/testops/actions/runs/44962212770
 
 - **suite (Python 3.11): FAILURE** — pytest collection error: `ImportError: cannot import name
   'batched' from 'itertools'` while importing `tests/test_case_page.py`. Annotations named the
@@ -78,9 +78,9 @@ Probe branch and PR were deleted after the run; working tree verified clean at e
   page from the test suite's store fixture, and serves it over HTTP through `app.Handler`,
   failing on any non-200 or missing section. Concurrency cancels superseded runs.
 - **How we know it works.** Green run on the ticket branch:
-  https://github.com/jagobond/testops/actions/runs/44961907849 — jobs `suite (Python 3.11)` 13s,
+  https://github.com/example-org/testops/actions/runs/44961907849 — jobs `suite (Python 3.11)` 13s,
   `suite (Python 3.12)` 14s, `render case page (Python 3.11)` 13s, all success. Red run on the
-  probe branch: https://github.com/jagobond/testops/actions/runs/44962212770 — 3.11 failed on
+  probe branch: https://github.com/example-org/testops/actions/runs/44962212770 — 3.11 failed on
   import-time `batched`, 3.12 green. Billed cost: 3 minutes per run (three jobs, each rounding up
   to one minute) — matches the stated claim.
 - **What it does not solve.** No scheduled run on `main` history before merge beyond normal PR

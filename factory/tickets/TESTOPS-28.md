@@ -29,7 +29,7 @@ So the classification is removed. `action_line` returns the whole action, render
 |----|-----------|
 | AC1 | `action_line` returns the full stored action, split into sentences for the page, with no clause removed. A property test over a corpus of hand-written actions (the reviewer's 15 probes included) asserts every content word of the input appears in the output. |
 | AC2 | The instruction vocabulary, the continuation openers and `second_half_is_instruction` are deleted, not left dormant. `git grep` for those names returns nothing. |
-| AC3 | The 94 real actions on `cotw-levels-20261122T011316` render in full. Where the tail duplicates the argument, the page may look repetitive — that is the intended trade, and it must be visible in the report, not tidied away. |
+| AC3 | The 94 real actions on `demo-product-levels-20261122T011316` render in full. Where the tail duplicates the argument, the page may look repetitive — that is the intended trade, and it must be visible in the report, not tidied away. |
 | AC4 | If the T26 no-repeat lint fires on the real corpus once tails are kept, the analyser is at fault, not the renderer: record each firing in the report as a TESTOPS-28 finding for a follow-up ticket that rewrites the analyser's `proposed_action` strings. Do **not** silence the lint, and do **not** reintroduce a cut. |
 | AC5 | The action box still reads as one instruction: sentence-splitting, capitalisation and full stops only. Two sentences are acceptable; a run-on is not. |
 | AC6 | Verdicts unchanged: 94 claims, 90 distinct, 1 unplaced, 1 gap, 2 review. Suite green on both interpreters. |

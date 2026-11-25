@@ -4,7 +4,7 @@
 `factory/testops-82-quoted-entity`, head `f2fc2f8` (the amendment). Everything below was derived
 offline from direct calls into `testops/analysers/level_fitness.py` v0.15 with the review corpora
 (the round-1 fixtures in `tests/test_product_evidence.py`) and from the stored snapshot
-`restfulbooker-levels-20261124-fe8537db-r2`. No live store, no port 8791, no network.
+`demo-booking-levels-20261124-fe8537db-r2`. No live store, no port 8791, no network.
 
 ## Verdict
 
@@ -120,7 +120,7 @@ next ticket as declared.
   returns results` → `distinct`/`no_intent`, word `room`; `verify the "room" type appears in the
   list` → word `room`, `GET /room/{id}`, never `list`.
 - **Corpus offline, rebuilt at both heads against the same snapshot copy.** I rebuilt the claim
-  set twice from `restfulbooker-levels-20261124-fe8537db-r2` (a scratch copy of the store; no
+  set twice from `demo-booking-levels-20261124-fe8537db-r2` (a scratch copy of the store; no
   network, no live store): once with the tree at `c8973fc` in a temporary worktree, once at
   `f2fc2f8`. Keyed on (path, line, assertion text): **43 claims in both, 0 verdicts moved**, 0
   near-miss kinds, matched words or routes differ. After: **1 `repeats_product`**, **12 near

@@ -22,8 +22,8 @@ The copy of the live store renders:
 
 Checked three ways, all agreeing: `queries.store_totals(conn)` → 4/47/208; the same UNION/COUNT SQL
 typed directly against the copy → 4/47/208; the rendered sentence → 4/47/208. The store's project
-set is `{cotw, reqoverflow, restfulbooker, testops}`; the front page's headings are
-`{restfulbooker, reqoverflow, cotw}` — a subset, so no heading can be a project the totals do not
+set is `{demo-product, demo-service, demo-booking, testops}`; the front page's headings are
+`{demo-booking, demo-service, demo-product}` — a subset, so no heading can be a project the totals do not
 count (headings come from `run.project`, which the totals' UNION includes).
 
 Then a deliberately odd copy: a run inserted naming project `ghost` with no `project` row, and a
@@ -38,7 +38,7 @@ cases, `lonely` has no runs), so the totals can lead the headings without contra
 (`testops/queries.py:577`), and `read_counts` builds every repository's sentence from
 `list(known) + sorted(set(counted) - set(known))` (`testops/queries.py:627`). So:
 
-- The restfulbooker run page states all six declared kinds for both repositories, including the
+- The demo-booking run page states all six declared kinds for both repositories, including the
   four real zeroes — verified against the copy, and independently against the artefact rows.
 - **If `config.FILE_KINDS` gains a kind tomorrow, the sentence includes it with no code change.**
   The kinds are read from the tuple on every render; nothing about the page names them literally.
@@ -54,12 +54,12 @@ cases, `lonely` has no runs), so the totals can lead the headings without contra
 
 ## Read versus skipped
 
-From the restfulbooker run page (`restfulbooker-levels-20261123T132456`), as it renders:
+From the demo-booking run page (`demo-booking-levels-20261123T132456`), as it renders:
 
 - *What this run read*: "Files this run read, per repository and per kind. A 0 is a kind this
   reader handles and that repository holds none of. Files it could not read are counted in their
   own section further down the page." — "From the product repository
-  (mwinteringham/restful-booker-platform) it read 23 .ts files, 4 .js files, 0 .csproj files,
+  (example-org/demo-booking-platform) it read 23 .ts files, 4 .js files, 0 .csproj files,
   0 .feature files, 0 .py files, and 0 .cs files." / "From the test repository
   (m-pujic-levi9-com/cypress-cucumber-e2e-tests) it read 14 .js files, 6 .feature files,
   1 .ts file, 0 .csproj files, 0 .py files, and 0 .cs files."
@@ -72,16 +72,16 @@ N", the skip section says "did not fetch", and the page's own lead-in sentence t
 two are different facts. The read counts were re-derived directly from the copy's artefact rows and
 match the page; the 142 comes from the snapshot's recorded `skipped` entry, as before.
 
-## The pinned CotW sentence
+## The pinned Demo Product sentence
 
 Rendered through the same derivation path the pages use (`sources.assessment_for` on the stored
-snapshot meta of `cotw-levels-20261122T204947`), on this branch and on a detached origin/main
+snapshot meta of `demo-product-levels-20261122T204947`), on this branch and on a detached origin/main
 worktree over the same store copy:
 
     'Assessed: code and test code were consulted and returned 95 items.'
 
 Byte-identical on both. One finding the brief should know about: this sentence **does not render on
-any CotW page in the live store** — the run has findings, so its run page takes the findings path,
+any Demo Product page in the live store** — the run has findings, so its run page takes the findings path,
 which renders no assessment sentence, and its case pages carry no `Assessed:` line either. The pin
 is real (the sentence builder is untouched and `sources.Assessment.sentence()` is byte-stable), but
 "diff it against origin/main's rendering" can only be honoured at the builder level, and was. Also,
@@ -107,8 +107,8 @@ unreadable-files parenthetical. Both facts are correct as rendered; the brief's 
 exactly `test_P05_case_links_back_to_its_run` and `test_P05_config_page_is_reachable_from_the_front_page`
 (TESTOPS-54, unmerged here; the build's account matches what I ran, failure text identical to the
 branch's). **P07 and P10 pass** (run explicitly). The new file's 7 tests pass, the
-TESTOPS-43 sentence pins pass, and the analyser pins hold: CotW 94 claims / 90 scenario /
-1 / 1 / 2 (test_action_prose, test_case_scan) and ReqOverflow 17 claims / 17 cases / 17 findings
+TESTOPS-43 sentence pins pass, and the analyser pins hold: Demo Product 94 claims / 90 scenario /
+1 / 1 / 2 (test_action_prose, test_case_scan) and DemoService 17 claims / 17 cases / 17 findings
 (test_action_prose, test_duplication_v2) — all inside the green 730. No other test moved.
 
 ## The wording
@@ -124,10 +124,10 @@ turns the zero from a number into a fact without a legend.
 
 ## Three sharpest concerns
 
-1. **The pinned sentence is invisible on the pages it is pinned about.** No CotW run or case page
+1. **The pinned sentence is invisible on the pages it is pinned about.** No Demo Product run or case page
    in the live store renders "Assessed: … 95 items" — the findings path of `run_response` renders
    no assessment sentence at all. The pin survives at the builder (verified against origin/main),
-   but a reader of the CotW pages cannot see the sentence the factory believes is pinned. Worth a
+   but a reader of the Demo Product pages cannot see the sentence the factory believes is pinned. Worth a
    ticket to decide whether that is intended.
 2. **`_file_suffix` is a latent false-zero trap.** A declared kind with a compound suffix would be
    stated as 0 while its reads were counted under the last-dot suffix. Guard it when

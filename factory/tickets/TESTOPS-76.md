@@ -12,14 +12,14 @@ depends_on: TESTOPS-72, TESTOPS-73
 ## Why this exists
 
 The band's facts are backed by the store and its links are right. Its **words** overclaim in three ways, and the corpus's
-flagship case is the worst example: restfulbooker, where the product was read, 25 surfaces were found, and the analyser
+flagship case is the worst example: demo-booking, where the product was read, 25 surfaces were found, and the analyser
 consumed none of them.
 
 1. **"Consulted" is indistinguishable between two states** - "the run read this repository" and "the verdict used it".
    The band note's converse ("a kind that is not tagged here was not part of the evidence") pushes the reader to the
    second reading.
 2. **The test-only sentence is not scoped by need.** A case whose analyser never needed the product - duplication on
-   reqoverflow - still says the product's routes "could not be consulted", asserting a blind spot the analysis did not
+   demo-service - still says the product's routes "could not be consulted", asserting a blind spot the analysis did not
    have. The tag is withheld correctly; the sentence must follow the same rule.
 3. **The standing absence line misleads while the link seam is unpopulated.** Every case says "a kind that is not tagged
    here was not linked to this case", when in fact no collector can write a link yet. A reader cannot distinguish "this

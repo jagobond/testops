@@ -55,7 +55,7 @@ all kept.
 
 ## Drop counts — before and after, measured
 
-Measured from the store (`data/testops.db`, run `cotw-levels-20261122T011316`, read read-only from
+Measured from the store (`data/testops.db`, run `demo-product-levels-20261122T011316`, read read-only from
 sqlite directly, not from test output): 94 tails, all with a `"; "` split.
 
 - Before (the bare-stem rule, reproduced in the probe script): **94 dropped / 0 kept**.

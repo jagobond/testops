@@ -11,13 +11,13 @@ depends_on: TESTOPS-33
 
 ## Finding (Product Owner)
 
-> "case-cotw-dup-20261120T194032: I don't know what this is doing here? An open case to tell me there are no
+> "case-demo-product-dup-20261120T194032: I don't know what this is doing here? An open case to tell me there are no
 > findings? This seems like a defect."
 
 It is. TESTOPS-22 fixed the *wording* of a quiet run. The structure is still wrong: every analysis run creates a
 case, even when it raised nothing, so the case list is padded with things nobody can act on. There are four such
-cases in the store now — `case-cotw-dup-20261120T153507`, `case-cotw-dup-20261120T194032`,
-`case-cotw-levels-20261121T173120`, `case-cotw-levels-20261121T173223`.
+cases in the store now — `case-demo-product-dup-20261120T153507`, `case-demo-product-dup-20261120T194032`,
+`case-demo-product-levels-20261121T173120`, `case-demo-product-levels-20261121T173223`.
 
 A case exists to carry a decision about a finding. No finding, no case.
 

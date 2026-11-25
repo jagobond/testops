@@ -1,4 +1,4 @@
-"""Measure the TESTOPS-28 review's repetition count over the 94 cotw actions.
+"""Measure the TESTOPS-28 review's repetition count over the 94 demo-product actions.
 
   before: the actions as stored in the pinned run (written by level_fitness 0.10.1)
   after:  the actions the working-tree analyser writes for the same scenario set
@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 from testops import rebuild  # noqa: E402
 from testops.store import db  # noqa: E402
 
-PINNED_RUN = "cotw-levels-20261122T011316"
+PINNED_RUN = "demo-product-levels-20261122T011316"
 
 STOPWORDS = frozenset("""
     a an the this that these those it its they them their there here and or but nor so if then

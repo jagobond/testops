@@ -20,9 +20,9 @@ from testops.web import app
 
 TS = "2020-01-01T00:00:00+00:00"
 COMMIT = "a" * 40
-PATH = "ReqOverflow.Specs.API/Features/Home.feature"
+PATH = "DemoService.Specs.API/Features/Home.feature"
 LINE = 24
-OTHER_PATH = "ReqOverflow.Specs.Controller/Features/Home.feature"
+OTHER_PATH = "DemoService.Specs.Controller/Features/Home.feature"
 OTHER_LINE = 23
 ASSERTION = "The latest question is shown on home page with details"
 LEVEL_CASE = "case-level-01"
@@ -42,9 +42,9 @@ def _seed(conn, *, snapshot, run, analyser, case_id, line, commit=COMMIT, path=P
           verdict="review", established_by="", action="Rewrite the step."):
     # The same snapshot and run may already exist: these rows are the harness, not the claims.
     if conn.execute("SELECT 1 FROM run WHERE id = ?", (run,)).fetchone() is None:
-        db.upsert_snapshot(conn, snapshot, "reqoverflow", TS, {"reqnroll/test": commit},
+        db.upsert_snapshot(conn, snapshot, "demo-service", TS, {"reqnroll/test": commit},
                            schema_version=2)
-        db.start_run(conn, run, "reqoverflow", snapshot, analyser, TS)
+        db.start_run(conn, run, "demo-service", snapshot, analyser, TS)
     claim_id = db.add_claim(
         conn, run, analyser, "0.9.0", f"scenario:{path}#{ASSERTION}",
         f"This test asserts the step {ASSERTION}.", verdict, 0.8, [], schema_version=2,
@@ -53,7 +53,7 @@ def _seed(conn, *, snapshot, run, analyser, case_id, line, commit=COMMIT, path=P
         sources_assessed=True, sources_missing=[], proposed_action=action)
     conn.execute("INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at,"
                  " summary) VALUES (?,?,?,?,?,?,?)",
-                 (case_id, run, "reqoverflow", analyser, snapshot, TS, "{}"))
+                 (case_id, run, "demo-service", analyser, snapshot, TS, "{}"))
     conn.execute("INSERT INTO finding (case_id, title, severity, fingerprint, claim_ids)"
                  " VALUES (?,?,?,?,?)",
                  (case_id, ASSERTION, "high", f"{claim_id:032d}", db.j([claim_id])))
@@ -141,9 +141,9 @@ def test_a_counterpart_with_no_case_renders_nothing(tmp_path):
     conn = db.connect(tmp_path / "no-case.db")
     _seed(conn, snapshot="snap-level", run="run-level", analyser="level_fitness",
           case_id=LEVEL_CASE, line=LINE)
-    db.upsert_snapshot(conn, "snap-dup", "reqoverflow", TS, {"reqnroll/test": COMMIT},
+    db.upsert_snapshot(conn, "snap-dup", "demo-service", TS, {"reqnroll/test": COMMIT},
                        schema_version=2)
-    db.start_run(conn, "run-dup", "reqoverflow", "snap-dup", "duplication", TS)
+    db.start_run(conn, "run-dup", "demo-service", "snap-dup", "duplication", TS)
     db.add_claim(conn, "run-dup", "duplication", "0.9.0", f"scenario:{PATH}#{ASSERTION}",
                  "A duplicate.", "duplicate", 0.9, [], schema_version=2,
                  assertion_text=ASSERTION, assertion_path=PATH, assertion_line=LINE,

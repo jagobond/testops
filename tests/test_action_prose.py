@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STORED = ROOT / "data" / "testops.db"
 # The run TESTOPS-28 reviewed. Its snapshot is what the corpus arm rebuilds, so the analyser is
 # measured against the same 94 assertions the review counted, at the same commits.
-PINNED_RUN = "cotw-levels-20261122T011316"
+PINNED_RUN = "demo-product-levels-20261122T011316"
 
 STOPWORDS = frozenset("""
     a an the this that these those it its they them their there here and or but nor so if then
@@ -262,13 +262,13 @@ def test_the_distinct_action_states_its_level_as_a_disposition_not_a_justificati
 
 
 def _duplication_claims(tmp_path, monkeypatch):
-    import reqoverflow_fixtures as corpus
+    import demo_service_fixtures as corpus
     from testops import pipeline
     from testops.config import Project, Repo
 
     path, connect = corpus.stub_pipeline(monkeypatch, pipeline, tmp_path)
-    project = Project(key="reqoverflow", product=Repo("reqnroll", "Sample-ReqOverflow"),
-                      test=Repo("reqnroll", "Sample-ReqOverflow"), jira_key="")
+    project = Project(key="demo-service", product=Repo("reqnroll", "demo-service"),
+                      test=Repo("reqnroll", "demo-service"), jira_key="")
     result = pipeline.run_duplication(project, token="unused")
     return result
 

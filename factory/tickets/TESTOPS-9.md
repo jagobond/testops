@@ -27,7 +27,7 @@ Schema comments that lie mislead every reader of the store — including the nex
 |----|-----------|
 | AC1 | Every verdict name in `schema.sql`, the `Claim` docstring and `analysers/base.py` matches what the analysers emit. A test reads the code for the emitted set and fails if a documented name is not in it. |
 | AC2 | The test fails in both directions: a documented verdict that is never emitted, and an emitted verdict that is never documented. |
-| AC3 | No behaviour change: verdict counts stay 94/90/1/1/2 on CotW levels and 17/17 on ReqOverflow duplication. |
+| AC3 | No behaviour change: verdict counts stay 94/90/1/1/2 on Demo Product levels and 17/17 on DemoService duplication. |
 | AC4 | Stored rows are untouched — this ticket changes words, not data. |
 
 ## Notes

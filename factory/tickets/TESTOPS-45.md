@@ -37,7 +37,7 @@ are documented as historical in the schema comment, with the ticket that retired
 | AC3 | The 128 rows with retired names remain readable and render exactly as today; the migration does not touch them. |
 | AC4 | The allowed set lives in one place. A test asserts the trigger's set, the analysers' emitted set and the documented set are identical — the same both-directions test as TESTOPS-9, now anchored in the store. |
 | AC5 | A row whose verdict is unknown *today* (if any exists outside the 128) is reported by a `testops check-store` command rather than crashing a page, so a legacy store can be inspected honestly. |
-| AC6 | No behaviour change for existing runs: CotW 94/90/1/1/2, ReqOverflow 17/17, pages unchanged. |
+| AC6 | No behaviour change for existing runs: Demo Product 94/90/1/1/2, DemoService 17/17, pages unchanged. |
 
 ## Notes
 

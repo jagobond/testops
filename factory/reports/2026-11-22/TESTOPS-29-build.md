@@ -52,8 +52,8 @@ no exemptions, and the verdicts are 94/90/1/1/2 exactly as before.
 |----|--------|
 | AC1 | Met. Every action is one instruction of at most two sentences with no clause restating its statement. Enforced by `test_every_action_in_the_corpus_is_one_instruction_of_at_most_two_sentences` (real 94 claims, rebuilt from the pinned snapshot) plus `test_the_action_no_longer_carries_the_reason_the_statement_gives` per verdict, which asserts the removed clause is absent from the action and its sentence is present in the statement. |
 | AC2 | Met, with one argued exception. The three clauses that restated the statement (review, gap, unplaced meta) are gone from the action and are in the statement, unchanged - the analyser never had them in the action alone. `test_the_reason_still_reaches_the_reader_through_the_page` renders section 1 for each and asserts the reason's content is there ("browser"+"settles" for review, "browser"+"nothing" for gap, "compared" for unplaced). The unplaced-unbound tail ("nothing can be judged until then") is the same fact as the statement's "nothing can be said about whether it is checked", and is covered by the same arm. The **distinct** claim keeps its fact - see "The one exception" below. |
-| AC3 | Met, measured myself: **2 of 94 → 0 of 94**. Before, from the store: `cotw-levels-20261122T011316`, the two review claims, sharing the word "browser". After, from the same 94 assertions rebuilt from snapshot `cotw-levels-20261122-a3f19853-r6`, and again from the fresh run `cotw-levels-20261122T115115`: 0. Guarded by `test_no_action_in_the_corpus_repeats_a_content_word_between_its_own_sentences`. |
-| AC4 | Met. Duplication actions are `Raise this with the team: keep one.` in all 18 claims of the reqoverflow corpus, asserted by `test_a_duplicate_action_asks_for_one_copy_and_nothing_more`; the finding stays in the statement, which is asserted to name the copy. The T26 lint (`repeated_clause`, `plain_english`, `bare_identifiers`, `straight_quotes`, `detached_punctuation`) fires **0 times over the 94 cotw pages of the fresh run** and **0 times over the 18 reqoverflow duplication pages**, unexempted. It is also run per claim over the rebuilt corpus in `test_the_scan_block_of_every_claim_passes_the_no_repeat_lint`. |
+| AC3 | Met, measured myself: **2 of 94 → 0 of 94**. Before, from the store: `demo-product-levels-20261122T011316`, the two review claims, sharing the word "browser". After, from the same 94 assertions rebuilt from snapshot `demo-product-levels-20261122-a3f19853-r6`, and again from the fresh run `demo-product-levels-20261122T115115`: 0. Guarded by `test_no_action_in_the_corpus_repeats_a_content_word_between_its_own_sentences`. |
+| AC4 | Met. Duplication actions are `Raise this with the team: keep one.` in all 18 claims of the demo-service corpus, asserted by `test_a_duplicate_action_asks_for_one_copy_and_nothing_more`; the finding stays in the statement, which is asserted to name the copy. The T26 lint (`repeated_clause`, `plain_english`, `bare_identifiers`, `straight_quotes`, `detached_punctuation`) fires **0 times over the 94 demo-product pages of the fresh run** and **0 times over the 18 demo-service duplication pages**, unexempted. It is also run per claim over the rebuilt corpus in `test_the_scan_block_of_every_claim_passes_the_no_repeat_lint`. |
 | AC5 | Met. `94 claims, 90 distinct, 1 unplaced, 1 gap, 2 review` on the fresh run and on the rebuild, pinned by `test_the_corpus_still_carries_the_verdicts_the_ticket_pins`. Suite green: **337 passed** (`.venv`, Python 3.12.5) and **333 passed, 4 skipped** (Python 3.11.15; the 4 skips are the pre-existing pre-3.12 checks). |
 
 Environment: `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_ENV`, `CONDA_PREFIX` stripped, `PYTHONNOUSERSITE=1`.
@@ -72,28 +72,28 @@ BEFORE (stored, level_fitness 0.10.1): 94 actions, 2 repeat a content word, 0 ca
 
 AFTER  (rebuilt, working tree): 94 actions, 0 repeat a content word, 0 carry more than two sentences
 
-after: 94 claims {'distinct': 90, 'unplaced': 1, 'gap': 1, 'review': 2}, snapshot cotw-levels-20261122-a3f19853-r6
+after: 94 claims {'distinct': 90, 'unplaced': 1, 'gap': 1, 'review': 2}, snapshot demo-product-levels-20261122-a3f19853-r6
 repetition count 2 of 94 -> 0 of 94
 ```
 
-The same count over the fresh run `cotw-levels-20261122T115115`'s stored rows: 0 of 94.
+The same count over the fresh run `demo-product-levels-20261122T115115`'s stored rows: 0 of 94.
 
 ## Why the store now holds a second 94-claim run
 
-The analyser changed, so the stored run `cotw-levels-20261122T011316` still holds 0.10.1's strings -
+The analyser changed, so the stored run `demo-product-levels-20261122T011316` still holds 0.10.1's strings -
 and that is correct. Versions bump and artefacts are never overwritten, so the fix is a new run
-(`cotw-levels-20261122T115115`, snapshot `cotw-levels-20261122-a3f19853-r7`), which is what the
+(`demo-product-levels-20261122T115115`, snapshot `demo-product-levels-20261122-a3f19853-r7`), which is what the
 product's pages read now. The pinned run is left exactly as it was and the corpus tests that pin the
 *renderer* still read it: it is the evidence that a stored two-clause action renders whole, which no
 new run can be.
 
 **The case id in the brief therefore moved by one run id, not by content.** The claim is the same
 assertion at the same commit; case numbering within a run is unchanged (01 gap, 02 first review,
-03 second review). The block below is `case-cotw-levels-20261122T115115-03`.
+03 second review). The block below is `case-demo-product-levels-20261122T115115-03`.
 
-## The rendered scan block — `case-cotw-levels-20261122T115115-03`
+## The rendered scan block — `case-demo-product-levels-20261122T115115-03`
 
-(The same claim as `case-cotw-levels-20261122T011316-03`: `Then each fact's data-fact-id is the same
+(The same claim as `case-demo-product-levels-20261122T011316-03`: `Then each fact's data-fact-id is the same
 on both loads`, review.)
 
 Reader text:
@@ -150,7 +150,7 @@ not contain the fact (which is why it cannot be moved there).
 2. **The duplication action is now terse** (`Raise this with the team: keep one.`). It names no copy
    and no level, because the statement one line above names both, and AC4 asked for the restatement
    to go. If a reader is expected to act from the action alone, this is the place to say so.
-3. **The corpus tests still pin `cotw-levels-20261122T011316`.** That is deliberate: it is the run
+3. **The corpus tests still pin `demo-product-levels-20261122T011316`.** That is deliberate: it is the run
    whose stored actions have tails, so it is the only evidence that the renderer keeps them. The
    analyser's own behaviour is measured by rebuilding that run's snapshot, not by pinning the new
    run id, so a later re-run cannot move what these tests measure.

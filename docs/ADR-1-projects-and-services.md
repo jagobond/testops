@@ -6,8 +6,8 @@ connectors, and any second team's use of TestOps.
 ## Context
 
 TestOps today identifies a "project" by a free-text string on the run and case rows, set by the CLI
-(`--project cotw`). The CotW work needs more than that: two git repositories, a Jira board and two ADO pipelines
-all belong to one thing a person calls "the CotW project". At Quilter the same shape repeats with different
+(`--project demo-product`). The Demo Product work needs more than that: two git repositories, a Jira board and two ADO pipelines
+all belong to one thing a person calls "the Demo Product project". At Quilter the same shape repeats with different
 resources. Nothing in the schema can express it, so every new source would arrive as another special case keyed by
 that string.
 
@@ -24,7 +24,7 @@ that project. TestOps then treats those project resources as single groups of co
 - **Run** records which services it consulted, which it could not, and why — the existing `not_assessable`
   discipline, applied per service rather than per analyser.
 
-Existing rows keep working: `project` stays the column and holds the project slug. `cotw` and `reqoverflow` become
+Existing rows keep working: `project` stays the column and holds the project slug. `demo-product` and `demo-service` become
 two projects with their current resources registered, and every existing page renders unchanged.
 
 ## Consequences

@@ -47,15 +47,15 @@ Ticket AC4 — all eleven verified over HTTP, individually:
 
 | Value | Result | Judgement |
 |---|---|---|
-| `jagobond/cotw-continuity` | accepted | right |
-| `Jira board COTW` | accepted | right |
-| `RuckoldtAndRylander` | accepted | right |
-| `cotw-continuity pipeline #2` | accepted | right |
-| `mwinteringham/restful-booker-platform` | accepted | right |
+| `example-org/demo-product` | accepted | right |
+| `Jira board DEMO` | accepted | right |
+| `ExampleAndCo` | accepted | right |
+| `demo-product pipeline #2` | accepted | right |
+| `example-org/demo-booking-platform` | accepted | right |
 | `<tailnet-address>` | accepted | right |
 | `localhost:8791` | accepted | right |
 | `https://github.com/org/repo.git` | accepted | right |
-| `COTW` | accepted | right |
+| `DEMO` | accepted | right |
 | `TOPS` | accepted | right |
 | `test password reset flow` | accepted | right |
 
@@ -114,10 +114,10 @@ cases are never deleted and names the counts when the project holds any (app.py:
 
 - Empty project with one service: 303; project row gone, its service cascaded (service count for
   the project 1 → 0); all other rows untouched (47 runs, 30 snapshots, 208 cases before and after).
-- `cotw` (33 runs, 16 snapshots, 61 cases): refused 400, page names all three counts, project and
+- `demo-product` (33 runs, 16 snapshots, 61 cases): refused 400, page names all three counts, project and
   evidence intact — counts match `evidence_counts` exactly.
 - Cannot be forced: `force=1`/`confirm=yes` fields → 400; trailing slash → refused; malformed slug
-  (`COTW`) → 400; URL-encoded slug (`%63otw`) → 400 (refuses as cotw); a second submit → 400 each
+  (`DEMO`) → 400; URL-encoded slug (`%63otw`) → 400 (refuses as demo-product); a second submit → 400 each
   time; GET on the route → 404. No code path deletes an evidence row: `remove_project` only runs
   after `any(counts.values())` is false, and only deletes from `project`.
 
@@ -139,7 +139,7 @@ only `testops/services.py`, `testops/web/app.py`, and the new `tests/test_config
     sha256 after:  48ac05fe14943cad3fa0192b5eeeb04b3a65352574f50b741fc354e03b418d9a
 
 Read-only check of the live db: `contract-audit-*` projects = 0; projects still exactly
-`cotw`, `reqoverflow`, `restfulbooker`, `testops`.
+`demo-product`, `demo-service`, `demo-booking`, `testops`.
 
 ## Three sharpest concerns
 

@@ -10,7 +10,7 @@ These tests pin the corrected rule against the real corpus and against small in-
   * AC1 - tables and doc strings are part of a scenario's signature, so scenarios that differ only
     in their data are not duplicates;
   * AC2 - ``assertion_text`` carries the data, so a claim never ends at "should be";
-  * AC3 - the before/after counts on reqoverflow, and what each resolved pair differed by;
+  * AC3 - the before/after counts on demo-service, and what each resolved pair differed by;
   * AC4 - the exact pair is not a duplicate, and a genuinely identical pair still is;
   * AC5 - a run written before the fix keeps its stored text;
   * AC6 - the level-fitness corpus is untouched (``test_level_fitness`` owns those counts).
@@ -21,7 +21,7 @@ import re
 
 import pytest
 
-import reqoverflow_fixtures as corpus
+import demo_service_fixtures as corpus
 from testops.analysers import duplication
 from testops.extract import gherkin
 
@@ -199,7 +199,7 @@ Feature: suggestions
     assert detail["assertion_text"] in claims[0].statement
 
 
-def test_the_reqoverflow_claims_never_stop_at_should_be():
+def test_the_demo_service_claims_never_stop_at_should_be():
     claims = duplication.analyse(_corpus_features(), [], lambda p: f"github:o/r@c:{p}")
     assert claims
     for claim in claims:
@@ -269,7 +269,7 @@ def test_rerun_counts_before_and_after_and_names_what_resolved():
 
     resolved = sorted(set(before_claims) - set(after_claims))
     assert resolved == [
-        "ReqOverflow.Specs.Controller/Features/Question/QuestionSuggestions.feature:29",
+        "DemoService.Specs.Controller/Features/Question/QuestionSuggestions.feature:29",
     ]
     # The pair differs twice over: the Given table and the Then table. The Then table is the one
     # the claim quoted.
@@ -291,11 +291,11 @@ def test_an_older_run_keeps_its_stored_text(tmp_path):
     from testops.web import app
 
     conn = db.connect(tmp_path / "old.db")
-    db.upsert_snapshot(conn, "snap-old", "reqoverflow", "2026-11-20T15:34:30+00:00",
+    db.upsert_snapshot(conn, "snap-old", "demo-service", "2026-11-20T15:34:30+00:00",
                        {corpus.REPO_SLUG: corpus.COMMIT}, schema_version=2)
-    db.start_run(conn, "run-old", "reqoverflow", "snap-old", duplication.name,
+    db.start_run(conn, "run-old", "demo-service", "snap-old", duplication.name,
                  "2026-11-20T15:34:31+00:00")
-    path = "ReqOverflow.Specs.Controller/Features/Question/QuestionSuggestions.feature"
+    path = "DemoService.Specs.Controller/Features/Question/QuestionSuggestions.feature"
     claim_id = db.add_claim(
         conn, "run-old", duplication.name, "2.1.0", f"scenario:{path}#The same word is in different fields",
         'The scenario "The same word is in different fields" asserts "the suggestions list should be".',
@@ -306,7 +306,7 @@ def test_an_older_run_keeps_its_stored_text(tmp_path):
         span=["controller"], proposed_action="Raise this with the team: keep one.")
     conn.execute("INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at, summary)"
                  " VALUES (?,?,?,?,?,?,?)",
-                 ("case-old", "run-old", "reqoverflow", duplication.name, "snap-old",
+                 ("case-old", "run-old", "demo-service", duplication.name, "snap-old",
                   "2026-11-20T15:34:31+00:00", "{}"))
     conn.execute("INSERT INTO finding (case_id, title, severity, fingerprint, claim_ids)"
                  " VALUES (?,?,?,?,?)",

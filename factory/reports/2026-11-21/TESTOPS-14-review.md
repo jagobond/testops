@@ -11,7 +11,7 @@ claim, and the corpus verdicts are exactly the numbers the ticket promises.
 
 ## Criteria
 
-- **AC1 HOLDS.** Snapshot `cotw-levels-20261121-a3f19853-r3` records 27 feature + 21 stepdef + 1
+- **AC1 HOLDS.** Snapshot `demo-product-levels-20261121-a3f19853-r3` records 27 feature + 21 stepdef + 1
   build + 1 test artefacts for the test arm and 45 source artefacts for the product arm. I rebuilt
   it with `testops.rebuild.rebuild` in a process where `socket.socket`, `socket.create_connection`,
   `socket.getaddrinfo` and `ssl.wrap_socket` were all replaced with raisers — any network call
@@ -25,7 +25,7 @@ claim, and the corpus verdicts are exactly the numbers the ticket promises.
   "explicit empty when nothing bound" branch is covered by
   `tests/test_evidence_depth.py:210` but never exercised by the corpus. That is fine, but the
   corpus cannot witness it.
-- **AC4 HOLDS.** The case page for `case-cotw-levels-20261121T230858-01` renders a link + a
+- **AC4 HOLDS.** The case page for `case-demo-product-levels-20261121T230858-01` renders a link + a
   one-line "shows" sentence per observation; the "no observations at these coordinates" fallback is
   absent from the page (checked the rendered HTML).
 - **AC5 HOLDS.** Rebuilt claims are equal to the originals — subject_ref, statement, verdict and
@@ -123,8 +123,8 @@ this one. Verified against the store:
 
 | run | written by | distinct | unplaced | gap | review |
 |---|---|---|---|---|---|
-| `cotw-levels-20261121T215534` | TESTOPS-4 build, 21:55 | 43 | 48 | 1 | 2 |
-| `cotw-levels-20261121T230858` | this ticket's build, 23:08 | 90 | 1 | 1 | 2 |
+| `demo-product-levels-20261121T215534` | TESTOPS-4 build, 21:55 | 43 | 48 | 1 | 2 |
+| `demo-product-levels-20261121T230858` | this ticket's build, 23:08 | 90 | 1 | 1 | 2 |
 
 The 43/48 run predates TESTOPS-10 (coverage vocabulary) and TESTOPS-11 (restraint) — those two tickets
 are what moved 48 unplaced to 1, and TESTOPS-11's review records that movement explicitly. AC6 compares

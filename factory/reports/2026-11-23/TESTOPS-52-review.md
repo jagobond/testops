@@ -98,9 +98,9 @@ first acceptance criterion of whichever ticket closes it.
 Opened `C:/Users/<name>/Projects/testops/data/testops.db` with `mode=ro` (URI-flagged; no write
 possible):
 
-- `project` holds exactly **4 rows: `cotw`, `testops`, `reqoverflow`, `restfulbooker`** — the two
+- `project` holds exactly **4 rows: `demo-product`, `testops`, `demo-service`, `demo-booking`** — the two
   stray rows are gone, exactly as the build claimed.
-- `run`: 47 rows, project values limited to `reqoverflow`, `cotw`, `restfulbooker`.
+- `run`: 47 rows, project values limited to `demo-service`, `demo-product`, `demo-booking`.
 - `case_`: 208 rows, same three projects. The `testops` project is an empty shell (no runs, no
   cases) — expected, it is the product's own self-record.
 - Claim verdicts present: all 8 vocabulary names. Write-checked by opening the connection

@@ -8,7 +8,7 @@ Interpreter: env -u PYTHONPATH -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=1
 
 HARD RULES
 - Never write to the live store or contact port 8791. Copy `data/`, serve on a free port.
-- **Read it at real volume.** Render the restfulbooker run (26 unplaced) and a store you build with 351. Quote what a
+- **Read it at real volume.** Render the demo-booking run (26 unplaced) and a store you build with 351. Quote what a
   reader sees before scrolling: headings, counts, the first entry. Judge whether the shape of the failure is legible in
   five seconds. Then judge the fold: is 20 per group the right preview, and does the "N of M shown, other K folded"
   sentence agree with the actual number of rows rendered in each group - count them yourself in the HTML.

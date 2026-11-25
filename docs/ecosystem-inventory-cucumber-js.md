@@ -3,10 +3,10 @@
 TESTOPS-42A, 23 November 2026. Every number below is a count over the corpus that is already in the
 store; none of it is an adjective or an extrapolation.
 
-**Provenance.** Snapshot `restfulbooker-20261122-262404a9` in `data/testops.db`, from the TESTOPS-39
+**Provenance.** Snapshot `demo-booking-20261122-262404a9` in `data/testops.db`, from the TESTOPS-39
 run. Test arm `m-pujic-levi9-com/cypress-cucumber-e2e-tests@262404a95784970315faeae6374ce8783ccbe598`
 (6 `.feature` files, 15 JavaScript/TypeScript files). Product arm
-`mwinteringham/restful-booker-platform@efe2deb8ce02db541adbf9d3a6604caf5fbdaae6` (27 `.js`/`.ts`
+`example-org/demo-booking-platform@efe2deb8ce02db541adbf9d3a6604caf5fbdaae6` (27 `.js`/`.ts`
 files collected; the Java product code was never fetched — that is TESTOPS-39's collector gap, not
 this ticket's). Counts were produced by reading the stored blobs, not by reading GitHub again.
 
@@ -313,5 +313,5 @@ it.
   words", naming the two nearest patterns. The estimate in §7 was 6.25 days; it was not re-measured.
 - **§5's 17/26 is now also a run result, not only a matching exercise.** The count reproduces through
   the level-fitness analyser over the stored snapshot (pinned by
-  `test_the_restfulbooker_corpus_places_17_of_43_and_says_why`). Nothing here changes the corpus
+  `test_the_demo-booking_corpus_places_17_of_43_and_says_why`). Nothing here changes the corpus
   facts the corrections above established.

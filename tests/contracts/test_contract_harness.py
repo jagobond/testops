@@ -78,8 +78,8 @@ def test_an_inherited_store_variable_cannot_redirect_the_server(tmp_path, monkey
     try:
         with urllib.request.urlopen(server.base_url + "/runs", timeout=10) as response:
             body = response.read().decode("utf-8", "replace")
-        assert "restfulbooker" in body, "the seeded store did not serve the runs index"
-        assert "cotw" not in body, (
+        assert "demo-booking" in body, "the seeded store did not serve the runs index"
+        assert "demo-product" not in body, (
             "the server served the live store's runs, so an inherited TESTOPS_DATA reached it")
     finally:
         server.stop()

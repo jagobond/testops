@@ -26,7 +26,7 @@ acceptance failures.
   no product test hides among them. Caveats under "Defeating the guard".
 - **AC4 HOLDS.** I started `app.serve(port=8812)` as a background process under the 3.11 venv
   (log: `TestOps UI on http://127.0.0.1:8812`) and fetched
-  `/case/case-cotw-levels-20261121T215534-01` (HTTP 200, 5838 bytes). Rendered text (tags
+  `/case/case-demo-product-levels-20261121T215534-01` (HTTP 200, 5838 bytes). Rendered text (tags
   stripped, verbatim): "Never actually proved · 1. What is asserted ... 'each fact's citation is
   in an element reachable by an accessible name' ... 5. What could not be checked — Jira and
   Azure DevOps were never consulted ... 6. Proposed action and decision ... Decide this case — 1
@@ -36,7 +36,7 @@ acceptance failures.
 - **AC5 HOLDS, with one observation.** `git diff feature/f1..HEAD` touches no existing test —
   only new `tests/test_python_floor.py`, `testops/web/app.py`, and my review prompt. I rendered
   case pages under both `git archive feature/f1` and HEAD against the same DB copies and compared
-  bytes: 5 real cases (including the full 62,801-byte `case-cotw-levels-20261120T194425`) are
+  bytes: 5 real cases (including the full 62,801-byte `case-demo-product-levels-20261120T194425`) are
   byte-identical, plus a synthetic case with a suppression note and terminal state, which
   exercises the `decision_form` hunk and renders the note suffix identically (5,538/5,538 bytes).
   I could not exercise the second hunk ("Every finding in this case has been suppressed", in
@@ -96,7 +96,7 @@ being a different shaped hole.
   agreement check on `requires-python`.
 - **How we know it works.** 33/33 modules import under 3.11.15; suites are 118 passed (3.12) and
   114 passed + 4 skipped (3.11), both run by me with the environment stripped. A 3.11-hosted
-  server renders `case-cotw-levels-20261121T215534-01` (text quoted above). Pages are
+  server renders `case-demo-product-levels-20261121T215534-01` (text quoted above). Pages are
   byte-identical before and after on five real cases plus a suppression-note case. Both sides of
   the guard fail on a planted backslash module.
 - **What it does not solve.** 3.12-only runtime APIs still pass the guard and would break the

@@ -104,7 +104,7 @@ absence-of-unknown. Fix the branch, not the depth.
 targets — identical to the build's numbers.** One deviation to state plainly: the build's scratch
 copy of the pinned run's blob store (`data74copy`) has been pruned, and the pinned run's blobs
 live in a store I was barred from, so I re-ran discovery over the corpus at source: the
-`restful-booker-platform` checkout in the scratch cache is at commit `efe2deb` (verified with
+`demo-booking-platform` checkout in the scratch cache is at commit `efe2deb` (verified with
 `git log`) and holds exactly 142 `.java` files. Same corpus, same pinned commit, no live store
 touched. No surface silently disappeared, and the reason the count does not move is as the build
 says: no controller in the corpus extends anything that declares a mapping, and every mapping

@@ -27,7 +27,7 @@ The first has no ellipsis and no count; the second has a counted remainder and t
 `aria-label="4 lines of the declaration not shown"`; the third has no count at all and its ellipsis
 row says `aria-label="the rest of this declaration could not be delimited"`.
 
-`case-restfulbooker-levels-20261124T123451-05` from the copied store — the case the review
+`case-demo-booking-levels-20261124T123451-05` from the copied store — the case the review
 complained about — now reads:
 
     The product’s own declaration, with the word that decided the match marked:

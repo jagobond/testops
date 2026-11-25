@@ -1,7 +1,7 @@
 from testops.collectors import jira
 from testops.config import load_env
 env = load_env()
-for key in ("COTW", "TOPS"):
+for key in ("DEMO", "TOPS"):
     issues = jira.collect(env["JIRA_SITE"], env["JIRA_EMAIL"], env["JIRA_API_TOKEN"], key)
     print(f"{key}: {len(issues)} issues")
     for k in list(issues)[:3]:
