@@ -1,6 +1,6 @@
 # TESTOPS-12 re-review (after TESTOPS-18 fixes)
 
-Corpus: run `cotw-levels-20261122T011316` (analyser level_fitness), 94 claims, 41 scenarios, 6 features, 47 surfaces. Suite: 198 passed, 16.4s, from the project `.venv` with PYTHONPATH and VIRTUAL_ENV stripped and PYTHONNOUSERSITE=1. Verdict counts in the run: 94 claims, 90 distinct, 1 unplaced, 1 gap, 2 review — confirmed.
+Corpus: run `demo-product-levels-20261122T011316` (analyser level_fitness), 94 claims, 41 scenarios, 6 features, 47 surfaces. Suite: 198 passed, 16.4s, from the project `.venv` with PYTHONPATH and VIRTUAL_ENV stripped and PYTHONNOUSERSITE=1. Verdict counts in the run: 94 claims, 90 distinct, 1 unplaced, 1 gap, 2 review — confirmed.
 
 ## Verdict — PASS
 
@@ -54,4 +54,4 @@ One honest caveat: the tests pin the *exact* phrases ("takes that answer as the 
 
 2. The `_ASKS` table is keyed by interaction code. A new code added without a `_ASKS` entry silently falls back to withholding the explanation — correct behaviour, but nothing warns the developer that their new code is invisible in the pass note. A test that enumerates codes against `_ASKS` keys would close that.
 
-3. The store run I read from (`cotw-levels-20261122T011316`) was produced during this re-review, not by the builder's own run. The counts match the builder's snapshot, but the prose evidence here is from my run, not theirs. If the builder's snapshot differs in any wording, this report would not see it — worth a one-line note on the ticket that the re-review corpus is a fresh run, not a re-read of theirs.
+3. The store run I read from (`demo-product-levels-20261122T011316`) was produced during this re-review, not by the builder's own run. The counts match the builder's snapshot, but the prose evidence here is from my run, not theirs. If the builder's snapshot differs in any wording, this report would not see it — worth a one-line note on the ticket that the re-review corpus is a fresh run, not a re-read of theirs.

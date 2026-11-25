@@ -149,15 +149,15 @@ def test_a_jwt_is_refused():
 # The ticket's list, verbatim, each against the field it would really be typed into. Every one of
 # these must be accepted and stored.
 ORDINARY = {
-    "repo": "jagobond/cotw-continuity",
-    "name": "Jira board COTW",
-    "org": "RuckoldtAndRylander",
-    "project": "cotw-continuity pipeline #2",
-    "repo_restful": "mwinteringham/restful-booker-platform",
+    "repo": "example-org/demo-product",
+    "name": "Jira board DEMO",
+    "org": "ExampleAndCo",
+    "project": "demo-product pipeline #2",
+    "repo_restful": "example-org/demo-booking-platform",
     "host": "192.0.2.10",
     "host_port": "localhost:8791",
     "repo_url": "https://github.com/org/repo.git",
-    "board": "COTW",
+    "board": "DEMO",
     "jira_key": "TOPS",
     "name_prose": "test password reset flow",
     # Boundaries of the "short credential-word identifier" rule, pinned so tightening it further
@@ -181,11 +181,11 @@ def test_ordinary_configuration_is_accepted_and_pinned(field, value):
 def test_a_service_named_in_ordinary_words_is_accepted(tmp_path):
     conn = db.connect(tmp_path / "ordinary.db")
     try:
-        services.add_project(conn, "cotw", "Children of the Old War")
-        for name in ("Jira board COTW", "cotw-continuity pipeline #2", "test password reset flow"):
-            services.add_service(conn, "cotw", "jira_board", "", name, {"board": "COTW"})
-        assert [service.name for service in services.list_services(conn, "cotw")] == \
-            ["Jira board COTW", "cotw-continuity pipeline #2", "test password reset flow"]
+        services.add_project(conn, "demo-product", "Demo Product")
+        for name in ("Jira board DEMO", "demo-product pipeline #2", "test password reset flow"):
+            services.add_service(conn, "demo-product", "jira_board", "", name, {"board": "DEMO"})
+        assert [service.name for service in services.list_services(conn, "demo-product")] == \
+            ["Jira board DEMO", "demo-product pipeline #2", "test password reset flow"]
     finally:
         conn.close()
 
@@ -299,7 +299,7 @@ def test_a_credential_in_any_settings_field_is_refused_over_http(live):
     _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
     for fields in (_service_fields(repo="token=«secret»"),
                    _service_fields(type="jira_board", role="", board="token=«secret»"),
-                   _service_fields(type="jira_board", role="", board="COTW",
+                   _service_fields(type="jira_board", role="", board="DEMO",
                                    host="password=hunter2"),
                    _service_fields(type="ado_pipeline", role="", org="AKIAABCDEFGHIJKLMNOP")):
         status, body = _post(f"{base}/config/services", fields)
@@ -329,29 +329,29 @@ def test_a_project_with_no_evidence_is_deleted_with_its_services(live):
 
 def test_a_project_that_holds_evidence_refuses_to_be_deleted_and_names_the_counts(live):
     base, path = live
-    _post(f"{base}/config/projects", {"slug": "cotw", "name": "Children of the Old War"})
+    _post(f"{base}/config/projects", {"slug": "demo-product", "name": "Demo Product"})
     conn = db.connect(path)
     try:
         conn.execute("INSERT INTO snapshot (id, project, created_at, artefact_versions) "
-                     "VALUES ('snap-1', 'cotw', '2026-01-01T00:00:00+00:00', '{}')")
+                     "VALUES ('snap-1', 'demo-product', '2026-01-01T00:00:00+00:00', '{}')")
         conn.execute("INSERT INTO run (id, project, snapshot_id, analyser, status, started_at) "
-                     "VALUES ('run-1', 'cotw', 'snap-1', 'duplication', 'ok', "
+                     "VALUES ('run-1', 'demo-product', 'snap-1', 'duplication', 'ok', "
                      "'2026-01-01T00:00:00+00:00')")
         conn.execute("INSERT INTO case_ (id, run_id, project, analyser, snapshot_id, created_at) "
-                     "VALUES ('case-1', 'run-1', 'cotw', 'duplication', 'snap-1', "
+                     "VALUES ('case-1', 'run-1', 'demo-product', 'duplication', 'snap-1', "
                      "'2026-01-01T00:00:00+00:00')")
         conn.commit()
     finally:
         conn.close()
 
-    status, body = _post(f"{base}/config/project/cotw/delete", {})
+    status, body = _post(f"{base}/config/project/demo-product/delete", {})
 
     assert status == 400, "a project holding evidence was deleted by a configuration action"
     assert "1 runs" in body and "1 snapshots" in body and "1 cases" in body, \
         "the refusal does not name the counts that block it"
     conn = db.connect(path)
     try:
-        assert [row["slug"] for row in services.list_projects(conn)] == ["cotw"]
+        assert [row["slug"] for row in services.list_projects(conn)] == ["demo-product"]
         assert conn.execute("SELECT COUNT(*) FROM run").fetchone()[0] == 1, \
             "the refusal deleted evidence"
     finally:
@@ -383,15 +383,15 @@ def test_remove_project_names_an_unknown_project(tmp_path):
 # values, the next fourteen the reviewer's, and the rest pin the boundary the two faults found.
 BOUNDARY = [
     # --- the original ticket's eleven: ordinary configuration, all accepted
-    ("jagobond/cotw-continuity", "accepted", "a repository coordinate: the '/' marks a path"),
-    ("Jira board COTW", "accepted", "prose - whitespace means it is not one identifier"),
-    ("RuckoldtAndRylander", "accepted", "one word and no credential word inside it"),
-    ("cotw-continuity pipeline #2", "accepted", "prose around a project name"),
-    ("mwinteringham/restful-booker-platform", "accepted", "a repository coordinate"),
+    ("example-org/demo-product", "accepted", "a repository coordinate: the '/' marks a path"),
+    ("Jira board DEMO", "accepted", "prose - whitespace means it is not one identifier"),
+    ("ExampleAndCo", "accepted", "one word and no credential word inside it"),
+    ("demo-product pipeline #2", "accepted", "prose around a project name"),
+    ("example-org/demo-booking-platform", "accepted", "a repository coordinate"),
     ("192.0.2.10", "accepted", "an IPv4 address: four digit parts"),
     ("localhost:8791", "accepted", "host:port, with no credential name before the ':'"),
     ("https://github.com/org/repo.git", "accepted", "a URL"),
-    ("COTW", "accepted", "a board key"),
+    ("DEMO", "accepted", "a board key"),
     ("TOPS", "accepted", "a Jira project key"),
     ("test password reset flow", "accepted", "prose: whitespace, so not one identifier"),
     # --- the reviewer's fourteen
@@ -788,7 +788,7 @@ def test_key_is_not_a_credential_word_in_a_pair_or_a_settings_field_name():
     for honest in ("sort_keys=True", "sorting_keys=asc", "board_keys", "primary_key=id"):
         assert services._looks_like_secret(honest) is None, f"{honest!r} was refused"
         assert services.validate_settings({"sorting_keys": honest}) == {"sorting_keys": honest}
-    assert services.validate_settings({"board_keys": "COTW"}) == {"board_keys": "COTW"}
+    assert services.validate_settings({"board_keys": "DEMO"}) == {"board_keys": "DEMO"}
     # A `key` stated with its determiner *and* a value is a pasted credential, and the pair branch is
     # where that shape is caught - the instance rule cannot see a value after '='.
     for pasted in ("my-key=hunter2", "the-key: abc123", "their_keys=v"):
@@ -960,7 +960,7 @@ def test_an_unknown_settings_key_is_refused_even_when_its_value_is_ordinary(live
     base, _path = live
     _post(f"{base}/config/projects", {"slug": "team", "name": "Team"})
     status, body = _post(f"{base}/config/services",
-                         _service_fields(a_field_added_next_year="COTW-PROJ-KEY-1"))
+                         _service_fields(a_field_added_next_year="DEMO-PROJ-KEY-1"))
     assert status == 400
     assert "a_field_added_next_year" in body
 

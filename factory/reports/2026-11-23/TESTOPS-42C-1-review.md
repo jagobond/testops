@@ -111,7 +111,7 @@ hand.
   analyser file changed.**
 - `detect()` on the corpus returns `supported is False` with the evidence lines and the refusal
   reason; `drivers()` raises `UnsupportedEcosystem`.
-- `tests/test_ecosystems.py::test_the_restfulbooker_corpus_is_not_assessable_and_not_lied_about`
+- `tests/test_ecosystems.py::test_the_demo-booking_corpus_is_not_assessable_and_not_lied_about`
   is in the green suite: the corpus run is still `not_assessable` with zero claims.
 
 ## .NET parity
@@ -119,8 +119,8 @@ hand.
 The only shared-code change is in `pattern_to_regex`: `{int}` now becomes `\d+` before the generic
 placeholder substitution (which also had its closing-brace escape tightened). `.NET` patterns use
 `{string}` and `(.*?)`, not `{int}`, and `{int}` got *narrower*, so the risk was only ever a
-dropped match. The pinned proofs all pass in the green suite: CotW **94 claims, 90 distinct, 1
-unplaced, 1 gap, 2 review** (`test_action_prose.py`), ReqOverflow **17/17** (`test_action_prose.py`,
+dropped match. The pinned proofs all pass in the green suite: Demo Product **94 claims, 90 distinct, 1
+unplaced, 1 gap, 2 review** (`test_action_prose.py`), DemoService **17/17** (`test_action_prose.py`,
 `test_duplication_tables.py`, `test_duplication_v2.py`), and the case-page goldens are asserted
 **byte-identical** against the fixture HTML (`test_projects_services.py`:
 `rendered == (FIXTURES / f"{case_id}.html").read_bytes()`). No .NET pattern regressed.

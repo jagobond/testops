@@ -25,7 +25,7 @@ from __future__ import annotations
 import time
 
 import level_fixtures as fixtures
-import reqoverflow_fixtures as reqoverflow
+import demo_service_fixtures as demo_service
 from testops import blobs, cases, pipeline
 from testops.analysers import duplication, level_fitness
 from testops.collectors.github import Collected
@@ -68,7 +68,7 @@ def _levels(monkeypatch, tmp_path, feature: str | None = None):
 
 
 def _duplication(monkeypatch, tmp_path):
-    path, connect = reqoverflow.stub_pipeline(monkeypatch, pipeline, tmp_path)
+    path, connect = demo_service.stub_pipeline(monkeypatch, pipeline, tmp_path)
     statements: list[str] = []
     _traced(monkeypatch, path, connect, statements)
     return statements, lambda: connect(path)
@@ -238,7 +238,7 @@ def test_the_duplication_case_gate_never_even_writes_the_suppressed_case(tmp_pat
     undoing the first one's work is a suppression with two chances to fail.
     """
     statements, connect = _duplication(monkeypatch, tmp_path)
-    project = _project("reqoverflow", "Sample-ReqOverflow", "Sample-ReqOverflow")
+    project = _project("demo-service", "demo-service", "demo-service")
 
     first = pipeline.run_duplication(project, token="unused")
     assert len(first.case_ids) == len(set(first.case_ids)) > 0

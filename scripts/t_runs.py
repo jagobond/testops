@@ -1,7 +1,7 @@
 import base64
 from testops.collectors.http import get_json
 from testops.config import load_env, project
-env = load_env(); p = project("cotw")
+env = load_env(); p = project("demo-product")
 h = {"Authorization": "Basic " + base64.b64encode(f":{env['AZURE_DEVOPS_PAT']}".encode()).decode(),
      "Accept": "application/json"}
 base = f"https://dev.azure.com/{p.ado_org}/{p.ado_project}"

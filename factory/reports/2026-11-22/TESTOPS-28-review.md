@@ -18,7 +18,7 @@ and did not fire, and the only cost is visible wordiness the ticket declared in 
   historical factory reports and this review's own prompt, which must name them to describe the
   past). The build report confirms the whole apparatus — `ORDER_CUES`, `IRREGULAR_FORMS`,
   `INSTRUCTION_FORMS`, `_inflections` and friends — went with it. Nothing dormant survives.
-- AC3 — HOLDS. All 94 actions of `cotw-levels-20261122T011316` render in full (verified from the
+- AC3 — HOLDS. All 94 actions of `demo-product-levels-20261122T011316` render in full (verified from the
   store directly, read-only sqlite, not from test output). The repetitiveness is reported in
   "The cost" below, not tidied away.
 - AC4 — HOLDS by absence: the T26 plain-English lint (`testops/web/lint.py::repeated_clause`,

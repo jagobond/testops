@@ -17,10 +17,10 @@ import sqlite3
 from collections import Counter
 from pathlib import Path
 
-SNAPSHOT = "restfulbooker-20261122-262404a9"
+SNAPSHOT = "demo-booking-20261122-262404a9"
 ARM_PREFIX = ("github:m-pujic-levi9-com/cypress-cucumber-e2e-tests"
               "@262404a95784970315faeae6374ce8783ccbe598:")
-PRODUCT_PREFIX = ("github:mwinteringham/restful-booker-platform"
+PRODUCT_PREFIX = ("github:example-org/demo-booking-platform"
                   "@efe2deb8ce02db541adbf9d3a6604caf5fbdaae6:")
 
 

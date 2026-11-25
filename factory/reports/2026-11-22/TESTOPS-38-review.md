@@ -38,8 +38,8 @@ secret guard to close in the next ticket, not this one.
   only guard, and it is a good one: the main checkout's code refuses a v4 store with
   `SchemaTooNewError`.)
 - **From the backup**: `from_backup.db`, a copy of the v3 `bak-before-…` file, migrated
-  forward → v4, projects `cotw, reqoverflow, restfulbooker, testops`, exactly 12 services
-  (cotw: product+test repos, Jira COTW, ADO pipelines #2 and #4; testops: both repos + TOPS;
+  forward → v4, projects `demo-product, demo-service, demo-booking, testops`, exactly 12 services
+  (demo-product: product+test repos, Jira DEMO, ADO pipelines #2 and #4; testops: both repos + TOPS;
   the two no-Jira specimens carry their two repos each). 46 runs intact. AC1's migration is
   faithful.
 
@@ -75,7 +75,7 @@ verified to return HTTP 400 and to leave the store empty of the row.
 | password-shaped value (`password1`) | **REFUSED** — "it contains 'password'" |
 | Jira host `https://jira.example.com` | **ACCEPTED** (303, row stored with host) — required to pass |
 | 32-char project key `XXXX…` (32 X) | **ACCEPTED** — required to pass |
-| 32-char mixed key `COTW-PROJ-KEY-0123456789-ABCDEFG` | **REFUSED** as high-entropy — false positive on a plausible key |
+| 32-char mixed key `DEMO-PROJ-KEY-0123456789-ABCDEFG` | **REFUSED** as high-entropy — false positive on a plausible key |
 | field named `api_token` (unit level) | **REFUSED** by name |
 
 Which way it errs: **both**. It over-flags long mixed-case strings (a legitimate 32-char key is
@@ -97,9 +97,9 @@ store file, and the server writes no request logs (`log_message` is silenced).
 - A 200-char name (200 A's + the script tag) is accepted and rendered escaped, layout intact.
 - The index and /runs do not print project *names* (they use the slug from run/case rows), so
   the escaped `/config` render is the only surface — checked, no raw occurrence anywhere.
-- **Removing a service a run used**: deleted cotw's product-repository service (id 1) via
+- **Removing a service a run used**: deleted demo-product's product-repository service (id 1) via
   POST. Run count (46), claim count (2310), finding count and `foreign_key_check` all
-  unchanged; the run page `cotw-levels-20261122T204947` still renders (HTTP 200) with its
+  unchanged; the run page `demo-product-levels-20261122T204947` still renders (HTTP 200) with its
   claims and its "could not consult" record, and its case page still renders. Evidence is
   not config — AC3's removal path honours that.
 

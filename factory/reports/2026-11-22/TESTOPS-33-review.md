@@ -27,7 +27,7 @@ nowhere and deferred nowhere, so the rule that it must not ship twice-broken fai
 - **AC3 HOLDS.** 90-character ceiling, whole-word trim, ellipsis, never mid-word. A 200-character unbroken
   subject degrades to the judgement alone rather than a mid-word cut.
 - **AC4 HOLDS.** The case page is untouched by the diff; the live page for
-  `case-reqoverflow-dup-20261122T090439-18` still carries the full assertion text and TESTOPS-23's six-section
+  `case-demo-service-dup-20261122T090439-18` still carries the full assertion text and TESTOPS-23's six-section
   structure including "3. The copy this claim names". Tests pin it.
 - **AC5 HOLDS.** Rows grouped under one `<h2 class="section">` per project; the verdict badge sits beside the
   case state, dashed for `unplaced`/legacy; `Cannot tell` cannot be mistaken for `Checked`.

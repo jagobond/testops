@@ -7,7 +7,7 @@ against the store copy in `data/`. Full suite: **579 passed in 99.6s**.
 ## Verdict
 
 **Accepted.** The seam is real, the refusals are real, AC3 is proven by absence of change against the
-pre-build tree, and AC5 — the soul of the ticket — holds live on the restfulbooker corpus. Two
+pre-build tree, and AC5 — the soul of the ticket — holds live on the demo-booking corpus. Two
 auxiliary numbers in the inventory (§5's 46 of 76 and 29 of 33) do not reproduce from the blobs under
 any matching rule I tried; the five numbers this review was asked to spot-check all do. Neither defect
 undermines the decision the document supports, but §5 should be corrected before T42-C is costed from it.
@@ -15,7 +15,7 @@ undermines the decision the document supports, but §5 should be corrected befor
 ## AC5 - unsupported means unsupported
 
 Called `cucumber_js.ECOSYSTEM.bindings(files)` and `.drivers(files)` directly over the 14 non-`.d.ts`
-JS/TS files of the stored restfulbooker test arm (21 files, 6 features): **both raise
+JS/TS files of the stored demo-booking test arm (21 files, 6 features): **both raise
 `UnsupportedEcosystem`**; neither returns `[]`. A full levels run over the same stored blobs, in a
 throwaway store: **0 claims**, assessment `not_assessable`, sentence exactly
 "cucumber-js is unsupported: this build can recognise JavaScript step definitions and cannot read
@@ -27,11 +27,11 @@ cucumber-js remains unsupported. Confirmed.
 
 ## AC3 - absence of change
 
-- **CotW levels rebuilt** from the stored blobs of `cotw-levels-20261122-a3f19853-r11`:
+- **Demo Product levels rebuilt** from the stored blobs of `demo-product-levels-20261122-a3f19853-r11`:
   **94 claims, verdicts 90 distinct / 2 review / 1 unplaced / 1 gap** — exactly the stored run's split
-  (stored run `cotw-levels-20261122T204947`, same 94 rows, same verdict counts).
-- **ReqOverflow duplication re-run** over the stored blobs of
-  `reqoverflow-20261122-78153818-r8` (135 stepdefs, 18 features, 123 bindings, reqnroll detected):
+  (stored run `demo-product-levels-20261122T204947`, same 94 rows, same verdict counts).
+- **DemoService duplication re-run** over the stored blobs of
+  `demo-service-20261122-78153818-r8` (135 stepdefs, 18 features, 123 bindings, reqnroll detected):
   **17 claims, all `duplicate`** — 17/17 as stored.
 - **Case pages byte-for-byte:** I checked out the pre-build tree (d9b81ab) as a scratch worktree,
   rendered **all 250 pages** (245 case pages + 5 run pages) from the same store copy with the old
@@ -58,7 +58,7 @@ per repository arm (`role`, `repository`, `ecosystem`, `title`, `supported`, `ev
 verified for the fake-ecosystem run and the real-corpus run. Survives rebuild in the sense that
 matters: `rebuild.rebuild` over the pre-seam Cypress levels snapshot (`...-r3`) refuses to resurrect
 claims the run never made — 0 claims, `ecosystem: cucumber-js`, `ecosystem_supported: False` — and
-over the CotW snapshot still resolves `reqnroll`/supported. One caveat for T42-C: the rebuild
+over the Demo Product snapshot still resolves `reqnroll`/supported. One caveat for T42-C: the rebuild
 **recomputes** the ecosystem from the blobs rather than reading the stored record, so record and
 recompute could drift silently; nothing checks them against each other.
 

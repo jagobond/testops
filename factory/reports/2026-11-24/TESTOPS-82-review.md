@@ -2,8 +2,8 @@
 
 2026-11-24, reviewer. Worktree `C:/Users/<name>/Projects/testops-t82`, branch
 `factory/testops-82-quoted-entity`, head `c8973fc`. Everything below was derived offline from the
-stored snapshot `restfulbooker-levels-20261124-fe8537db-r2` and from direct calls into
-`testops/analysers/level_fitness.py` v0.14 with a Restful-booker-shaped surface corpus. No live
+stored snapshot `demo-booking-levels-20261124-fe8537db-r2` and from direct calls into
+`testops/analysers/level_fitness.py` v0.14 with a Demo-booking-shaped surface corpus. No live
 store, no port 8791, no network.
 
 ## Verdict
@@ -92,7 +92,7 @@ sit in rank 0, and the old ranking decides:
 
 ## Corpus
 
-Re-derived offline, twice, from `restfulbooker-levels-20261124-fe8537db-r2`: once from the
+Re-derived offline, twice, from `demo-booking-levels-20261124-fe8537db-r2`: once from the
 TESTOPS-79 merge (`a1adec4`, rebuilt in a temporary worktree against the same self-contained
 snapshot — the earlier snapshot cannot be rebuilt offline and is not used) and once from this
 tree. Keyed on (scenario, assertion text, line): 43 claims in both, **0 verdicts moved**, and 0

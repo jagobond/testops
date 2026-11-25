@@ -66,7 +66,7 @@ env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=
 
 ## Notes for the builder
 
-- A worked example of the target reading, for the CotW specimen: today's statement is unreadable
+- A worked example of the target reading, for the Demo Product specimen: today's statement is unreadable
   shorthand; the replacement should read like
   *"This test asserts that each fact's citation is in an element an assistive technology can name.
   Only a browser works that out, and this test reads the server's response instead, so nothing checks

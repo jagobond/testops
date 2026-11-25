@@ -1,6 +1,6 @@
 """TESTOPS-25: the copied fixture carries its upstream MIT notice and its provenance.
 
-`tests/fixtures/reqoverflow/` is a verbatim subset of `reqnroll/Sample-ReqOverflow` (MIT, Copyright
+`tests/fixtures/demo-service/` is a verbatim subset of `reqnroll/Sample-ReqOverflow` (MIT, Copyright
 (c) 2013-2024 Reqnroll and Gaspar Nagy). MIT only permits redistribution with the copyright and
 permission notice, so these files are part of the fixture's contract, not tidy-up material: if a
 future change deletes them, this suite goes red.
@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURE = ROOT / "tests" / "fixtures" / "reqoverflow"
+FIXTURE = ROOT / "tests" / "fixtures" / "demo-service"
 LICENSE = FIXTURE / "LICENSE"
 PROVENANCE = FIXTURE / "PROVENANCE.md"
 NOTICES = ROOT / "THIRD-PARTY-NOTICES.md"
@@ -63,7 +63,7 @@ def test_the_repository_root_makes_the_obligation_visible():
     assert NOTICES.is_file(), "the third-party obligation is hidden inside a test directory"
 
     text = NOTICES.read_text(encoding="utf-8")
-    assert "tests/fixtures/reqoverflow" in text
+    assert "tests/fixtures/demo-service" in text
     assert "MIT" in text
     assert "Reqnroll and Gaspar Nagy" in text
     assert "LICENSE" in text and "PROVENANCE.md" in text
@@ -74,7 +74,7 @@ def test_the_fixture_stays_data_and_the_notices_stay_out_of_the_corpus():
     assert list(FIXTURE.rglob("*.csproj")) == []
     assert list(FIXTURE.rglob("*.slnx")) == []
 
-    import reqoverflow_fixtures as corpus
+    import demo_service_fixtures as corpus
 
     texts = corpus.texts()
     assert len(texts) == 108, "the analyser no longer sees the 108 files the run collected"

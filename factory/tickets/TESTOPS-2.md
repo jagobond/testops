@@ -57,7 +57,7 @@ env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV -u CONDA_PREFIX PYTHONNOUSERSITE=
   `store.db.add_claim(...)`, `analysers.level_fitness.analyse(features, bindings, surfaces,
   uri_for_path, budget)`, `cases.fingerprint(...)`, `pipeline._emit(...)`.
 - Fixtures are in-memory objects, not files on disk, wherever the API allows it. AC6 must not
-  need `cotw-bdd` to be present on the machine.
+  need `demo-product-tests` to be present on the machine.
 - If an acceptance criterion cannot be satisfied without changing product code, **stop and report
   it** rather than changing `testops/`. A criterion that requires a product change is a finding
   about this ticket, and the Lead decides how to split it.

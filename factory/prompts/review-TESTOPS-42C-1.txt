@@ -27,7 +27,7 @@ HARD RULES
 - **AC7 no half-wiring:** confirm the pipeline and analysers have no diff, `detect().supported is False`, `drivers()`
   still refuses, and the corpus run is still `not_assessable` with zero claims. A part that quietly places claims would
   be worse than no part.
-- **AC8:** CotW 94/90/1/1/2, ReqOverflow 17/17, goldens byte-identical. The `{int}` change touches a matcher .NET also
+- **AC8:** Demo Product 94/90/1/1/2, DemoService 17/17, goldens byte-identical. The `{int}` change touches a matcher .NET also
   uses - confirm no .NET pattern regressed.
 - Do not edit product code or the ticket. Write exactly one file:
   factory/reports/2026-11-23/TESTOPS-42C-1-review.md with: ## Verdict; ## Counted from blobs; ## The 16; ## Regex

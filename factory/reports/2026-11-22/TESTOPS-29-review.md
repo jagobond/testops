@@ -1,7 +1,7 @@
 # TESTOPS-29 review — 2026-11-22
 
-Reviewer: independent re-measurement over the pinned run `cotw-levels-20261122T011316` (94 claims,
-snapshot `cotw-levels-20261122-a3f19853-r6`), suite run stripped per AGENTS.md.
+Reviewer: independent re-measurement over the pinned run `demo-product-levels-20261122T011316` (94 claims,
+snapshot `demo-product-levels-20261122-a3f19853-r6`), suite run stripped per AGENTS.md.
 
 ## Verdict — PASS
 
@@ -75,5 +75,5 @@ ticket, as the build report itself flags.
    author will cite it as precedent.
 3. **The corpus renderer tests still pin the old run's stored rows.** That is deliberate and argued
    (they are the only evidence the renderer keeps legacy two-clause actions whole), but it means
-   the store must retain `cotw-levels-20261122T011316` indefinitely; a future prune of old runs
+   the store must retain `demo-product-levels-20261122T011316` indefinitely; a future prune of old runs
    will silently weaken those tests rather than fail them.

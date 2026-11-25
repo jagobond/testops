@@ -19,7 +19,7 @@ Diff:       git diff feature/f1..HEAD
 HARD RULES
 - Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
 - **Verify the counts against the store, not against the page.** The quiet page claims 6 feature files, 41
-  scenarios, 17 exclusion patterns from CotwBdd.csproj, 21 of 27 stored feature files outside the build. Check
+  scenarios, 17 exclusion patterns from DemoProductTests.csproj, 21 of 27 stored feature files outside the build. Check
   each against the snapshot's own artefact rows. A count nobody can derive is the same defect as a claim nobody
   can settle.
 - **Test the AC4 rule adversarially.** The page must read what the run could not consult from the *recorded*

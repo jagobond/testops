@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TESTOPS-102. The tracked tree must carry no personal identifiers.
+"""TESTOPS-102, TESTOPS-103. The tracked tree must carry no personal identifiers, and no old names.
 
 A repository pushed to a colleague's organisation must not name Harry's subscription, his
 machines, his network or his home directory. This check is the gate for that: it reads every
@@ -15,6 +15,14 @@ The shapes:
 * a credential - every quoted string and every code-shaped token on a line is asked of
   :func:`testops.services.credential_reason`, the screen the store boundary already applies.
   There is one vocabulary for credentials in this repository, and this is it.
+
+TESTOPS-103 adds a sixth: a **name**. Every shape above is a shape - a GUID is an identifier
+because of its form, not its value - and that is exactly why a name cannot be caught by one. The
+demonstration corpus was renamed so a clone cannot say whose GitHub account made this or which
+projects it was pointed at, and a name that comes back is a provenance leak that looks like an
+ordinary English word. It is in this check rather than in a separate one because this is the check
+that asks "would a reader of this clone learn what the ticket says they must not", and a name is
+that question in its most literal form.
 
 Placeholders are not identifiers: ``<account>.services.ai.azure.com``, ``C:\\Users\\<name>`` and
 ``TESTOPS_AGENT_TOKEN=<token>`` are the documentation's way of saying "put yours here", and the
@@ -75,6 +83,41 @@ EXAMPLE_LABELS = ("example", "account", "your-account")
 # An authorization header written into source or a report: a scheme and one unbroken value.
 AUTH_HEADER = re.compile(r"(?i)\b(?:bearer|basic|digest|token)\s+(?P<body>[A-Za-z0-9._~+/=-]{12,})\b")
 
+# TESTOPS-103. The demonstration corpus's old names - the GitHub handle, the book series, the band's
+# site, the two public sample projects.
+#
+# They are written in halves so that this check does not read its own vocabulary as a finding: the
+# guard runs over every tracked file, including itself, and a literal here would be the one line in
+# the repository that trips it. Joined at import, the words are exactly the names.
+FORBIDDEN_NAMES = tuple(sorted({
+    "jago" "bond",
+    "mwinter" "ingham",
+    "cot" "w",
+    "cot" "w-contin" "uity",
+    "cot" "w-bdd",
+    "children of the old " "war",
+    "req" "overflow",
+    "restful-" "booker",
+    "restful" "booker",
+    "mwtestcon" "sultancy.co" ".uk",
+    "ruckol" "dtand" "rylander",
+    "ruckol" "dt & " "rylander",
+}, key=len, reverse=True))
+FORBIDDEN = re.compile(r"(?i)(?<![\w])(?:%s)(?![\w])"
+                       % "|".join(re.escape(name) for name in FORBIDDEN_NAMES))
+
+# The files that may still carry one of those names, and why. They are the documents a copied
+# fixture's licence obliges: the upstream repository, its projects and its commit have to stay
+# legible where the attribution is made, or the notice is not a notice. `rename_corpus.py` is the
+# map itself, which is the names by definition; it is a TESTOPS-103 migration artefact.
+ATTRIBUTION_CARRIERS = {
+    "factory/tickets/TESTOPS-103.md",
+    "THIRD-PARTY-NOTICES.md",
+    "tests/fixtures/demo-service/PROVENANCE.md",
+    "tests/test_third_party_attribution.py",
+    "scripts/rename_corpus.py",
+}
+
 SKIP_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".zip", ".pdf", ".woff", ".woff2"}
 
 
@@ -92,6 +135,13 @@ def shapes_in(line: str, name: str = "") -> list[tuple[str, str]]:
     ``example-account``, and a GUID it genuinely needs is written down as a non-GUID value.
     """
     found: list[tuple[str, str]] = []
+
+    # A name is not a shape, so it is asked before the shapes: the vocabulary is exact, and a line
+    # that carries one is a finding whatever else it looks like.
+    if name not in ATTRIBUTION_CARRIERS:
+        match = FORBIDDEN.search(line)
+        if match:
+            found.append(("name", match.group(0)))
 
     if not name.startswith(THIRD_PARTY_BLOBS):
         match = GUID.search(line)
@@ -170,9 +220,10 @@ def main() -> int:
                 hits += 1
     if hits:
         print(f"\n{hits} identifier(s) in {len(files)} tracked files. "
-              f"Deployment identifiers are configuration, never source (TESTOPS-102).")
+              f"Deployment identifiers are configuration, never source (TESTOPS-102); the old corpus "
+              f"names are attribution or a migration artefact, never the product (TESTOPS-103).")
         return 1
-    print(f"read {len(files)} files, no identifiers")
+    print(f"read {len(files)} files, no identifiers and no old names")
     return 0
 
 

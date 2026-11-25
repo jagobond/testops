@@ -44,9 +44,9 @@ No false positives. Every value in the brief was accepted and stored:
 - `owner/repo` → git_repo `repo`, 200, stored.
 - `https://jira.example.com` → jira_board `host`, 200, stored.
 - `https://dev.azure.com/org/project/_build?definitionId=2` → `host`, 200, stored.
-- `C:/work/repos/cotw` → `host`, 200, stored.
+- `C:/work/repos/demo-product` → `host`, 200, stored.
 - `PROJ` → ado_pipeline `ado_project` (with `org`), 200, stored.
-- `COTW-PROJ-KEY-0123456789-ABCDEFG` → `board`, 200, stored (longest run 10 — the rule is working).
+- `DEMO-PROJ-KEY-0123456789-ABCDEFG` → `board`, 200, stored (longest run 10 — the rule is working).
 - UUID `18a34e2a-…` → `board`, 200, stored (longest run 12).
 - `main`, `refs/heads/feature/x`, `pipeline #2` (as `host`), 12-char word `thunderstorm` → all 200,
   stored.
@@ -136,8 +136,8 @@ fine-grained suffix shape) would keep the credentials caught and free the lookal
 ### Round-1 regressions check
 
 - All eleven accepted values re-posted: `owner/repo`, `https://jira.example.com`,
-  `https://dev.azure.com/org/project/_build?definitionId=2`, `C:/work/repos/cotw`, `PROJ`,
-  `COTW-PROJ-KEY-0123456789-ABCDEFG`, the UUID, `main`, `refs/heads/feature/x`, `pipeline #2`,
+  `https://dev.azure.com/org/project/_build?definitionId=2`, `C:/work/repos/demo-product`, `PROJ`,
+  `DEMO-PROJ-KEY-0123456789-ABCDEFG`, the UUID, `main`, `refs/heads/feature/x`, `pipeline #2`,
   `thunderstorm` — **all still 200, all stored**.
 - Round-1 "still errs" items: the low-entropy `ghp_` probe is **now refused** (prefix rule) —
   improved. `Q29udGludWl0eUdhbWU=` still accepted as before. The JWT caught by run length, not
@@ -192,8 +192,8 @@ programmatically): `sk-`+48 base62, `github_pat_`+22 base62, `AKIA`+16, `ASIA`+1
 ### Round-1's eleven accepted values, one final time
 
 All **200, stored**: `owner/repo` (git_repo), `https://jira.example.com` (jira_board host+board),
-`https://dev.azure.com/org/project/_build?definitionId=2` (ado_pipeline), `C:/work/repos/cotw`
-(git_repo), `PROJ` (ado_pipeline, with `org`), `COTW-PROJ-KEY-0123456789-ABCDEFG`, the UUID, `main`,
+`https://dev.azure.com/org/project/_build?definitionId=2` (ado_pipeline), `C:/work/repos/demo-product`
+(git_repo), `PROJ` (ado_pipeline, with `org`), `DEMO-PROJ-KEY-0123456789-ABCDEFG`, the UUID, `main`,
 `refs/heads/feature/x`, `pipeline #2`, `thunderstorm`.
 
 ### Verdict — PASS

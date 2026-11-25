@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 import level_fixtures as level_fixtures
-import reqoverflow_fixtures as reqoverflow
+import demo_service_fixtures as demo_service
 from testops import blobs, cases, retention
 from testops.collectors.github import Collected
 from testops.config import Project, Repo
@@ -65,19 +65,19 @@ def _project(key: str, test: str = "tests", product: str = "product") -> Project
     return Project(key=key, product=Repo("o", product), test=Repo("o", test), jira_key="")
 
 
-def _reqoverflow_store(tmp_path, monkeypatch):
+def _demo_service_store(tmp_path, monkeypatch):
     """The real corpus wired to the real pipeline, with the collector re-putting every blob."""
     from testops import pipeline
 
     blob_dir = tmp_path / "blobs"
     monkeypatch.setattr(blobs, "BLOB_DIR", blob_dir)
-    path = tmp_path / "reqoverflow.db"
+    path = tmp_path / "demo-service.db"
     real_connect = db.connect
 
     def collect(repo, token, role="product"):
         # The real collector fetches every file and calls blobs.put on its bytes. Doing the same
         # here is what makes the second run a genuine test of content-addressing.
-        return Collected(commit=reqoverflow.COMMIT, files=reqoverflow.files())
+        return Collected(commit=demo_service.COMMIT, files=demo_service.files())
 
     monkeypatch.setattr(pipeline, "load_env", lambda: {})
     monkeypatch.setattr(pipeline.db, "connect", lambda: real_connect(path))
@@ -142,8 +142,8 @@ def _case_with_finding(conn, case_id: str, snapshot_id: str, fingerprint: str,
 def test_two_runs_over_an_unchanged_commit_add_no_blob_files_and_no_blob_bytes(tmp_path, monkeypatch):
     from testops import pipeline
 
-    path, connect, blob_dir = _reqoverflow_store(tmp_path, monkeypatch)
-    project = _project("reqoverflow", "Sample-ReqOverflow", "Sample-ReqOverflow")
+    path, connect, blob_dir = _demo_service_store(tmp_path, monkeypatch)
+    project = _project("demo-service", "demo-service", "demo-service")
 
     first = pipeline.run_duplication(project, token="unused")
     after_first = _blob_stats(blob_dir)
@@ -214,8 +214,8 @@ def test_growth_per_levels_run_is_measured_before_and_after(tmp_path, monkeypatc
 def test_growth_per_duplication_run_is_measured_before_and_after(tmp_path, monkeypatch):
     from testops import pipeline
 
-    path, connect, blob_dir = _reqoverflow_store(tmp_path, monkeypatch)
-    project = _project("reqoverflow", "Sample-ReqOverflow", "Sample-ReqOverflow")
+    path, connect, blob_dir = _demo_service_store(tmp_path, monkeypatch)
+    project = _project("demo-service", "demo-service", "demo-service")
     connect(path).close()
 
     before = measure(lambda: connect(path), blob_dir)

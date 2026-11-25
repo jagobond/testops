@@ -6,7 +6,7 @@ Repository: worktree C:/Users/<name>/Projects/testops-t7 (branch `factory/testop
 Suite:   tests/contracts/test_page_contracts.py (722 lines, 29 tests)
 Brief:   factory/briefs/page-contracts.md (24 promises - the whole specification the author was given)
 Author report: factory/reports/2026-11-23/TESTOPS-7-author-report.md ; raw first run: TESTOPS-7-first-run.txt
-The application is RUNNING at http://<tailnet-address>:8791/ with the live store (CotW, ReqOverflow, restfulbooker runs).
+The application is RUNNING at http://<tailnet-address>:8791/ with the live store (Demo Product, DemoService, demo-booking runs).
 
 HARD RULES
 - **Run the suite yourself** against the running server: `C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe -m

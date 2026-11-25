@@ -34,7 +34,7 @@ and the corpus did not move.
   1 not. The real store (migrated by the builder) reads: 723 v1 claims all `not assessed`, 282
   assessed, 282 not — no invented assessment anywhere.
 - **AC7 HOLDS.** `scripts/replay_levels.py --acceptance` on the newest levels snapshot
-  (`cotw-levels-…`, test `a3f19853` / product `b901ea4d`): **94 claims, 90 distinct, 1 unplaced,
+  (`demo-product-levels-…`, test `a3f19853` / product `b901ea4d`): **94 claims, 90 distinct, 1 unplaced,
   1 gap, 2 review — PASS.**
 - **AC8 WEAK (HOLDS via CI).** Green here on the repo venv (Python 3.12), 177 passed. No 3.11
   interpreter on this machine; the branch is pushed and `.github/workflows/ci.yml` runs the

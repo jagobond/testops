@@ -112,7 +112,7 @@ def _scenario_ref(feature_path: str, scenario: gherkin.Scenario) -> str:
 
 
 def _suite(path: str) -> str:
-    """Top-level project segment of a spec path, e.g. 'ReqOverflow.Specs.API'."""
+    """Top-level project segment of a spec path, e.g. 'DemoService.Specs.API'."""
     head = path.split("/", 1)[0]
     return head
 
@@ -277,7 +277,7 @@ def analyse(features: list[gherkin.Feature], bindings: list[stepbindings.Binding
     facts the run recorded, not values guessed here.
 
     ``suite_of`` is the ecosystem's own suite rule (TESTOPS-42C-3, AC6). Without it the .NET rule -
-    the top-level path segment - is used, which is exactly right for ``ReqOverflow.Specs.API``. A
+    the top-level path segment - is used, which is exactly right for ``DemoService.Specs.API``. A
     JavaScript suite lives under one ``cypress`` directory, so that rule would pair every feature
     with every step definition; the cucumber module supplies directory co-location instead, and a
     claim records which JS suite it paired. ``extractor`` names the vocabulary the pairing used, so

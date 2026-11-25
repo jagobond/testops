@@ -261,7 +261,7 @@ def page(title: str, body: str) -> bytes:
 
 
 def versions_text(versions: dict | None) -> str:
-    """"cotw-bdd@a3f19853" - what was looked at, abbreviated but unambiguous."""
+    """"demo-product-tests@a3f19853" - what was looked at, abbreviated but unambiguous."""
     return ", ".join(f"{k.split('/')[-1]}@{v[:8]}" for k, v in (versions or {}).items())
 
 
@@ -288,7 +288,7 @@ def freshness_line(fr: dict) -> str:
     """Never 'all clear'. Say what was looked at, and when."""
     if not fr.get("ever_run"):
         return ('<p class="fresh">Nothing has been analysed yet. '
-                '<span class="quiet">Run <span class="code">python -m testops.cli levels --project cotw</span> '
+                '<span class="quiet">Run <span class="code">python -m testops.cli levels --project demo-product</span> '
                 'to produce a first case.</span></p>')
     versions = versions_text(fr.get("versions"))
     return (f'<p class="fresh">Last analysed <strong>{esc(age(fr.get("finished_at")))}</strong>'
@@ -3129,8 +3129,8 @@ def config_page(conn) -> bytes:
             'Adding one here is configuration; runs and cases keep their project slug.</p>',
             '<h2 class="section">Add a project</h2>',
             '<form method="post" action="/config/projects">'
-            '<label>Slug <input name="slug" placeholder="cotw" required></label> '
-            '<label>Name <input name="name" placeholder="Children of the Old War"></label> '
+            '<label>Slug <input name="slug" placeholder="demo-product" required></label> '
+            '<label>Name <input name="name" placeholder="Demo Product"></label> '
             '<button type="submit">Add project</button></form>']
     if not projects:
         body.append('<p class="quiet">No projects are configured in this store yet.</p>')

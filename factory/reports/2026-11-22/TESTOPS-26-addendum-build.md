@@ -1,7 +1,7 @@
 # TESTOPS-26 addendum build report — 2026-11-22
 
 Branch `factory/testops-23-copy`, addendum committed at 44c4158. Two typographic defects seen in
-the rendered build of `case-cotw-levels-20261122T011316-03`. Nothing else changed: the page's
+the rendered build of `case-demo-product-levels-20261122T011316-03`. Nothing else changed: the page's
 structure, the recast copy and the verdicts are untouched.
 
 ## AC10 — the detached comma
@@ -67,8 +67,8 @@ asymmetry looks like a mistake to anyone who has not measured it.
 Served from `testops.web.app`, screenshotted with headless Chrome at 1100px:
 
 ```
-C:\Users\<name>\Pictures\testops-screenshots\TESTOPS-26-case-cotw-levels-20261122T011316-03.png
-C:\Users\<name>\Pictures\testops-screenshots\TESTOPS-26-case-cotw-levels-20261122T011316-03-scan-block-2x.png
+C:\Users\<name>\Pictures\testops-screenshots\TESTOPS-26-case-demo-product-levels-20261122T011316-03.png
+C:\Users\<name>\Pictures\testops-screenshots\TESTOPS-26-case-demo-product-levels-20261122T011316-03-scan-block-2x.png
 ```
 
 The second is the scan block at 2x, where the comma and the box's padding can be read directly.

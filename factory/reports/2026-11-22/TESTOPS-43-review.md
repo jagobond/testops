@@ -13,7 +13,7 @@ from probes I built myself against the real `pipeline._readings`, a real `Regist
 
 The zero-hiding aggregate now names each capability when a capability returned nothing or lost
 files; a fully-read run still renders the old short sentence; every skip appears on the run page
-whatever the verdict; the live CotW and ReqOverflow sentences are byte-identical to `main`'s.
+whatever the verdict; the live Demo Product and DemoService sentences are byte-identical to `main`'s.
 Three opacity margins remain, listed below; none is the fault the ticket named.
 
 ## Sentences rendered (three stores, quoted)
@@ -67,13 +67,13 @@ no longer be confused.
 
 I checked out `main`'s `testops/sources.py` to a temp file, imported both modules side by side,
 and rendered identical assessments under each — legacy no-readings records, readings-without-
-skips records, a zero record, and the live store's own snapshot registries (CotW r9–r11,
-ReqOverflow r6–r8, both `needs` and `consults` per analyser). Every pair IDENTICAL. The strings:
+skips records, a zero record, and the live store's own snapshot registries (Demo Product r9–r11,
+DemoService r6–r8, both `needs` and `consults` per analyser). Every pair IDENTICAL. The strings:
 
-- CotW r11 `level_fitness.needs` —
+- Demo Product r11 `level_fitness.needs` —
   main: `Assessed: code and test code were consulted and returned 95 items.`
   branch: `Assessed: code and test code were consulted and returned 95 items.`
-- ReqOverflow r8 `duplication.needs` —
+- DemoService r8 `duplication.needs` —
   main: `Assessed: test code was consulted and returned 158 items.`
   branch: `Assessed: test code was consulted and returned 158 items.`
 - `consults` rows (blocked Jira/ADO sentences) identical in full, quoted in the probe output.

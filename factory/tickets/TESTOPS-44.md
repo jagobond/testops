@@ -16,7 +16,7 @@ contains `/`, so a complete AWS key posted to a free-text settings field was **a
 reviewer's scratch store). In the shipped form only `repo` is free-text and its `owner/name` regex constrains it, so
 today's exposure is a hand-crafted POST or a future settings field — which is exactly how this becomes a leak.
 
-It also refuses the innocent: `COTW-PROJ-KEY-0123456789-ABCDEFG`, a plausible 32-character project key, was rejected as
+It also refuses the innocent: `DEMO-PROJ-KEY-0123456789-ABCDEFG`, a plausible 32-character project key, was rejected as
 high-entropy. A guard that blocks real configuration teaches people to disable it.
 
 Two smaller findings from the same review:
@@ -32,10 +32,10 @@ Two smaller findings from the same review:
 | id | criterion |
 |----|-----------|
 | AC1 | Base64 is detected as base64 **before** the `/` exemption applies: a value whose charset and length look like base64 is refused even though it contains `/`. Prove with the reviewer's AWS key and with a random 40-byte base64 string. |
-| AC2 | A legitimate structured key is accepted: `COTW-PROJ-KEY-0123456789-ABCDEFG`, `owner/repo`, `https://jira.example.com`, `PROJ`, a UUID, and a 12-char word. Pin every one of these as a test so tightening the guard cannot silently break configuration. |
+| AC2 | A legitimate structured key is accepted: `DEMO-PROJ-KEY-0123456789-ABCDEFG`, `owner/repo`, `https://jira.example.com`, `PROJ`, a UUID, and a 12-char word. Pin every one of these as a test so tightening the guard cannot silently break configuration. |
 | AC3 | The guard never echoes a rejected value: assert the response body and the log contain the field name and the reason, never the value. |
 | AC4 | Opening a store that needs migration prints one line naming the version change (`migrated store v3 -> v4`) and, on a store whose version is newer than the build supports, refuses with the versions named. A migrated-in-this-request store is distinguishable from one opened for reading. |
-| AC5 | No behaviour change elsewhere: 439+ tests, CotW 94/90/1/1/2, ReqOverflow 17/17, pages unchanged. |
+| AC5 | No behaviour change elsewhere: 439+ tests, Demo Product 94/90/1/1/2, DemoService 17/17, pages unchanged. |
 | AC6 | Process: any ticket whose diff touches more than three modules must contain its build report, and the builder must not report "done" without one. State this in the builder prompt, not just the ticket. |
 
 ## Notes

@@ -17,7 +17,7 @@ Diff:       git diff feature/f1..HEAD
 
 HARD RULES
 - Run the suite: env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q
-- **Measure the repetition yourself** over all 94 actions in run cotw-levels-20261122T011316: for each claim,
+- **Measure the repetition yourself** over all 94 actions in run demo-product-levels-20261122T011316: for each claim,
   take the action and the statement, and report how many actions share a content word with their own block.
   The build claims zero. Verify or refute with your own code.
 - **Check nothing was deleted to win.** The reason must still be on the page (AC2). For the two review-verdict

@@ -1,7 +1,7 @@
 # TESTOPS-50 review — reviewer, 23 November 2026
 
 Interpreter: `env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 C:/Users/<name>/Projects/testops/.venv/Scripts/python.exe`,
-store copy in `data/`, snapshot `restfulbooker-levels-20261122-262404a9-r3`.
+store copy in `data/`, snapshot `demo-booking-levels-20261122-262404a9-r3`.
 
 ## Verdict
 

@@ -102,7 +102,7 @@ tests was touched.
 ## What I did not verify
 
 - The `testops` **lint/prose tooling beyond what the suite covers** — I did not re-run the
-  corpus counts against a rebuilt store (the build's CotW 94/90/1/1/2 and ReqOverflow 17/17
+  corpus counts against a rebuilt store (the build's Demo Product 94/90/1/1/2 and DemoService 17/17
   pins were taken from the suite's own count tests, which pass).
 - The goldens' strip check covers the fixture pages, not a full re-render of every case page
   in a live store.

@@ -33,9 +33,9 @@ from testops.web import app
 
 # The three projects the blind author named, and the analysers this build registers. The build has
 # two analysers, so "a case from each" is as many distinct analysers as exist; both are covered.
-PROJECTS = (("cotw", "TestCraft COTW", "level_fitness"),
-            ("reqoverflow", "ReqOverflow", "duplication"),
-            ("restfulbooker", "restful-booker", "level_fitness"))
+PROJECTS = (("demo-product", "TestCraft DEMO", "level_fitness"),
+            ("demo-service", "DemoService", "duplication"),
+            ("demo-booking", "demo-booking", "level_fitness"))
 
 
 # --------------------------------------------------------------------------- HTML helpers
@@ -197,7 +197,7 @@ def test_a_case_page_links_its_own_run_and_the_link_says_what_it_is(store):
 
 def test_every_page_offers_the_same_visible_way_to_configuration(live):
     """AC2: /config is reachable from every page, by the same affordance, and it is visible text."""
-    pages = ["/", "/runs", "/run/run-case-cotw", "/case/case-cotw", "/config", "/no-such-page"]
+    pages = ["/", "/runs", "/run/run-case-demo-product", "/case/case-demo-product", "/config", "/no-such-page"]
     affordances = {}
     for path in pages:
         status, body = _get(live, path)
@@ -220,9 +220,9 @@ def test_every_page_offers_the_same_visible_way_to_configuration(live):
 
 def test_run_to_case_and_back_to_the_same_run(live):
     """AC3: the round trip, walked by following parsed links and constructing no URL."""
-    status, run_html = _get(live, "/run/run-case-reqoverflow")
+    status, run_html = _get(live, "/run/run-case-demo-service")
     assert status == 200
-    run_href = "/run/run-case-reqoverflow"
+    run_href = "/run/run-case-demo-service"
 
     case_links = [h for h in internal(run_html) if h.startswith("/case/")]
     assert case_links, "the run page links no case"
@@ -305,8 +305,8 @@ def test_every_internal_link_on_every_page_resolves(live):
                 seen.add(href)
                 frontier.append(href)
 
-    kinds = {"front": "/", "runs": "/runs", "run": "/run/run-case-cotw",
-             "case": "/case/case-cotw", "config": "/config"}
+    kinds = {"front": "/", "runs": "/runs", "run": "/run/run-case-demo-product",
+             "case": "/case/case-demo-product", "config": "/config"}
     for kind, path in kinds.items():
         status, body = _get(live, path)
         assert status == 200, f"the {kind} page returned HTTP {status}"

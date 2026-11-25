@@ -41,7 +41,7 @@ analyser would make it three.
 | AC3 | The duplication sentence states its own identity (`scenario + signature`) and what does and does not disturb it. |
 | AC4 | Concern 3 is stated wherever the reader would rely on it: a decision recorded before a twin was added can cover again after the twin is removed. Either surface it on the page or make the key carry enough history to prevent it — say which, and why. |
 | AC5 | A test asserts every registered analyser has a cover sentence, so a new analyser cannot inherit another's wording by default. |
-| AC6 | Goldens: whichever pages change, the diff contains only the sentence (verify programmatically, as TESTOPS-40's review did). Counts unchanged: CotW 94/90/1/1/2, ReqOverflow 17/17. |
+| AC6 | Goldens: whichever pages change, the diff contains only the sentence (verify programmatically, as TESTOPS-40's review did). Counts unchanged: Demo Product 94/90/1/1/2, DemoService 17/17. |
 
 ## Notes
 

@@ -12,7 +12,7 @@ depends_on: TESTOPS-18
 ## Why
 
 Two findings from the Product Owner's review of
-`case-cotw-levels-20261122T011316-03`:
+`case-demo-product-levels-20261122T011316-03`:
 
 > "It needs a summary at the top which includes a finding statement and a proposed solution. A user needs to
 > be able to do a quick scan of the case to determine if it's worth their time."

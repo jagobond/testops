@@ -328,7 +328,7 @@ def _record(findings: int = 6) -> dict:
 
 
 # The sentence the real model wrote and was rejected for, quoted from the reply to
-# case-restfulbooker-levels-20261124T123451-05 (TESTOPS-90's evidence). The 2405 is the claim id.
+# case-demo-booking-levels-20261124T123451-05 (TESTOPS-90's evidence). The 2405 is the claim id.
 REAL_SENTENCE = ("The record does not contain the defect's origin, and claim:2405 is the claim whose "
                  "record that gap concerns.")
 
@@ -482,7 +482,7 @@ def test_a_citation_id_written_in_the_prose_is_not_a_statistic():
 
     The number scan used to read the 2405 of ``claim:2405`` as a fabricated count. The sentence is
     the model's own, quoted from the rejected reply on
-    ``case-restfulbooker-levels-20261124T123451-05``; it is honest, it cites the row it names, and it
+    ``case-demo-booking-levels-20261124T123451-05``; it is honest, it cites the row it names, and it
     is accepted now.
     """
     record = _citation_record()

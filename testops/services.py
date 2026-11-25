@@ -54,7 +54,7 @@ _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 #
 #   1. a `name=value` pair whose name is a credential word, anywhere in the value - `password=hunter2`,
 #      `Authorization: Bearer ***`, `api_key = "..."`. The name stands alone, so `tokens` is not
-#      `token` and `cotw-continuity` contains no credential name at all;
+#      `token` and `demo-product` contains no credential name at all;
 #   2. an issued-token shape *searched anywhere* in the value, not only at position 0 - a PEM block,
 #      a JWT, an `Authorization` header, and (rule 4) a known prefix with its format's real body
 #      (TESTOPS-59 AC1: a real token pasted inside a sentence is still a token);
@@ -663,7 +663,7 @@ def _field_names_a_credential(name: str) -> bool:
 
 
 
-# What divides a structured key into readable parts. `COTW-PROJ-KEY-0123456789-ABCDEFG` and a UUID
+# What divides a structured key into readable parts. `DEMO-PROJ-KEY-0123456789-ABCDEFG` and a UUID
 # are configuration written as short parts; a token is one long unbroken run. Judging the longest run
 # rather than the whole value is what lets a hyphenated key through while a `ghp_...` token stays out.
 _SEPARATORS = re.compile(r"[/\\\-._:]")
@@ -823,7 +823,7 @@ def _looks_like_secret(value: str) -> str | None:
             return (f"it looks like a base64-encoded secret ({len(plain)} characters of the "
                     f"base64 alphabet)")
         # AC2: a structured key is written in short parts; a token is one long unbroken run. Only
-        # the longest run is judged, so a UUID or COTW-PROJ-KEY-... is configuration and ghp_... is
+        # the longest run is judged, so a UUID or DEMO-PROJ-KEY-... is configuration and ghp_... is
         # still a token.
         longest = max(len(part) for part in _SEPARATORS.split(plain))
         if longest >= 32 and (re.fullmatch(r"[A-Fa-f0-9]+", plain)
@@ -963,7 +963,7 @@ def add_project(conn, slug: str, name: str) -> dict:
     refuse_credential_in(name, "project name")
     if not _SLUG.fullmatch(slug):
         raise ConfigError(f"project slug {slug!r} must be lower-case letters, digits and hyphens, "
-                          f"starting with a letter or digit (for example: cotw)")
+                          f"starting with a letter or digit (for example: demo-product)")
     if get_project(conn, slug) is not None:
         raise ConfigError(f"a project {slug!r} already exists; choose another slug")
     conn.execute("INSERT INTO project (slug, name, created_at) VALUES (?,?,?)",

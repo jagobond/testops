@@ -43,9 +43,9 @@ Successful! message`) is unchanged, so the eight real-corpus refusals keep their
 
 ## The corpus, re-derived offline
 
-`scripts/replay_levels.py --snapshot restfulbooker-levels-20261124-fe8537db` (test arm
+`scripts/replay_levels.py --snapshot demo-booking-levels-20261124-fe8537db` (test arm
 `m-pujic-levi9-com/cypress-cucumber-e2e-tests@fe8537db`, product arm
-`mwinteringham/restful-booker-platform@efe2deb8`), rebuilt twice: once from the TESTOPS-79 tree
+`example-org/demo-booking-platform@efe2deb8`), rebuilt twice: once from the TESTOPS-79 tree
 (before) and once from this tree (after).
 
 | | before (v0.13) | after (v0.14) |
@@ -123,7 +123,7 @@ one, so no page that holds none changes by a byte.
   `distinct` / `no_intent`, `search for "room" returns results` → `distinct` / `no_intent`,
   `verify the "room" type appears in the list` → `repeats_product` (`GET /room/{id}`, word `room`).
   All five pinned by the existing tests, unchanged.
-- **Corpus, rebuilt offline twice** from `restfulbooker-levels-20261124-fe8537db-r2` (store copied
+- **Corpus, rebuilt offline twice** from `demo-booking-levels-20261124-fe8537db-r2` (store copied
   to a scratch directory; no network, no live store, no port 8791): once from the TESTOPS-82 head
   `c8973fc` in a temporary detached worktree, once from this tree. Keyed on (scenario, assertion
   text, line): **43 claims in both, 0 verdicts moved**, and **0 near-miss kinds, matched words or

@@ -66,9 +66,9 @@ is in the store and not only in prose.
 
 - Full suite from the worktree with the prescribed interpreter: **514 passed, 0 skipped**
   (3m55s), including the new vocabulary test.
-- CotW levels, latest run `cotw-levels-20261122T204947` (queried the scratch store directly):
+- Demo Product levels, latest run `demo-product-levels-20261122T204947` (queried the scratch store directly):
   **94 claims — distinct 90, gap 1, review 2, unplaced 1**. Matches.
-- ReqOverflow duplication, latest run `reqoverflow-dup-20261122T205100`:
+- DemoService duplication, latest run `demo-service-dup-20261122T205100`:
   **17 claims, 17 cases, all `duplicate`**. Matches. (Earlier same-day runs hold 18/18 — prior
   snapshots, never overwritten, per the standing rule.)
 - No migration: `user_version` = 0, no new migration file in `git diff`, no writer path changed

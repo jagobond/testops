@@ -6,15 +6,15 @@ Seven minutes, five pages, one point: *a finding is evidence, and you can check 
 
 ## 1. The corpus (30 s)
 
-Open the home page. Say what it is: **41 analysis runs, 226 case pages** from real repositories - restful-booker-platform
-(Java + Cypress), CotW, reqoverflow. Nothing here was typed in by hand; each page is rendered from rows a run stored.
+Open the home page. Say what it is: **41 analysis runs, 226 case pages** from real repositories - demo-booking-platform
+(Java + Cypress), Demo Product, demo-service. Nothing here was typed in by hand; each page is rendered from rows a run stored.
 
 Do not apologise for it being read-only. Say why: the analysis needs GitHub and a token, and they are not in the image on
 purpose.
 
 ## 2. One case, with the agent off (2 min)
 
-`/case/case-restfulbooker-levels-20261124T123451-05`
+`/case/case-demo-booking-levels-20261124T123451-05`
 
 Read the verdict aloud: **"Checked, but the product already exposes this."** Then walk down the page:
 

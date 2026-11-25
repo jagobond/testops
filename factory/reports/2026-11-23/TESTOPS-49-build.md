@@ -99,7 +99,7 @@ Examined and already sound, no change:
 9. `tests/test_third_party_attribution.py` — `rglob("*.csproj") == []` is a claim *about*
    emptiness (no build targets in the fixture), and the same test pins `len(texts) == 108`, so a
    vanished fixture cannot pass.
-10. `tests/reqoverflow_fixtures.py::texts` — a corpus builder, not a verdict; its count is pinned
+10. `tests/demo-service_fixtures.py::texts` — a corpus builder, not a verdict; its count is pinned
     at 108 by its consumers.
 
 ## AC5

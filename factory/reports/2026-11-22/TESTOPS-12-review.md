@@ -1,6 +1,6 @@
 # TESTOPS-12 review — 2026-11-22
 
-Corpus: run `cotw-levels-20261122T005529` (analyser level_fitness, snapshot cotw-levels-20261122-a3f19853-r4), 94 claims, 41 scenarios. Suite: 190 passed, 15.9s, from the project `.venv` with PYTHONPATH and VIRTUAL_ENV stripped and PYTHONNOUSERSITE=1.
+Corpus: run `demo-product-levels-20261122T005529` (analyser level_fitness, snapshot demo-product-levels-20261122-a3f19853-r4), 94 claims, 41 scenarios. Suite: 190 passed, 15.9s, from the project `.venv` with PYTHONPATH and VIRTUAL_ENV stripped and PYTHONNOUSERSITE=1.
 
 ## Verdict
 
@@ -17,7 +17,7 @@ NEEDS-FIX — the corpus holds its counts and most of its prose is the best this
 
 ## The prose
 
-Six statements, verbatim, from run `cotw-levels-20261122T005529`.
+Six statements, verbatim, from run `demo-product-levels-20261122T005529`.
 
 1. (distinct, settled by the response the server sends) "The assertion is about the data as stored: it reports how many admitted facts rest on a batch decision. The run only reads the responses the server sends, and that answer says what is stored, so the assertion is checked."
    The sharpest sentence in the corpus and the most problematic. "That answer says what is stored" is the open question — see below.
@@ -47,7 +47,7 @@ Ruling: the disclosure is necessary but not sufficient. "That answer says what i
 
 Disclosure is the right instinct, and a paying reader can reconstruct the inference. But a disclosure the reader must undo is not a disclosure; it is the claim wearing its caveat as a footnote inside the same sentence.
 
-There is also direct evidence the builder knows the better answer: run `cotw-levels-20261121T230858` carried the label "settled by the data as stored, read through the response the server sends" for exactly these claims, and the final run dropped it for the blunter one. The honest form existed in the codebase's history and was removed.
+There is also direct evidence the builder knows the better answer: run `demo-product-levels-20261121T230858` carried the label "settled by the data as stored, read through the response the server sends" for exactly these claims, and the final run dropped it for the blunter one. The honest form existed in the codebase's history and was removed.
 
 The wording I would use:
 
@@ -71,4 +71,4 @@ How we know it works: 190 tests pass from the clean-venv invocation; the corpus 
 
 What it does not solve: the response-as-store upgrade in every I1-over-api statement (ruled on above, disclosed but not reworded); the pass-note fallback leaking the raw label; the colon hiccup on bare verdict clauses.
 
-Where to look: `testops/analysers/level_fitness.py` (`_label`, `_second`, `META_PROPERTY`), `testops/queries.py` (`pass_note_from_rows`, `_ASKS`), `testops/web/app.py` (the zero-observations paragraph, the pass-note paragraph), corpus at run `cotw-levels-20261122T005529`, and run `cotw-levels-20261121T230858` for the dropped label.
+Where to look: `testops/analysers/level_fitness.py` (`_label`, `_second`, `META_PROPERTY`), `testops/queries.py` (`pass_note_from_rows`, `_ASKS`), `testops/web/app.py` (the zero-observations paragraph, the pass-note paragraph), corpus at run `demo-product-levels-20261122T005529`, and run `demo-product-levels-20261121T230858` for the dropped label.

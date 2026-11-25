@@ -19,9 +19,9 @@ never be a project the totals do not count.
 
 **Run page (`testops/web/app.py::read_counts_block`, `testops/queries.py::read_counts`).**
 A new section, *What this run read*, gives per-repository, per-kind read counts including
-explicit zeroes, e.g. for the pinned restfulbooker run:
+explicit zeroes, e.g. for the pinned demo-booking run:
 
-    From the product repository (mwinteringham/restful-booker-platform) it read 23 .ts files,
+    From the product repository (example-org/demo-booking-platform) it read 23 .ts files,
     4 .js files, 0 .csproj files, 0 .feature files, 0 .py files, and 0 .cs files.
     From the test repository (m-pujic-levi9-com/cypress-cucumber-e2e-tests) it read 14 .js files,
     6 .feature files, 1 .ts file, 0 .csproj files, 0 .py files, and 0 .cs files.
@@ -38,10 +38,10 @@ its "did not fetch" summary and its per-kind `<strong>142 .java</strong> … uns
 and the read section never borrows its words.
 
 `pipeline.py`, the collectors, both analysers and `sources.Assessment.sentence()` are untouched,
-so the pinned COTW sentence ("Assessed: code and test code were consulted and returned N items")
+so the pinned DEMO sentence ("Assessed: code and test code were consulted and returned N items")
 and the analyser counts are unchanged by construction and re-verified by the suite
 (`tests/test_partial_reads_visible.py::test_the_stored_runs_still_render_the_sentence_they_rendered`,
-`test_action_prose`/`test_case_scan` 94/90/1/1/2, ReqOverflow 17/17 — all pass).
+`test_action_prose`/`test_case_scan` 94/90/1/1/2, DemoService 17/17 — all pass).
 
 ## Tests added (`tests/test_counts_that_say_what_they_count.py`, 7)
 
@@ -64,8 +64,8 @@ which gains the totals paragraph and nothing else:
 
 ```diff
 @@ -84,2 +84,2 @@
--<body><main><h1>TestOps</h1><p class="meta"><a href="/runs">all runs</a></p><p class="fresh">Last analysed <strong>a fixed time ago</strong> at cotw-bdd@a3f19853 <span class="quiet">(Level fitness)</span></p><h2 class="section">cotw</h2>…
-+<body><main><h1>TestOps</h1><p class="meta"><a href="/runs">all runs</a></p><p class="fresh">Last analysed <strong>a fixed time ago</strong> at cotw-bdd@a3f19853 <span class="quiet">(Level fitness)</span></p><p class="totals">The store holds <strong>4 projects</strong>, <strong>12 runs</strong> and <strong>12 cases</strong>. A project is a set of repositories this tool is set up to analyse; a run is one analysis of a project at a fixed commit; a case is one finding waiting for a decision.</p><h2 class="section">cotw</h2>…
+-<body><main><h1>TestOps</h1><p class="meta"><a href="/runs">all runs</a></p><p class="fresh">Last analysed <strong>a fixed time ago</strong> at demo-product-tests@a3f19853 <span class="quiet">(Level fitness)</span></p><h2 class="section">demo-product</h2>…
++<body><main><h1>TestOps</h1><p class="meta"><a href="/runs">all runs</a></p><p class="fresh">Last analysed <strong>a fixed time ago</strong> at demo-product-tests@a3f19853 <span class="quiet">(Level fitness)</span></p><p class="totals">The store holds <strong>4 projects</strong>, <strong>12 runs</strong> and <strong>12 cases</strong>. A project is a set of repositories this tool is set up to analyse; a run is one analysis of a project at a fixed commit; a case is one finding waiting for a decision.</p><h2 class="section">demo-product</h2>…
 ```
 
 Rendered from the same migrated `before_v3.db` with the same frozen clock the test uses. No run

@@ -11,7 +11,7 @@ depends_on: TESTOPS-19
 
 ## Why
 
-The Product Owner, on `case-cotw-levels-20261122T011316-03`:
+The Product Owner, on `case-demo-product-levels-20261122T011316-03`:
 
 > "The verbiage is still not right, but I'm not quite sure how to explain why yet. That might need another
 > iteration."

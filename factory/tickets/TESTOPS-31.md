@@ -50,7 +50,7 @@ sentence and not an assertion, because the meaning was in the table that was dro
 |----|-----------|
 | AC1 | A scenario's signature includes the rows of any data table attached to a step and the text of any doc string, so two scenarios differing only in table content are **not** duplicates. |
 | AC2 | `assertion_text` carries the table (rows inline, e.g. "the suggestions list should be: What is Reqnroll?", or the full table rendered as data) so the claim states something a reader can check. Never a sentence that ends in "should be". |
-| AC3 | Re-running duplication on `reqoverflow` reports how many claims were previously declared duplicates on step text alone, and how many survive once the table is part of the signature. Report the before/after counts per scenario pair; state each pair's differing rows. |
+| AC3 | Re-running duplication on `demo-service` reports how many claims were previously declared duplicates on step text alone, and how many survive once the table is part of the signature. Report the before/after counts per scenario pair; state each pair's differing rows. |
 | AC4 | A test pins the exact pair above as NOT a duplicate, and keeps a genuinely identical pair (same text, same rows) as a duplicate, so the fix cannot be "stop reporting duplicates". |
 | AC5 | Existing duplication runs are not rewritten; only new runs carry the corrected signatures. Old pages keep their stored text. |
 | AC6 | Level-fitness corpus untouched: 94 claims, 90 distinct, 1 unplaced, 1 gap, 2 review. |

@@ -1,6 +1,6 @@
 """Rebuild the level-fitness claim set from a stored snapshot, and check the corpus numbers.
 
-    .venv/Scripts/python.exe scripts/replay_levels.py --snapshot cotw-levels-20261121-a3f19853-r2
+    .venv/Scripts/python.exe scripts/replay_levels.py --snapshot demo-product-levels-20261121-a3f19853-r2
 
 The rebuild reads one snapshot and nothing else: the test arm's features and step definitions, the
 product arm's source the surfaces were read from, the run's blind spots, and the observations behind
@@ -97,7 +97,7 @@ def accept(claims) -> list[str]:
     return problems
 
 
-def newest_levels_snapshot(conn, project: str = "cotw") -> str:
+def newest_levels_snapshot(conn, project: str = "demo-product") -> str:
     row = conn.execute(
         "SELECT id FROM snapshot WHERE project = ? AND id LIKE '%-levels-%'"
         " ORDER BY created_at DESC, rowid DESC LIMIT 1", (project,)).fetchone()
@@ -110,7 +110,7 @@ def newest_levels_snapshot(conn, project: str = "cotw") -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--snapshot", default=None,
-                    help="snapshot to rebuild (default: the newest levels snapshot for cotw)")
+                    help="snapshot to rebuild (default: the newest levels snapshot for demo-product)")
     ap.add_argument("--json", default="", help="write every claim, as JSON, to this path")
     ap.add_argument("--baseline-run", default="", help="compare verdicts with this stored run")
     ap.add_argument("--acceptance", action="store_true",

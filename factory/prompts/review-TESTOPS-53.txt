@@ -15,7 +15,7 @@ HARD RULES
   temp dir. Read `tests/contracts/harness.py` and `conftest.py` first and say whether the refusal is structural (a check
   on the resolved path) or advisory (a variable it happens to unset today).
 - **Port 0 only:** confirm the child binds an ephemeral port and the parent reads it, and that a fixed-port hijack cannot
-  silently substitute another store. The build reports two unrelated `cotw.panel` processes had bound 8811 and were
+  silently substitute another store. The build reports two unrelated `demo-product.panel` processes had bound 8811 and were
   answering requests - if true, that is a real observed hazard and worth confirming by running the suite twice
   concurrently (two `pytest tests/contracts` at once) and reporting that both pass against their own stores.
 - **AC2:** prove the skip path by making the server unable to start (scratch copy) and report the skip reason text.

@@ -14,8 +14,8 @@ depends_on: TESTOPS-31
 > "It does not, however, give any evidence of the additional scenario that asserts the same thing. Rather, it
 > shows me other scenarios around it, never claiming that any of them are the duplicate assertion."
 
-For `case-reqoverflow-dup-20261122T115216-18` the statement names
-`ReqOverflow.Specs.Controller/Features/Question/QuestionSuggestions.feature:17` as the copy that already asserts
+For `case-demo-service-dup-20261122T115216-18` the statement names
+`DemoService.Specs.Controller/Features/Question/QuestionSuggestions.feature:17` as the copy that already asserts
 this thing — and that file:line never appears on the page. What appears is section 3, "the other steps in this
 scenario, for context", which is about the claim's *own* scenario and is correctly labelled as not-evidence.
 

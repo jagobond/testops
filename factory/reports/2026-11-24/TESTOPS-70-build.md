@@ -34,20 +34,20 @@ Nothing in the web layer changed, and no golden file changed.
 
 ## AC7 — the corpus, read again
 
-Real run against `mwinteringham/restful-booker-platform@efe2deb8` with the production pipeline
+Real run against `example-org/demo-booking-platform@efe2deb8` with the production pipeline
 (levels run, GitHub collector, both arms), written to a **throwaway store** under the Hermes scratch
 directory — the worktree's `data/testops.db` and the live store were opened read-only or not at all.
 The token was placed in a temporary `.env` in the worktree, used, and deleted in the same command;
 `test -s` proved the file held the variable before the run and `test -e` proved it gone after.
 
-- run `restfulbooker-levels-20261124T100624`, snapshot `restfulbooker-levels-20261124-fe8537db`
+- run `demo-booking-levels-20261124T100624`, snapshot `demo-booking-levels-20261124-fe8537db`
 - surfaces: **found**, **142** files parsed, **25** surfaces
 - read: `{"code": 142, "test_code": 48}` → "Assessed: code and test code were consulted and returned
   190 items." (the same run before this ticket said *cannot assess: code was not read*)
 - languages: `142 .java`, `23 .ts`, `4 .js`; the page no longer prints
   *What the surface reader could not read*
 - test-side arithmetic unchanged: 43 claims, 4 cases — the same as
-  `restfulbooker-levels-20261123T132456`, because the level analyser does not consume surfaces.
+  `demo-booking-levels-20261123T132456`, because the level analyser does not consume surfaces.
 
 Five named route declarations and what each claims (the corpus has no Javadoc and no `@Operation`,
 so every claim here is the humanised method name — the third rung of the ladder, honestly):
@@ -74,7 +74,7 @@ in the per-repository read sentence:
 
 That is TESTOPS-55's promise doing its job: a kind the collector reads is stated for every repository,
 and 0 is a fact. No case page changed, the index did not change, and no golden fixture changed. Old
-restfulbooker run pages still print "142 .java files … this run did not fetch" for the skipped files
+demo-booking run pages still print "142 .java files … this run did not fetch" for the skipped files
 of *that* run; the stored record is a fact about that run and is left alone, exactly like any other
 historical skip.
 

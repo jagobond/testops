@@ -128,7 +128,7 @@ At the field surface (`validate_settings({"key": …})`) the same two directions
 `keys` holding `hunter2` are refused, holding `${API_KEY}`, `from-env` or `os.environ[API_KEY]` are
 stored. This closes the exact entry the T63 review recorded (`field key = hunter2 → accepted`) as a
 *rule*, not as an accident of the HTTP form's field whitelist. The honest key settings keep their
-values: `sort_keys=True`, `sorting_keys=asc`, `primary_key=id`, `board_keys=COTW`, `jira_key=TOPS`,
+values: `sort_keys=True`, `sorting_keys=asc`, `primary_key=id`, `board_keys=DEMO`, `jira_key=TOPS`,
 `key_metrics=latency` all store. Prose keeps the space it needs: "the key: it is in the vault" and
 "ask for the key: the platform team has it" stay configuration, because the lookbehind excludes a
 space and `_`/`-` as well as alphanumerics.

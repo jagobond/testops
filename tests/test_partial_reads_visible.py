@@ -13,7 +13,7 @@ TESTOPS-41 stopped a skipped file being counted as consulted. Three smaller lies
     explaining. A run that skips 500 `.sql` files and reads its code fine now says so, always,
     with each kind's count, its reason, and the names behind a disclosure.
 
-AC4 pins the two sentences that must not change - CotW and ReqOverflow have no capability that
+AC4 pins the two sentences that must not change - Demo Product and DemoService have no capability that
 lost a file, so neither gains a word. AC5 is structural: the wording lives in `sources.py`, and
 no page module builds its own. AC6 is a lint: the sentence uses the page's vocabulary and repeats
 nothing the page states beside it.
@@ -39,10 +39,10 @@ from testops.web import app
 ROOT = Path(__file__).resolve().parents[1]
 STORED = ROOT / "data" / "testops.db"
 
-COTW_RUN = "cotw-levels-20261122T204947"
-REQOVERFLOW_RUN = "reqoverflow-dup-20261122T205100"
-COTW_SENTENCE = "Assessed: code and test code were consulted and returned 95 items."
-REQOVERFLOW_SENTENCE = "Assessed: test code was consulted and returned 158 items."
+DEMO_RUN = "demo-product-levels-20261122T204947"
+DEMO_SERVICE_RUN = "demo-service-dup-20261122T205100"
+DEMO_SENTENCE = "Assessed: code and test code were consulted and returned 95 items."
+DEMO_SERVICE_SENTENCE = "Assessed: test code was consulted and returned 158 items."
 
 
 # --------------------------------------------------------------------------- a registry in memory
@@ -115,16 +115,16 @@ def test_a_complete_reading_gains_no_parenthetical():
                          sources.Reading(sources.TEST_CODE, observed=50))
 
     assert "(" not in sentence
-    assert sentence == COTW_SENTENCE
+    assert sentence == DEMO_SENTENCE
 
 
 # --------------------------------------------------------------------------- AC4: the pins
 
-def test_cotw_and_reqoverflow_sentences_are_unchanged():
+def test_demo_product_and_demo_service_sentences_are_unchanged():
     """Both recorded no lost file, so the wording is exactly what it was before this ticket."""
     assert _sentence(sources.Reading(sources.CODE, observed=45),
-                     sources.Reading(sources.TEST_CODE, observed=50)) == COTW_SENTENCE
-    assert _sentence(sources.Reading(sources.TEST_CODE, observed=158)) == REQOVERFLOW_SENTENCE
+                     sources.Reading(sources.TEST_CODE, observed=50)) == DEMO_SENTENCE
+    assert _sentence(sources.Reading(sources.TEST_CODE, observed=158)) == DEMO_SERVICE_SENTENCE
 
 
 def test_a_record_written_before_readings_still_reads_as_it_did():
@@ -133,12 +133,12 @@ def test_a_record_written_before_readings_still_reads_as_it_did():
                          "route": "github-api", "note": "", "order": 0}}
     registry = sources.Registry.from_record(stored)
 
-    assert registry.assess({sources.CODE, sources.TEST_CODE}).sentence() == COTW_SENTENCE
+    assert registry.assess({sources.CODE, sources.TEST_CODE}).sentence() == DEMO_SENTENCE
 
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
-@pytest.mark.parametrize("run_id,sentence", [(COTW_RUN, COTW_SENTENCE),
-                                             (REQOVERFLOW_RUN, REQOVERFLOW_SENTENCE)])
+@pytest.mark.parametrize("run_id,sentence", [(DEMO_RUN, DEMO_SENTENCE),
+                                             (DEMO_SERVICE_RUN, DEMO_SERVICE_SENTENCE)])
 def test_the_stored_runs_still_render_the_sentence_they_rendered(run_id, sentence):
     conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
@@ -301,7 +301,7 @@ INTERNAL_WORDS = ("capability", "capabilities", "registry", "reading", "readings
 
 
 @pytest.mark.parametrize("sentence", [
-    COTW_SENTENCE,
+    DEMO_SENTENCE,
     "Assessed: code returned 0 items; test code returned 2 items.",
     "Assessed: code and test code were consulted and returned 60 items "
     "(3 .cs files and 1 other kind unreadable).",

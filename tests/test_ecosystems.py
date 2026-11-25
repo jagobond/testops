@@ -9,7 +9,7 @@ The ticket's shape, in tests:
     and the module's bindings are the same rows ``stepbindings`` produced, so the seams's proof is
     the absence of change (the corpus tests over the real store cover the rest).
   * AC4 - a detected, unsupported ecosystem reports ``not_assessable`` with its name, and never
-    "none of its steps could be tied to a layer". Proven on the restfulbooker corpus in the store.
+    "none of its steps could be tied to a layer". Proven on the demo-booking corpus in the store.
   * AC5 - cucumber-js is unsupported: its declarations parse (T42C-1), its drivers do not, and
     the gate that keeps claims from being placed is still on.
   * AC7 - detection is total for recognisable markers, and an unrecognised repository is `unknown`.
@@ -39,10 +39,10 @@ STORED = ROOT / "data" / "testops.db"
 BLOB_DIR = ROOT / "data" / "blobs"
 
 # The TESTOPS-39 specimen: six feature files and fifteen JavaScript files in the test arm.
-CYPRESS_SNAPSHOT = "restfulbooker-20261122-262404a9"
+CYPRESS_SNAPSHOT = "demo-booking-20261122-262404a9"
 CYPRESS_TEST_REPO = ("m-pujic-levi9-com/cypress-cucumber-e2e-tests",
                      "262404a95784970315faeae6374ce8783ccbe598")
-CYPRESS_PRODUCT_REPO = ("mwinteringham/restful-booker-platform",
+CYPRESS_PRODUCT_REPO = ("example-org/demo-booking-platform",
                         "efe2deb8ce02db541adbf9d3a6604caf5fbdaae6")
 
 
@@ -284,7 +284,7 @@ def _stored_arm(conn, slug, commit):
 
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
-def test_the_restfulbooker_corpus_places_17_of_43_and_says_why(monkeypatch, tmp_path):
+def test_the_demo_booking_corpus_places_17_of_43_and_says_why(monkeypatch, tmp_path):
     """AC1/AC2/AC8, on the corpus TESTOPS-39 used: 44 declarations, 43 asserting steps.
 
     17 are placed and 26 are unplaced because no binding matches their words - never because the
@@ -298,7 +298,7 @@ def test_the_restfulbooker_corpus_places_17_of_43_and_says_why(monkeypatch, tmp_
     finally:
         stored.close()
     assert sum(1 for _sha, kind in test_arm.values() if kind == "feature") == 6
-    assert test_arm, "the restfulbooker snapshot is not in this store"
+    assert test_arm, "the demo-booking snapshot is not in this store"
 
     shas = {sha for sha, _kind in test_arm.values()} | {sha for sha, _kind in product_arm.values()}
     blobs_text = {f"__{sha}": _read_blob(sha) for sha in shas}

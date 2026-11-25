@@ -66,7 +66,7 @@ as this passive. `is redirected` never supplied an intent, so the real corpus ke
 
 ## No weakening
 
-- **Corpus, rebuilt offline** from `restfulbooker-levels-20261124-fe8537db-r2` with
+- **Corpus, rebuilt offline** from `demo-booking-levels-20261124-fe8537db-r2` with
   `scripts/replay_levels.py`, twice: once from the branch head `21e3248` in a detached worktree,
   once from this tree (a scratch copy of the store; no network, no live store, no port 8791).
   Keyed on (subject, assertion text, line): **43 claims in both, 0 verdicts moved**, and **0

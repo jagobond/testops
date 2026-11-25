@@ -35,7 +35,7 @@ Tests — new `tests/test_navigation.py` (4 tests, one per AC), plus the goldens
 ## AC by AC
 
 **AC1 — a case links to its run, across three projects.** `test_a_case_page_links_its_own_run_and_the_link_says_what_it_is`
-renders a case from `cotw`, `reqoverflow` and `restfulbooker` (one per project, and both registered
+renders a case from `demo-product`, `demo-service` and `demo-booking` (one per project, and both registered
 analysers: `level_fitness` and `duplication`). For each it asserts the case page's parsed hrefs
 contain `/run/run-case-<project>`, that the anchor's visible text is the run id, and that it never
 says "back". The build registers two analysers, not three, so "a case from each analyser" is
@@ -112,7 +112,7 @@ Before switching to a copied store, the first exploratory `pytest` on HEAD (not 
 `tests/contracts` run against the live server on 8791 and it created one empty project,
 `contract-audit-20261123144427` (no services, no runs, no snapshots, no cases). It was removed with
 the product's own `services.remove_project`; the live store now lists only
-`cotw, reqoverflow, restfulbooker, testops`. No other live write was made. This is the hazard
+`demo-product, demo-service, demo-booking, testops`. No other live write was made. This is the hazard
 TESTOPS-53 exists to close, and the reason every contract run here was on a copy.
 
 ## Files
@@ -173,7 +173,7 @@ answer **405** with `Allow: POST`, from one tuple of patterns (`POST_ONLY`) besi
 Nothing about the POST behaviour itself changed; `do_POST` still dispatches on the same paths.
 
 Witness: with `app.py` stashed, the form sweep fails with six lines of the form
-`the page /config posts a post form to /config/project/cotw/delete, which returned HTTP 404`.
+`the page /config posts a post form to /config/project/demo-product/delete, which returned HTTP 404`.
 
 **Suite after the amendment:** `pytest -q --ignore=tests/contracts` → **698 passed** (the 697 from
 the build plus the new orphan test). No contract test was run against any live server.

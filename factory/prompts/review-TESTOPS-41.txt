@@ -17,7 +17,7 @@ HARD RULES
   written before this change (backwards compatibility). For each, quote the sentence the page renders.
 - **Check the arithmetic.** Counts must come from fetched files only. Verify with a direct query that the number in
   the sentence equals the count of artefacts actually read for that capability, not the tree size.
-- **Check nothing else moved.** CotW must be 94/90/1/1/2 with its sentence unchanged; ReqOverflow 17/17. The build
+- **Check nothing else moved.** Demo Product must be 94/90/1/1/2 with its sentence unchanged; DemoService 17/17. The build
   claims 228 pages were byte-identical before and after; spot-check at least six pages yourself, including a case
   page and a run page, and say how you compared.
 - **Judge the "mislabelling" limitation it confesses** (product front-end `.js` counted as test code). Is the page

@@ -8,7 +8,7 @@ Ticket `factory/tickets/TESTOPS-31.md`, feature F1, autonomy `build`.
 The Product Owner's complaint was real and the finding behind it was a false positive. Two scenarios
 in `QuestionSuggestions.feature` assert different lists and were declared duplicates because the
 analyser compared step *words* only. The signature now carries the data, `assertion_text` states
-what the list is, and re-running on `reqoverflow` drops exactly that one claim: **18 → 17**. The nine
+what the list is, and re-running on `demo-service` drops exactly that one claim: **18 → 17**. The nine
 surviving pairs are identical down to their rows, so the fix is not "stop reporting duplicates".
 
 ## What changed
@@ -39,7 +39,7 @@ surviving pairs are identical down to their rows, so the fix is not "stop report
 - `tests/test_duplication_v2.py`, `tests/test_action_prose.py` — corpus counts 18 → 17, with the
   reason recorded in the module docstring. Nothing else in those tests moved.
 
-## Re-run on reqoverflow (AC3)
+## Re-run on demo-service (AC3)
 
 Method: the real `run_duplication` writes 17 claims to a throwaway store
 (`tests/test_duplication_v2.py`, `test_duplication_tables.py::test_rerun_counts_before_and_after_*`).
@@ -84,9 +84,9 @@ above, and the level-fitness corpus is separately pinned at 94/90/1/1/2.
   `test_digits_in_step_text_are_not_parameterised`.
 - AC2 — done. `assertion_text` is `step: data`; the statement quotes the same. Pinned by
   `test_the_assertion_carries_the_table_so_it_never_ends_at_should_be` and
-  `test_the_reqoverflow_claims_never_stop_at_should_be`. For the `reqoverflow` claims, the one whose
-  step already contains a colon (`the home page main message should be: "Welcome to ReqOverflow!"`)
-  is unchanged and still correct; no reqoverflow claim asserts a table, so the corpus half of AC2 is
+  `test_the_demo-service_claims_never_stop_at_should_be`. For the `demo-service` claims, the one whose
+  step already contains a colon (`the home page main message should be: "Welcome to DemoService!"`)
+  is unchanged and still correct; no demo-service claim asserts a table, so the corpus half of AC2 is
   covered by the synthetic cases.
 - AC3 — done, above. Pinned by `test_rerun_counts_before_and_after_and_names_what_resolved`.
 - AC4 — done. `test_the_pair_the_product_owner_opened_now_asserts_differently` and

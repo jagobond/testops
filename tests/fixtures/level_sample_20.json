@@ -1,6 +1,6 @@
 {
   "about": [
-    "TESTOPS-10 AC3: twenty real assertions from the CotW run cotw-levels-20261121T215534,",
+    "TESTOPS-10 AC3: twenty real assertions from the Demo Product run demo-product-levels-20261121T215534,",
     "hand-labelled before the analyser was changed. The sample is every fourth assertion in the",
     "run's distinct assertion texts, sorted, first twenty - a rule fixed before any label was",
     "written, so the sample was not chosen to flatter the result.",
@@ -16,7 +16,7 @@
     "'uses_browser' is whether any step of the scenario drives a browser. Both are inputs the",
     "analyser is allowed to use, recorded here so the test needs no repository."
   ],
-  "source_run": "cotw-levels-20261121T215534",
+  "source_run": "demo-product-levels-20261121T215534",
   "sample_rule": "sorted distinct assertion_text, every fourth, first twenty",
   "labelled_before_change": true,
   "samples": [

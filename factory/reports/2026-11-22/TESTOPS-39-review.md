@@ -13,7 +13,7 @@ found in the write-up (below) do not overturn it.
 ## Claims verified
 
 **(a) The binding count.** I read the five collected `.stepdef.js` blobs straight out of the blob
-store for snapshot `restfulbooker-levels-20261122-262404a9` and counted `\b(Given|When|Then|And|But)\s*\(`:
+store for snapshot `demo-booking-levels-20261122-262404a9` and counted `\b(Given|When|Then|And|But)\s*\(`:
 10 + 5 + 11 + 13 + 5 = **44**, matching the store's `bindings: 0` against a corpus that holds 44.
 Two precision notes: only **13** are `Then(`; the assessment's phrase "all of the form
 `Then('…', () => { … })`" is wrong — the 44 are Given/When/Then/And/But. And the JS test tree holds
@@ -27,8 +27,8 @@ while the product contributed exactly 27 `.js`/`.ts` files (verified by URI list
 Java code was never fetched.
 
 **(c) 43 claims, all `unplaced`.** `select verdict, count(*) from claim where run_id in
-('restfulbooker-levels-20261122T201853','restfulbooker-dup-20261122T201909')` → 43 rows, every one
-`unplaced`, no other verdict. Step-binding observations for the restfulbooker snapshots: extractor
+('demo-booking-levels-20261122T201853','demo-booking-dup-20261122T201909')` → 43 rows, every one
+`unplaced`, no other verdict. Step-binding observations for the demo-booking snapshots: extractor
 `gherkin` only, 66 rows — no binding extractor observation exists at all. Zero cases raised.
 
 **(d) The source sentence.** I rebuilt the assessment from the snapshot's recorded registry
@@ -41,7 +41,7 @@ Java code was never fetched.
 the sentence about `code` is false, as charged.
 
 **(e) Scope of the diff.** `git diff --stat main..HEAD`: 6 files — factory bookkeeping (TICKETS.md,
-review prompt, the assessment, tickets 41/42) and `testops/config.py` (+8, a `restfulbooker`
+review prompt, the assessment, tickets 41/42) and `testops/config.py` (+8, a `demo-booking`
 Project literal). No analyser, extractor, collector, renderer or store file moved.
 
 **Suite.** `env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q`
@@ -68,7 +68,7 @@ with everything I re-ran.
 
 Test repo (`m-pujic-levi9-com/cypress-cucumber-e2e-tests`): **no licence** (GitHub API
 `"license": null`) — all rights reserved by default. Product repo
-(`mwinteringham/restful-booker-platform`): **GPL-3.0**. Nothing from either was copied into this
+(`example-org/demo-booking-platform`): **GPL-3.0**. Nothing from either was copied into this
 repository: the diff shows only a `Project` literal (owner/name coordinates) and factory files.
 Reading public code at a pinned commit, storing metadata and quoting `file:line` facts with short
 verbatim step texts and a line or two of binding code for criticism is analysis, not

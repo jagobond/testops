@@ -13,24 +13,24 @@ HARD RULES
   odd (a project known only because a run names it, a project with no runs) and confirm the page still agrees with the
   store. The build claims a run-named project is counted - verify that it is, and that the page cannot show a heading for
   a project the totals do not count.
-- **The zeros:** the restfulbooker example reads "0 .csproj files ... 0 .cs files". Verify each listed kind really is
+- **The zeros:** the demo-booking example reads "0 .csproj files ... 0 .cs files". Verify each listed kind really is
   every kind the collector reads, and that a kind NOT in that list cannot silently vanish - if `config.FILE_KINDS` gains a
   kind tomorrow, does the sentence include it with no code change? Say what would break.
-- **Read vs skipped:** on a repository that is partially read (the restfulbooker product side is the natural specimen),
+- **Read vs skipped:** on a repository that is partially read (the demo-booking product side is the natural specimen),
   confirm the page shows the read count AND the skip count, and that a reader cannot confuse "read 0" with "skipped 142".
   Quote both sentences as they render.
-- **The pinned sentence:** a previous ticket pinned the CotW sentence "code and test code were consulted ... returned N
+- **The pinned sentence:** a previous ticket pinned the Demo Product sentence "code and test code were consulted ... returned N
   items" byte-for-byte for a run with zero skips. Confirm it still reads exactly as before on this branch - diff it
   against origin/main's rendering, not against the build's word.
 - **Derivation, not duplication:** find where the numbers come from. If any count is stored, cached or written twice,
   that is a finding. Say how a stale count could arise and whether the page can ever disagree with the store.
 - **Contract suite:** run it. On this branch expect P07/P10 to pass, and the P05 pair to fail (TESTOPS-54 is not merged
-  here). Anything else moving is a regression. Also run the full product suite and the analyser pins (CotW 94/90/1/1/2,
-  ReqOverflow 17/17).
+  here). Anything else moving is a regression. Also run the full product suite and the analyser pins (Demo Product 94/90/1/1/2,
+  DemoService 17/17).
 - **Wording as a reader:** read the new front-page line and the read-counts block cold. Do they say what the numbers
   count, without a legend? Is "The store holds 4 projects, 47 runs and 208 cases" followed by definitions a reader wanted,
   or padding?
 - Write exactly one file: factory/reports/2026-11-24/TESTOPS-55-review.md with: ## Verdict; ## The front-page totals,
-  checked against the store; ## The zeros; ## Read versus skipped; ## The pinned CotW sentence; ## Derivation;
+  checked against the store; ## The zeros; ## Read versus skipped; ## The pinned Demo Product sentence; ## Derivation;
   ## Contract suite; ## The wording; ## Three sharpest concerns.
 - Reply with the verdict and a summary under 250 words.

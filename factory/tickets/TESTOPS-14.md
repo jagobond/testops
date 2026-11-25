@@ -53,7 +53,7 @@ and records no observation rows for them.
 ## Addendum at review time (Lead, after rendering the page)
 
 AC3 and AC4 were met by volume, not by relevance. The page for
-`case-cotw-levels-20261121T230858-01` now shows, under "Evidence recorded at this claim's own
+`case-demo-product-levels-20261121T230858-01` now shows, under "Evidence recorded at this claim's own
 coordinates in this run:", six scenarios from `canon_query_api.feature` — lines 22, 29, 34, 41, 48,
 55 — each described as starting at that line with 2–4 steps. The claim is the step at **line 59**.
 None of those six lines is the claim. A reader is invited to conclude the claim rests on six

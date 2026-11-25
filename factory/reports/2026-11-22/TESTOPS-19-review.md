@@ -29,14 +29,14 @@ claim's own commit, degrades honestly on every missing-content path, and moves n
   exception, no empty `<pre>`.
 - AC9 HOLDS. Both excerpts come from `blobs.text(sha)`; the AC9 socket test passes; the page I
   rendered with a blob physically missing still completed.
-- AC10 HOLDS. Snapshot `cotw-levels-20261122-a3f19853-r6`: 94 claims — 90 distinct, 1 gap, 1
+- AC10 HOLDS. Snapshot `demo-product-levels-20261122-a3f19853-r6`: 94 claims — 90 distinct, 1 gap, 1
   unplaced, 2 review. Suite: 210 passed, clean invocation, 18.4s.
 
 ## The snippets
 
-Spot check 1 — assertion excerpt. Claim of `case-cotw-levels-20261122T011316-03`,
+Spot check 1 — assertion excerpt. Claim of `case-demo-product-levels-20261122T011316-03`,
 `features/review_panel.feature`, commit `a3f19853`. I rendered the page, then ran `git show
-a3f19853:features/review_panel.feature` in the real `cotw-bdd` repo and compared. The excerpt is
+a3f19853:features/review_panel.feature` in the real `demo-product-tests` repo and compared. The excerpt is
 lines 30–34, asserted line 32 marked, and every rendered line matches the commit's bytes at its
 printed line number — no off-by-one. The stored blob and the repo agree.
 
@@ -99,4 +99,4 @@ summary gap and the four-fold repetition of the claim text remain open, owned by
 
 **Where to look.** `testops/queries.py` (`summary_of`, `source_snippets`), `testops/web/app.py`
 (`summary_block`, `snippet_block`), `tests/test_case_summary_and_code.py`; the -03 case page and the
-`cotw-bdd` repo at `a3f19853`.
+`demo-product-tests` repo at `a3f19853`.

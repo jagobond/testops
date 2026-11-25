@@ -53,7 +53,7 @@ identical to `HEAD` (checked programmatically for all 14). So:
 - `index.html` and `runs.html`: **stylesheet only** — 21 added lines, nothing else.
 - `case-page-01` … `case-page-12`: stylesheet plus the band (one long line between the state line
   and the run link). No wording, count, verdict or other markup moved.
-- `case-page-06` (reqoverflow, test arm only) is the golden that shows AC4: the dimmed product tag
+- `case-page-06` (demo-service, test arm only) is the golden that shows AC4: the dimmed product tag
   and the "assessed against test code only" sentence.
 - `case-page-01` shows both repositories as consulted tags.
 
@@ -86,7 +86,7 @@ harness built its own seed store and bound port 0 as before.
   item, pipeline run or requirements document yet, so those four tags are pinned by fixture tests
   only. The corpus has no such links, and inventing them from an issue board would be a guess.
 - The old golden fixture store records the product arm but no product commit, so its product tags
-  link the repository and say the commit was not recorded. The contract seed (restful-booker) does
+  link the repository and say the commit was not recorded. The contract seed (demo-booking) does
   record the commit, and its band shows the `/tree/<commit>` link.
 - The band links one test file per repository — the first claim that carries coordinates. A case
   whose findings span several files still gets one repository tag, because the unit AC1 names is

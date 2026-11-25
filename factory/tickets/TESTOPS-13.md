@@ -37,7 +37,7 @@ file, so nothing checks it.
 | AC1 | Every module under `testops/` imports successfully under Python 3.11. |
 | AC2 | The full suite passes under **both** 3.11 and 3.12, with the counts recorded in the report. |
 | AC3 | A test fails if any module reintroduces a backslash inside an f-string expression — the specific construct that broke the floor — so the regression cannot return silently on a 3.12-only run. |
-| AC4 | The server starts under 3.11 and serves a real case page: the report quotes the rendered text of `case-cotw-levels-20261121T215534-01` fetched from a 3.11-hosted process. |
+| AC4 | The server starts under 3.11 and serves a real case page: the report quotes the rendered text of `case-demo-product-levels-20261121T215534-01` fetched from a 3.11-hosted process. |
 | AC5 | No behaviour changes: pages render identically before and after (same text content), and no test is weakened to accommodate the change. |
 | AC6 | `requires-python` and the code agree. If you conclude 3.11 support is not wanted, changing the declared floor is a decision for the Lead, not something to do silently to make a test pass. |
 

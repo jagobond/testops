@@ -28,9 +28,9 @@ HARD RULES
   failed / 3 skipped with P4 passing. Confirm exactly which five fail and that they are the known ones (P05 x2, P07, P10,
   P23). Any sixth failure or any newly failing contract test is a regression.
 - **Analysers untouched:** `git diff --stat origin/main...HEAD` must show no change under `testops/extract/`,
-  `testops/judgement/` or the analysis pipeline. CotW 94/90/1/1/2 and ReqOverflow 17/17 still pinned.
+  `testops/judgement/` or the analysis pipeline. Demo Product 94/90/1/1/2 and DemoService 17/17 still pinned.
 - **The disclosure:** the build admits two early full-suite runs wrote `contract-audit-*` projects to the LIVE store, and
-  that it deleted those two rows itself. Verify the live store now holds exactly cotw, reqoverflow, restfulbooker,
+  that it deleted those two rows itself. Verify the live store now holds exactly demo-product, demo-service, demo-booking,
   testops with no stray rows (read-only query), and say whether the root cause - `tests/contracts` defaulting to the live
   server - is fixed by this ticket or remains a live hazard for every future `pytest` run. If it remains, say plainly that
   it needs its own ticket.

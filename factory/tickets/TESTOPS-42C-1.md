@@ -14,7 +14,7 @@ matcher: 44 declarations in 5 files, 16 of them multi-line, `{string}` and `{int
 Everything downstream is inference, so this must be exact first.
 
 Reference: `docs/ecosystem-inventory-cucumber-js.md` §1–§2 and `tools/ecosystem_inventory_counts.py` — the corpus facts and
-the tool that proves them. Corpus: snapshot `restfulbooker-20261122-262404a9`, test arm
+the tool that proves them. Corpus: snapshot `demo-booking-20261122-262404a9`, test arm
 `m-pujic-levi9-com/cypress-cucumber-e2e-tests@262404a95`, blobs in the store.
 
 ## Acceptance criteria
@@ -28,7 +28,7 @@ the tool that proves them. Corpus: snapshot `restfulbooker-20261122-262404a9`, t
 | AC5 | The duplicate pattern (`Visitor will get validation/mandatory error message: {string}`, declared in `booking.stepdef.js` and `contact.stepdef.js`) resolves per-suite first, and falls back to any-suite only when the scenario's suite matches neither. Test both directions. |
 | AC6 | Suite scoping matches the corpus: 6 features, 5 stepdef files, and each feature resolves to its own suite (the existing stem rule works on 5 of 5 - prove it, do not assume it). |
 | AC7 | No claim is placed by this ticket: `analysers` receive the bindings and the run still reports what it reported before for this corpus (which is `not_assessable` until T42C-3 wires placement). Do not half-wire. |
-| AC8 | .NET and Python unchanged: CotW 94/90/1/1/2, ReqOverflow 17/17, case-page goldens byte-identical, suite green (583+). |
+| AC8 | .NET and Python unchanged: Demo Product 94/90/1/1/2, DemoService 17/17, case-page goldens byte-identical, suite green (583+). |
 
 ## Notes
 

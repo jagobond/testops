@@ -6,7 +6,7 @@ rules around it, and runs the plain-English lint over every claim of a real run.
 
 The corpus check has two arms. One drives the real pipeline over the fixture repository, so it is
 deterministic and does not read the product's store. The other runs the same lint over the stored
-cotw run (94 claims, 90 distinct / 1 unplaced / 1 gap / 2 review) when that store is present; it is
+demo-product run (94 claims, 90 distinct / 1 unplaced / 1 gap / 2 review) when that store is present; it is
 skipped in a clean checkout, because the store is a build artefact and not part of the repository.
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STORED = ROOT / "data" / "testops.db"
 # The run the ticket names, pinned by id rather than picked by a query: a re-run of the analyser
 # must not move what these tests measure (TESTOPS-28 AC3, AC6).
-PINNED_RUN = "cotw-levels-20261122T011316"
+PINNED_RUN = "demo-product-levels-20261122T011316"
 STEPS = "Steps/PanelSteps.cs"
 
 TS = "2020-01-01T00:00:00+00:00"
@@ -406,7 +406,7 @@ def test_the_pinned_run_keeps_its_verdicts():
 
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
-def test_the_stored_cotw_corpus_keeps_its_verdicts_and_passes_the_lint(tmp_path, monkeypatch):
+def test_the_stored_demo_product_corpus_keeps_its_verdicts_and_passes_the_lint(tmp_path, monkeypatch):
     """The real 94-claim run: same verdict counts, every page through the same lint."""
     copy = tmp_path / "corpus.db"
     shutil.copyfile(STORED, copy)
@@ -428,7 +428,7 @@ def test_the_stored_cotw_corpus_keeps_its_verdicts_and_passes_the_lint(tmp_path,
                 " JOIN run r ON r.id = c.run_id WHERE c.id = ?", (row["id"],)).fetchone()
             conn.execute("INSERT INTO case_ (id, run_id, project, analyser, snapshot_id,"
                          " created_at, summary) VALUES (?,?,?,?,?,?,?)",
-                         (case_id, context["run_id"], "cotw", context["analyser"],
+                         (case_id, context["run_id"], "demo-product", context["analyser"],
                           context["snapshot_id"], TS, "{}"))
             conn.execute("INSERT INTO finding (case_id, title, severity, fingerprint, claim_ids)"
                          " VALUES (?,?,?,?,?)",

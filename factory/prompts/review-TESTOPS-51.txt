@@ -13,8 +13,8 @@ HARD RULES
 - **The screen is a shape, not a word list:** read `_looks_like_secret` and decide whether it is a shape you can reason
   about, or a pile of special cases that will miss the next format. Say which.
 - **False positives are the main risk.** Verify by hand over HTTP on your copy - not from the build's table - that all of
-  these are accepted: `jagobond/cotw-continuity`, `Jira board COTW`, `RuckoldtAndRylander`, `cotw-continuity pipeline #2`,
-  `mwinteringham/restful-booker-platform`, `<tailnet-address>`, `localhost:8791`, `https://github.com/org/repo.git`, `COTW`,
+  these are accepted: `example-org/demo-product`, `Jira board DEMO`, `ExampleAndCo`, `demo-product pipeline #2`,
+  `example-org/demo-booking-platform`, `<tailnet-address>`, `localhost:8791`, `https://github.com/org/repo.git`, `DEMO`,
   `TOPS`, `test password reset flow`. Then push on the boundary yourself with at least ten values of your own invention
   that a real user might type - product names, a repo called `password-manager/tool`, a board called `secrets-service`, a
   host named `vault.internal`, a description like `Bearer token rotation work`, a path like `docs/token-refresh.md`. For
@@ -25,7 +25,7 @@ HARD RULES
   project name rather than a service name, a value in the repo field with leading whitespace or a trailing newline, a
   URL-encoded value, mixed case in the credential word, a value split across two fields. Report which get through.
 - **AC6 delete route:** on your copy, delete an empty project (works, services cascade, nothing else changes) and attempt
-  to delete `cotw` (must refuse, naming the run/snapshot/case counts). Confirm it cannot be forced by POST, a malformed
+  to delete `demo-product` (must refuse, naming the run/snapshot/case counts). Confirm it cannot be forced by POST, a malformed
   slug or a second submit, and that no evidence row is ever removed by this route.
 - **AC7/AC8:** run the contract suite on your copy (`TESTOPS_BASE=http://127.0.0.1:<port>`) - expect 20 passed / 6 failed /
   3 skipped on main's suite, with **P23 now passing** and the other five unchanged. Confirm no case-page golden moved.

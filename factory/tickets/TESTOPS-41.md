@@ -32,8 +32,8 @@ and the run prints `"surfaces": 0` with no reason attached.
 | AC1 | The collector records, per run, **which files it skipped and why** — unsupported kind, size cap, ignore pattern — with counts per kind. A file it could not read is never counted as consulted. |
 | AC2 | The source record distinguishes three states for a capability: *read and returned items*, *read and returned nothing*, *not readable in this repository* — and the page's sentence differs for each. The `code` capability must not read as observed when zero product-code files were fetched. |
 | AC3 | A surface reader that cannot parse a language returns `not_assessable` with the reason (the language and the file count), not `[]`. The run's stats distinguish "0 surfaces found" from "0 surfaces findable". |
-| AC4 | Both are proven on the TESTOPS-39 corpus: re-running `restfulbooker` renders a sentence naming the 142 skipped `.java` files, and says the product code was not read, rather than the current false sentence. |
-| AC5 | CotW and ReqOverflow are unaffected: verdict counts 94/90/1/1/2 and 17/17, and their pages byte-identical. |
+| AC4 | Both are proven on the TESTOPS-39 corpus: re-running `demo-booking` renders a sentence naming the 142 skipped `.java` files, and says the product code was not read, rather than the current false sentence. |
+| AC5 | Demo Product and DemoService are unaffected: verdict counts 94/90/1/1/2 and 17/17, and their pages byte-identical. |
 | AC6 | The fix is not a longer kind list alone. Whatever list exists must be data (configuration), and the code must report what fell outside it — a list that silently grows is the same bug with more entries. |
 
 ## Notes

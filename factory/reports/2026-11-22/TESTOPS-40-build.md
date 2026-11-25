@@ -83,8 +83,8 @@ closed here; closing it would need a stable per-assertion identity the source do
 ## AC5 — no verdict or claim counts move
 
 The analyser's verdict logic is untouched; only `evidence_key` changed, and only in scenarios with
-repeat words. Corpus tests that pin the counts pass unchanged: CotW **94 claims / 90 distinct / 1
-unplaced / 1 gap / 2 review**, ReqOverflow **17/17**. Existing runs and snapshots are untouched.
+repeat words. Corpus tests that pin the counts pass unchanged: Demo Product **94 claims / 90 distinct / 1
+unplaced / 1 gap / 2 review**, DemoService **17/17**. Existing runs and snapshots are untouched.
 
 ## The byte-identical pages
 
@@ -105,9 +105,9 @@ env -u PYTHONPATH -u VIRTUAL_ENV PYTHONNOUSERSITE=1 \
 540 passed in 102.14s
 ```
 
-Run against a copy of the CotW build store in this worktree's gitignored `data/`, so the corpus
+Run against a copy of the Demo Product build store in this worktree's gitignored `data/`, so the corpus
 tests that need it ran rather than skipped — including the pin for **94 claims / 90 distinct / 1
-unplaced / 1 gap / 2 review**, and the ReqOverflow **17/17** assertions. Without that store present
+unplaced / 1 gap / 2 review**, and the DemoService **17/17** assertions. Without that store present
 the same tree gives **529 passed, 11 skipped**; the 11 are exactly the corpus tests that read it.
 
 Before this ticket in this worktree: 528 passed, 1 failed (the golden pages), 11 skipped. Eight new

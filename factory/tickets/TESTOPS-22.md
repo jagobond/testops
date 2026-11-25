@@ -11,7 +11,7 @@ depends_on: TESTOPS-21
 
 ## Why
 
-The Product Owner opened `case-cotw-dup-20261120T194032` and asked:
+The Product Owner opened `case-demo-product-dup-20261120T194032` and asked:
 
 > "Is this resolved because of a test of the application? If so, I find no information here about what was
 > actually done, which I would expect. Otherwise, it looks like another application defect."

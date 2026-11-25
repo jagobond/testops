@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS snapshot (
 CREATE TABLE IF NOT EXISTS artefact (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   snapshot_id TEXT NOT NULL REFERENCES snapshot(id),
-  uri TEXT NOT NULL,                       -- github:owner/name@sha:path  |  jira:COTW-12
+  uri TEXT NOT NULL,                       -- github:owner/name@sha:path  |  jira:DEMO-12
   kind TEXT NOT NULL,                      -- feature | stepdef | source | test | issue | run
   blob_sha TEXT,
   meta TEXT NOT NULL DEFAULT '{}',
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS claim (
   run_id TEXT NOT NULL REFERENCES run(id),
   analyser TEXT NOT NULL,
   analyser_version TEXT NOT NULL,
-  subject_ref TEXT NOT NULL,               -- scenario:<feature>#<name> | issue:COTW-12
+  subject_ref TEXT NOT NULL,               -- scenario:<feature>#<name> | issue:DEMO-12
   statement TEXT NOT NULL,                 -- the claim's own heading, in plain words
   verdict TEXT NOT NULL,                   -- distinct | gap | review | unplaced | duplicate | repeats_product
   confidence REAL NOT NULL DEFAULT 0.0,

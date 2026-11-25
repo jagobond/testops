@@ -39,27 +39,27 @@ without it.
 
 ## The case-to-run link
 
-Verified on real cases from all three projects in the store (cotw, reqoverflow, restfulbooker) and
+Verified on real cases from all three projects in the store (demo-product, demo-service, demo-booking) and
 both registered analysers (`level_fitness`, `duplication`) — three project/analyser combinations,
 each checked live:
 
-- `case-cotw-levels-20261120T194425` → `/run/cotw-levels-20261120T194425`
-- `case-reqoverflow-dup-20261120T153431` → `/run/reqoverflow-dup-20261120T153431`
-- `case-restfulbooker-levels-20261123T132456-01` → `/run/restfulbooker-levels-20261123T132456`
+- `case-demo-product-levels-20261120T194425` → `/run/demo-product-levels-20261120T194425`
+- `case-demo-service-dup-20261120T153431` → `/run/demo-service-dup-20261120T153431`
+- `case-demo-booking-levels-20261123T132456-01` → `/run/demo-booking-levels-20261123T132456`
 
 The anchor text is the run id inside the sentence "Raised by the run <id> — what that run analysed,
 and what it could not consult." That is not a bare "back" and not a bare id: the sentence names
 what the link is. Judged as a reader: the link says what it is and where it goes.
 
 The promise fails honestly where the build said it already held: all four no-finding rows in the
-store (e.g. `case-cotw-dup-20261120T153507`) also link their run, under the TESTOPS-34 sentence
+store (e.g. `case-demo-product-dup-20261120T153507`) also link their run, under the TESTOPS-34 sentence
 "This row raised no finding, so it is not a case. The run it recorded is <id>." Unchanged by this
 ticket, and carrying the link.
 
 ## Round trip and the stale case
 
-Programmatic round trip on two runs (`cotw-levels-20261122T000930`,
-`cotw-levels-20261121T215534`): run page → first `/case/...` href parsed from it → case page →
+Programmatic round trip on two runs (`demo-product-levels-20261122T000930`,
+`demo-product-levels-20261121T215534`): run page → first `/case/...` href parsed from it → case page →
 `/run/...` href parsed from that → **the same run URL** both times, and the run page still lists
 the case. No URL was constructed at any step.
 

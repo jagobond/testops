@@ -4,7 +4,7 @@ from testops.config import load_env, project
 
 env = load_env()
 tok = env["GITHUB_PAT"]
-for name, role_key in (("cotw", "test"), ("cotw", "product")):
+for name, role_key in (("demo-product", "test"), ("demo-product", "product")):
     proj = project(name)
     repo = proj.test if role_key == "test" else proj.product
     c = github.collect(repo, tok, role=role_key)

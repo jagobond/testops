@@ -91,22 +91,22 @@ def test_the_migration_brings_the_projects_across_with_their_services(tmp_path):
     conn = db.connect(store)
     try:
         projects = {row["slug"]: row for row in services.list_projects(conn)}
-        cotw = services.list_services(conn, "cotw")
-        req = services.list_services(conn, "reqoverflow")
+        demo_product = services.list_services(conn, "demo-product")
+        req = services.list_services(conn, "demo-service")
         # Existing rows keep their project column and it holds the slug - nothing rewritten.
         assert conn.execute("SELECT DISTINCT project FROM case_ ORDER BY project").fetchall()
     finally:
         conn.close()
 
-    assert {"cotw", "reqoverflow"} <= set(projects)
-    assert {s.type for s in cotw} == {"git_repo", "jira_board", "ado_pipeline"}
-    assert {s.settings.get("repo") for s in cotw if s.type == "git_repo"} == {
-        "jagobond/cotw-continuity", "jagobond/cotw-bdd"}
-    assert [s.settings.get("board") for s in cotw if s.type == "jira_board"] == ["COTW"]
-    assert sorted(s.settings.get("pipeline_id") for s in cotw
+    assert {"demo-product", "demo-service"} <= set(projects)
+    assert {s.type for s in demo_product} == {"git_repo", "jira_board", "ado_pipeline"}
+    assert {s.settings.get("repo") for s in demo_product if s.type == "git_repo"} == {
+        "example-org/demo-product", "example-org/demo-product-tests"}
+    assert [s.settings.get("board") for s in demo_product if s.type == "jira_board"] == ["DEMO"]
+    assert sorted(s.settings.get("pipeline_id") for s in demo_product
                   if s.type == "ado_pipeline") == [2, 4]
     assert [s.settings.get("repo") for s in req if s.type == "git_repo"] == [
-        "reqnroll/Sample-ReqOverflow", "reqnroll/Sample-ReqOverflow"]
+        "reqnroll/demo-service", "reqnroll/demo-service"]
     assert not [s for s in req if s.type in ("jira_board", "ado_pipeline")]
 
 
@@ -147,13 +147,13 @@ def test_the_cli_resolves_a_project_from_the_store_and_refuses_an_unknown_slug_b
         tmp_path, monkeypatch, capsys):
     path = _migrated_store(tmp_path)
     monkeypatch.setattr(cli.db, "connect", _connect_factory(path))
-    assert cli.main(["runs", "--project", "cotw"]) == 0
+    assert cli.main(["runs", "--project", "demo-product"]) == 0
 
     with pytest.raises(SystemExit) as refused:
         cli.main(["runs", "--project", "no-such-project"])
     message = str(refused.value)
     assert "unknown project 'no-such-project'" in message
-    assert "cotw" in message
+    assert "demo-product" in message
 
 
 # --------------------------------------------------------------------------- AC5
@@ -176,7 +176,7 @@ def test_settings_refuse_a_credential_and_say_why(tmp_path):
 
         # Hosts, paths, board keys and repository coordinates are what settings are for.
         assert services.validate_settings({"host": "https://example.atlassian.net",
-                                           "board": "COTW", "path": "/mnt/data/repo",
+                                           "board": "DEMO", "path": "/mnt/data/repo",
                                            "repo": "owner/name"})
     finally:
         conn.close()

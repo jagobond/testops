@@ -21,10 +21,10 @@ changed by the Lead. The reviewer should treat every claim below as the builder'
 
 ## Verification, as the builder left it
 
-- **AC3, proven live rather than by absence:** a levels run rebuilt over the stored CotW blobs gives 94 claims / 90
-  distinct / 2 review / 1 unplaced / 1 gap — identical to the stored run; ReqOverflow duplication gives 17 duplicate
+- **AC3, proven live rather than by absence:** a levels run rebuilt over the stored Demo Product blobs gives 94 claims / 90
+  distinct / 2 review / 1 unplaced / 1 gap — identical to the stored run; DemoService duplication gives 17 duplicate
   claims in 17 cases; case-page goldens byte-identical.
-- **AC4 on `restfulbooker`:** the run is `not_assessable`, the sentence reads "cucumber-js is unsupported: this build can
+- **AC4 on `demo-booking`:** the run is `not_assessable`, the sentence reads "cucumber-js is unsupported: this build can
   recognise JavaScript step definitions and cannot read them, so it will not guess what they do", the page prints "44
   cucumber-js step-binding declarations in 5 files", and neither banned phrase ("no layers found", "steps could not be
   tied to a layer") appears.

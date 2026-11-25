@@ -18,11 +18,16 @@ Stages, in this order (``--apply`` runs all of them):
                underscored form, because a module name cannot carry a hyphen.
 3. store     - rewrite the text columns of the page fixture's store (``before_v3.db``). It is
                binary, so it is not a text file, but its rows are rendered into the goldens.
-4. seed      - the contract seed is content-addressed: after a blob's text changes its filename no
+4. blobs     - the evidence store (``data/``) is content-addressed as well; rewrite its blobs and
+               repoint every artefact, so a page that quotes the source does not print the old name
+               over a row that says the new one. ``--store`` chooses the store.
+5. seed      - the contract seed is content-addressed: after a blob's text changes its filename no
                longer equals the SHA-256 of its contents. Rewrite the blob, recompute the hash,
                rename the file and repoint ``seed.json`` (and every ``blob_sha`` reference in it).
-5. goldens   - re-render ``tests/fixtures/projects_services/*.html`` through the same path the tests
+6. goldens   - re-render ``tests/fixtures/projects_services/*.html`` through the same path the tests
                use: ``app.age`` frozen to ``"a fixed time ago"``, exactly as the baseline was made.
+7. digests   - re-take ``tests/fixtures/agent/off-golden.json``, the sha256 of every real case and
+               run page, with the same pinned clock the gate pins.
 
 ``--check`` prints what is left of the names in the tracked tree (the attribution documents and this
 script are the only permitted carriers, and are listed explicitly).
@@ -107,13 +112,19 @@ PROTECTED: dict[str, tuple[str, ...]] = {
 }
 
 # The files that may still carry a name after the rename, and why. Two kinds only: the documents
-# that owe upstream attribution, and this script, whose table *is* the names.
+# that owe upstream attribution, and the ticket and the script that *define* the map - a document
+# that cannot state which names it removes cannot be reviewed.
 CARRIERS = (
+    "factory/tickets/TESTOPS-103.md",
     "THIRD-PARTY-NOTICES.md",
     "tests/fixtures/demo-service/PROVENANCE.md",
     "tests/test_third_party_attribution.py",
     "scripts/rename_corpus.py",
 )
+
+# The ticket is not text to rewrite: its table is the map. Every other file, including the other
+# tickets and reports, is renamed like the code.
+SKIP_FILES = {"factory/tickets/TESTOPS-103.md"}
 
 BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".zip", ".pdf", ".woff", ".woff2", ".db"}
 
@@ -173,17 +184,23 @@ def rewrite_python(text: str) -> str:
         return offsets[row - 1] + column
 
     edits: list[tuple[int, int, str]] = []
+    # Python 3.12 tokenizes an f-string's literal text as FSTRING_MIDDLE, not as one STRING; the
+    # fields between them are ordinary tokens, so their names take the identifier spelling.
+    fstring_middle = getattr(tokenize, "FSTRING_MIDDLE", -1)
     for token in tokenize.generate_tokens(io.StringIO(text).readline):
+        literal = False
         if token.type == tokenize.NAME:
             style = "ident"
         elif token.type in (tokenize.STRING, tokenize.COMMENT):
+            style, literal = "text", token.type == tokenize.STRING
+        elif token.type == fstring_middle:
             style = "text"
         else:
             continue
         if not any(was in token.string for was, _ in TABLE):
             continue
         piece = token.string
-        if style == "text" and token.type == tokenize.STRING:
+        if style == "text" and literal:
             piece = _rewrite_string_literal(piece)
         else:
             piece = apply_table(piece, style)
@@ -216,13 +233,21 @@ def _rewrite_string_literal(literal: str) -> str:
     return held
 
 
+def protection(relative: str) -> tuple[str, ...]:
+    """The protected spans for a tracked path, whichever side of the rename it is named from."""
+    for key, spans in PROTECTED.items():
+        if relative in (key, renamed_path(key)):
+            return spans
+    return ()
+
+
 def rewrite_text(path: Path, relative: str, apply: bool = True) -> bool:
     raw = path.read_bytes()
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
         return False
-    protected, saved = _protect(text, PROTECTED.get(relative, ()))
+    protected, saved = _protect(text, protection(relative))
     if path.suffix == ".py":
         rewritten = rewrite_python(protected)
     else:
@@ -246,7 +271,7 @@ def stage_text(apply: bool) -> int:
     changed = 0
     for relative in tracked_files():
         path = ROOT / relative
-        if path.suffix.lower() in BINARY_SUFFIXES or relative == "scripts/rename_corpus.py":
+        if path.suffix.lower() in BINARY_SUFFIXES or relative in SKIP_FILES:
             continue
         if not path.is_file():
             continue
@@ -280,8 +305,8 @@ def stage_paths(apply: bool) -> int:
 
 # --------------------------------------------------------------------------- stage 3: the store
 
-def stage_store(apply: bool) -> int:
-    path = ROOT / FIXTURE_STORE
+def stage_store(apply: bool, path: Path | None = None) -> int:
+    path = path or (ROOT / FIXTURE_STORE)
     if not path.is_file():
         return 0
     conn = sqlite3.connect(str(path))
@@ -311,6 +336,27 @@ def stage_store(apply: bool) -> int:
                                  list(updates.values()) + [row["_rowid"]])
         if apply:
             conn.commit()
+            # The schema's own text is stored verbatim in `sqlite_master`, comments included, and
+            # this fixture was created when those comments named the corpus. Rewriting them is the
+            # only way the file stops carrying the names; `writable_schema` is how sqlite allows a
+            # change to that table, and `integrity_check` is what proves it survived.
+            stored = [(name, apply_table(sql)) for name, sql in conn.execute(
+                "SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL")]
+            schema_changes = [(sql, name) for name, sql in stored
+                              if conn.execute("SELECT sql FROM sqlite_master WHERE name = ?",
+                                              (name,)).fetchone()[0] != sql]
+            if schema_changes:
+                conn.execute("PRAGMA writable_schema = ON")
+                for sql, name in schema_changes:
+                    conn.execute("UPDATE sqlite_master SET sql = ? WHERE name = ?", (sql, name))
+                conn.execute("PRAGMA writable_schema = OFF")
+                conn.commit()
+            # VACUUM, not tidiness: a rewritten row leaves its old text in a free page, and the
+            # guard reads this file's bytes. Compacting is what makes the store stop carrying names.
+            conn.execute("VACUUM")
+            verdict = conn.execute("PRAGMA integrity_check").fetchone()[0]
+            if verdict != "ok":
+                raise SystemExit("the store did not survive the rewrite: %s" % verdict)
     finally:
         conn.close()
     return changed
@@ -336,16 +382,14 @@ def stage_seed(apply: bool) -> int:
         except UnicodeDecodeError:
             continue
         rewritten = apply_table(text)
-        if rewritten == text:
-            continue
         digest = hashlib.sha256(rewritten.encode("utf-8")).hexdigest()
-        if digest != sha:
-            renamed += 1
-            replaced[sha] = digest
+        if digest == sha:
+            continue
+        renamed += 1
+        replaced[sha] = digest
         if apply:
             (blob_dir / digest).write_bytes(rewritten.encode("utf-8"))
-            if digest != sha:
-                source.unlink()
+            source.unlink()
     if not apply:
         return renamed
 
@@ -366,7 +410,69 @@ def stage_seed(apply: bool) -> int:
     return renamed
 
 
-# --------------------------------------------------------------------------- stage 5: goldens
+# --------------------------------------------------------------------------- stage 5: the store's blobs
+
+# A blob is quoted source, and the spelling a name takes depends on what the file is. Python is
+# parsed with the same tokenizer the tree pass uses: `from cotw.citation import ...` is a module
+# name, and a module name cannot carry a hyphen, so it takes `demo_product` while the docstring
+# above it takes `Demo Product`. Every other language in this corpus names the project in strings
+# and comments only, where the slug spelling is the one a reader expects.
+PYTHON = ".py"
+
+
+def blob_text(text: str, suffix: str) -> str:
+    return rewrite_python(text) if suffix == PYTHON else apply_table(text)
+
+
+def stage_blobs(apply: bool, store: Path | None = None) -> int:
+    """Rewrite the evidence store's own blobs, and repoint every artefact at its new hash.
+
+    The store is content-addressed too: ``artefact.blob_sha`` is the name of a file under
+    ``data/blobs/<xx>/<rest>``. A page renders the quoted source straight out of that file, so a
+    blob still holding the old names would print them on the page even though the row beside it says
+    ``demo-product``. Rewriting the text without re-hashing would break the store's addressing, so
+    the two moves go together, exactly as they do for the contract seed.
+    """
+    store = store or (ROOT / "data" / "testops.db")
+    if not store.is_file():
+        return 0
+    blob_dir = store.parent / "blobs"
+    conn = sqlite3.connect(str(store))
+    conn.row_factory = sqlite3.Row
+    renamed = 0
+    try:
+        # A blob may be quoted by several artefacts; the suffix that decides the spelling is the
+        # last one to claim it, and they agree, because a blob's bytes are its identity.
+        suffix = {}
+        for row in conn.execute("SELECT uri, blob_sha FROM artefact WHERE blob_sha IS NOT NULL"):
+            suffix[row["blob_sha"]] = Path(row["uri"].rsplit(":", 1)[-1]).suffix
+        for sha, one in sorted(suffix.items()):
+            source = blob_dir / sha[:2] / sha[2:]
+            if not source.is_file():
+                continue
+            try:
+                text = source.read_bytes().decode("utf-8")
+            except UnicodeDecodeError:
+                continue
+            rewritten = blob_text(text, one)
+            digest = hashlib.sha256(rewritten.encode("utf-8")).hexdigest()
+            if digest == sha:
+                continue
+            renamed += 1
+            if apply:
+                target = blob_dir / digest[:2] / digest[2:]
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(rewritten.encode("utf-8"))
+                source.unlink()
+                conn.execute("UPDATE artefact SET blob_sha = ? WHERE blob_sha = ?", (digest, sha))
+        if apply:
+            conn.commit()
+    finally:
+        conn.close()
+    return renamed
+
+
+# --------------------------------------------------------------------------- stage 6: goldens
 
 def stage_goldens(apply: bool) -> int:
     sys.path.insert(0, str(ROOT))
@@ -394,6 +500,75 @@ def stage_goldens(apply: bool) -> int:
     return len(pages)
 
 
+# --------------------------------------------------------------------------- stage 6: page digests
+
+AGENT_GOLDEN = "tests/fixtures/agent/off-golden.json"
+PINNED_NOW = "2026-11-24T12:00:00+00:00"
+
+
+def stage_digests(apply: bool) -> int:
+    """Re-take the agent-off page digests, with the clock pinned the way the gate pins it.
+
+    ``tests/test_agent_case.py`` and its two siblings compare the *bytes* of every real case and run
+    page with a sha256 taken at 2026-11-24T12:00Z. The rename changes those bytes on purpose (the
+    page carries the project slug, the run id and the tag prefix), so the digests are re-taken here,
+    through the same render path and the same pinned clock, rather than being declared stale.
+    """
+    sys.path.insert(0, str(ROOT))
+    import datetime as dt
+    import hashlib
+    import os
+
+    from testops.web import app
+
+    class Fixed(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dt.datetime(2026, 11, 24, 12, 0, 0, tzinfo=dt.timezone.utc)
+
+    class Shim:
+        datetime = Fixed
+        timezone = dt.timezone
+        timedelta = dt.timedelta
+        date = dt.date
+
+    golden_path = ROOT / AGENT_GOLDEN
+    golden = json.loads(golden_path.read_text(encoding="utf-8"))
+    store = ROOT / "data" / "testops.db"
+    if not store.is_file():
+        return 0
+    previous = (app.dt, os.getcwd())
+    app.dt = Shim
+    os.chdir(ROOT)
+    conn = sqlite3.connect("file:%s?mode=ro" % store.as_posix(), uri=True)
+    conn.row_factory = sqlite3.Row
+    changed = 0
+    try:
+        for case_id in sorted(golden["cases"]):
+            if conn.execute("SELECT 1 FROM case_ WHERE id = ?", (case_id,)).fetchone() is None:
+                continue
+            digest = hashlib.sha256(app.case_page(conn, case_id)).hexdigest()
+            if digest != golden["cases"][case_id]:
+                golden["cases"][case_id] = digest
+                changed += 1
+        for run_id in sorted(golden["runs"]):
+            if conn.execute("SELECT 1 FROM run WHERE id = ?", (run_id,)).fetchone() is None:
+                continue
+            digest = hashlib.sha256(app.run_page(conn, run_id)).hexdigest()
+            if digest != golden["runs"][run_id]:
+                golden["runs"][run_id] = digest
+                changed += 1
+    finally:
+        conn.close()
+        app.dt, cwd = previous
+        os.chdir(cwd)
+    if apply and changed:
+        golden["pinned_now"] = PINNED_NOW
+        golden_path.write_text(json.dumps(golden, ensure_ascii=False, indent=1, sort_keys=True)
+                               + "\n", encoding="utf-8")
+    return changed
+
+
 # --------------------------------------------------------------------------- --check
 
 def forbidden_pattern() -> re.Pattern:
@@ -403,7 +578,7 @@ def forbidden_pattern() -> re.Pattern:
 
 def stage_check() -> int:
     pattern = forbidden_pattern()
-    carriers = set(CARRIERS)
+    carriers = {name for key in CARRIERS for name in (key, renamed_path(key))}
     hits = 0
     for relative in tracked_files():
         path = ROOT / relative
@@ -431,6 +606,8 @@ def main(argv=None) -> int:
     parser.add_argument("--apply", action="store_true", help="write the changes")
     parser.add_argument("--check", action="store_true", help="report names left in the tree")
     parser.add_argument("--only", default="", help="run one stage: text, paths, store, seed, goldens")
+    parser.add_argument("--store", default="",
+                        help="rewrite this store's text columns (default: the page fixture store)")
     args = parser.parse_args(argv)
 
     if args.check:
@@ -439,9 +616,11 @@ def main(argv=None) -> int:
     stages = {
         "text": stage_text,
         "paths": stage_paths,
-        "store": stage_store,
+        "store": lambda apply: stage_store(apply, Path(args.store) if args.store else None),
+        "blobs": lambda apply: stage_blobs(apply, Path(args.store) if args.store else None),
         "seed": stage_seed,
         "goldens": stage_goldens,
+        "digests": stage_digests,
     }
     chosen = [args.only] if args.only else list(stages)
     if not args.apply:

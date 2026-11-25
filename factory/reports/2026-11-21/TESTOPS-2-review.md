@@ -35,7 +35,7 @@ with real `stepbindings.Binding` objects. The gap scenario is named so the analy
 ACCESSIBILITY path classifies it I4 (needs_browser) while the bindings say layer `api` —
 exactly the gap condition — and the distinct scenario hits the MARKUP/KP path. Both tests assert
 the detail fields (`uses_browser`, `needs_browser`, `claim`), so a broken classifier cannot pass
-by accident. No repo checkout, no `cotw-bdd`, no network.
+by accident. No repo checkout, no `demo-product-tests`, no network.
 
 AC7 — HOLDS. Drives the real `pipeline._emit` against a real tmp_path store seeded with the
 foreign-key rows it needs. Distinct → returns False, zero findings; gap → returns True, exactly

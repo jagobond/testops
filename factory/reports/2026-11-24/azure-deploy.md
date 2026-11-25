@@ -36,8 +36,8 @@ in `<foundry-resource-group>`; it has its own resource group and its own registr
   169.254.169.254 on both `2018-02-01` and `2019-08-01`). So the token is a **Container App secret**
   (`testops-agent-token`, exposed as `TESTOPS_AGENT_TOKEN=secretref:...`), not a key in the image or the repo. That is a
   deliberate trade recorded here: the identity path is the better design and does not work in this environment.
-- **No authentication.** Everything in the store is public repositories (restful-booker-platform,
-  cotw-continuity, reqoverflow). A login gate is a product change and belongs through a factory
+- **No authentication.** Everything in the store is public repositories (demo-booking-platform,
+  demo-product, demo-service). A login gate is a product change and belongs through a factory
   ticket, not a deploy-time hack.
 
 ## What the demo cannot do

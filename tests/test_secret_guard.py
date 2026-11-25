@@ -2,7 +2,7 @@
 
 The guard failed twice in the TESTOPS-38 review. It **accepted** a complete AWS key in a free-text
 field, because base64 - the most common credential encoding - contains ``/`` and any value containing
-``/`` was exempt. It **refused** ``COTW-PROJ-KEY-0123456789-ABCDEFG``, a plausible project key, as
+``/`` was exempt. It **refused** ``DEMO-PROJ-KEY-0123456789-ABCDEFG``, a plausible project key, as
 high-entropy. Both are pinned here.
 
 AC2 is the one that matters most: a guard that refuses real configuration gets switched off, and a
@@ -40,7 +40,7 @@ SAMPLE_GUID = "-".join(("3f2504e0", "4f89", "11d3", "9a0c", "0305e82c3301"))
 # Every one of these is configuration a person could type, and every one must be accepted.
 CONFIGURATION = {
     "repo": "owner/repo",
-    "board": "COTW-PROJ-KEY-0123456789-ABCDEFG",
+    "board": "DEMO-PROJ-KEY-0123456789-ABCDEFG",
     "host": "https://jira.example.com",
     "project": "PROJ",
     "correlation_id": SAMPLE_GUID,
@@ -129,7 +129,7 @@ NOT_A_TOKEN = {
     "label": "task-akia-review",
     "repo": "masking/x",
     "repo_alt": "risk/sk-learn-docs",
-    "board": "COTW-akia-review-board",
+    "board": "DEMO-akia-review-board",
 }
 
 
@@ -247,9 +247,9 @@ ROUND_ONE_ACCEPTED = {
     "repo": "owner/repo",
     "host": "https://jira.example.com",
     "build": "https://dev.azure.com/org/project/_build?definitionId=2",
-    "path": "C:/work/repos/cotw",
+    "path": "C:/work/repos/demo-product",
     "project": "PROJ",
-    "board": "COTW-PROJ-KEY-0123456789-ABCDEFG",
+    "board": "DEMO-PROJ-KEY-0123456789-ABCDEFG",
     "correlation_id": SAMPLE_GUID,
     "branch": "main",
     "ref": "refs/heads/feature/x",
@@ -358,11 +358,11 @@ def test_the_configuration_page_accepts_a_structured_key_and_stores_it(tmp_path,
         assert status == 200
         status, page = _post(f"{base}/config/services",
                              {"project": "team", "type": "jira_board", "role": "",
-                              "name": "COTW board",
+                              "name": "DEMO board",
                               "board": CONFIGURATION["board"],
                               "host": CONFIGURATION["host"]})
         assert status == 200, page
-        assert "COTW board" in page
+        assert "DEMO board" in page
     finally:
         httpd.shutdown()
         httpd.server_close()
@@ -373,7 +373,7 @@ def test_the_configuration_page_accepts_a_structured_key_and_stores_it(tmp_path,
     finally:
         conn.close()
     assert len(services_) == 1
-    assert services_[0].settings["board"] == "COTW-PROJ-KEY-0123456789-ABCDEFG"
+    assert services_[0].settings["board"] == "DEMO-PROJ-KEY-0123456789-ABCDEFG"
     assert services_[0].settings["host"] == "https://jira.example.com"
 
 

@@ -126,7 +126,7 @@ Both mutations were reverted; `git diff` shows only the intended changes. A thir
 |----|----------|
 | AC1 | `tests/test_verdict_vocabulary.py::test_documented_verdicts_are_exactly_the_emitted_ones` runs once per place (schema column, `Claim` docstring, field comment). Each documented set equals the AST-read emitted set. |
 | AC2 | `test_the_comparison_reports_both_directions`, plus the two live mutations recorded above with their exact failure output. |
-| AC3 | Full suite `514 passed, 0 skipped` (including the corpus arms below). CotW levels: 94 claims with `{"distinct": 90, "unplaced": 1, "gap": 1, "review": 2}` (`test_action_prose.py::test_the_corpus_still_carries_the_verdicts_the_ticket_pins`). ReqOverflow duplication: 17 claims / 17 cases / 17 findings (`test_duplication_v2.py`, five separate assertions). |
+| AC3 | Full suite `514 passed, 0 skipped` (including the corpus arms below). Demo Product levels: 94 claims with `{"distinct": 90, "unplaced": 1, "gap": 1, "review": 2}` (`test_action_prose.py::test_the_corpus_still_carries_the_verdicts_the_ticket_pins`). DemoService duplication: 17 claims / 17 cases / 17 findings (`test_duplication_v2.py`, five separate assertions). |
 | AC4 | No migration, no writer path touched. The measurement copy of the store is byte-identical to the live one (`sha256 99f30117419ce8a2e7baba5bc11b66e7b795040828a7ce777e782e865d488d65` both), and the live store's mtime is unchanged (`2026-11-22 21:17:00`). All 2,310 claim rows remain, including the 128 retired-name rows. |
 
 ## Test runs (from the worktree, main checkout's interpreter)

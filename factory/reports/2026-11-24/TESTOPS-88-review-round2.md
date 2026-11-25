@@ -51,7 +51,7 @@ what the sentence says.
    the route lookup (`['the route /room, which no cited fact names']`). Strip the route shape and
    the lie survives: "This repeats the existing check, which validates the token before the handler
    runs", citing `claim:1`, → `[]` on the synthetic record *and* on a real record from the store
-   (case `case-cotw-levels-20261120T194425`, citing `claim:19`). **Survives.** A claim citation is
+   (case `case-demo-product-levels-20261120T194425`, citing `claim:19`). **Survives.** A claim citation is
    a pointer, not a proof; anything the check cannot recognise as a shape rides in behind a real id.
 2. **A real route with a meaning-changing qualifier.** "The product already deletes the room, so
    this test only checks the response", citing `route:GET /rooms`. → `[]`. **Survives.** Lowercase

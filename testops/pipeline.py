@@ -510,7 +510,7 @@ def run_duplication(project: Project, token: str,
 
     # Every duplication claim is written with the coordinates its reader needs to check it. The store
     # refuses a v2 row without them, so this loop cannot quietly fall back to a subject-only claim -
-    # which is exactly how the eighteen reqoverflow findings came to say nothing (TESTOPS-21).
+    # which is exactly how the eighteen demo-service findings came to say nothing (TESTOPS-21).
     for c in claims:
         cid = db.add_claim(conn, run_id, duplication.name, duplication.version, c.subject_ref,
                            c.statement, c.verdict, c.confidence, c.detail.get("support", []),

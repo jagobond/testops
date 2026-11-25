@@ -22,7 +22,7 @@ HARD RULES
 - **Try to make two statements collide.** AC2 says two findings in a run must never share a statement. Build the
   case you think breaks it: two different scenarios with the same title, the same scenario duplicated across two
   feature files, a scenario whose title matches another's text. Report what happened.
-- **Verify the corpus is synthetic.** Read tests/fixtures/reqoverflow: is it plausibly generated for these tests,
+- **Verify the corpus is synthetic.** Read tests/fixtures/demo-service: is it plausibly generated for these tests,
   or is it a copy of somebody's real repository? Names, credentials, controller code, licence headers. If it
   looks copied, say so — that is a licensing and honesty problem, not a style note.
 - Confirm: 18 cases, 1 finding each, 18 distinct statements; old v1 run still renders; level-fitness verdicts

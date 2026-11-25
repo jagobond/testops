@@ -161,7 +161,7 @@ Verified in `docs/ecosystem-inventory-cucumber-js.md`:
   protocol change to `drivers()` is a widening annotation, not a behaviour change.
 - `test_the_reqnroll_module_is_the_old_extractor` (row-for-row equality against the old extractor)
   passes in the green suite.
-- CotW **94/90/1/1/2**, ReqOverflow **17/17**, and the case-page goldens byte-identical are all
+- Demo Product **94/90/1/1/2**, DemoService **17/17**, and the case-page goldens byte-identical are all
   pinned proofs inside the 615 — green. No .NET pattern regressed.
 - AC5 verified by my own probes: a JS `Repository` is `unknown` in the JS table (the .NET table
   still says `storage` when the word genuinely stands alone — `\bRepository\b` is unchanged); JS

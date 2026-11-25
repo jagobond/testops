@@ -15,7 +15,7 @@ HARD RULES - the guard must be right in BOTH directions or it is worse than noth
   SSH private key; `Bearer `; `password=`; a 32-char random alphanumeric.
 - **Real configuration that must be ACCEPTED** (a false positive here is the worse failure): `owner/repo`,
   `https://jira.example.com`, `https://dev.azure.com/org/project/_build?definitionId=2`, a Windows path
-  `C:/work/repos/cotw`, `PROJ`, `COTW-PROJ-KEY-0123456789-ABCDEFG`, a UUID, `main`, `refs/heads/feature/x`,
+  `C:/work/repos/demo-product`, `PROJ`, `DEMO-PROJ-KEY-0123456789-ABCDEFG`, a UUID, `main`, `refs/heads/feature/x`,
   `pipeline #2`, a 12-char word, and a 21-char base64-looking word that is actually a name (e.g. `Q29udGludWl0eUdhbWU=`).
   Report every false positive and say what rule caused it.
 - **No echo:** grep the response bodies AND the server log for each refused value; report any occurrence.

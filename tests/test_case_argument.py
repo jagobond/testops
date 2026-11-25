@@ -1,6 +1,6 @@
 """TESTOPS-23: the page tells the reader one argument, and these are the faults it removed.
 
-The Product Owner read ``case-cotw-levels-20261122T011316-03`` and said "the verbiage is still not
+The Product Owner read ``case-demo-product-levels-20261122T011316-03`` and said "the verbiage is still not
 right, but I'm not quite sure how to explain why yet". The ticket names seven faults; this module
 pins each one, and then runs the prose lint the ticket defines over every claim of a real run.
 

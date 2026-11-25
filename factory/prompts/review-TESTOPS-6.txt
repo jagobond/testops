@@ -22,7 +22,7 @@ HARD RULES
       .venv/Scripts/python.exe -m pytest -q
 - **Render the page and read it as the Product Owner would.** Start the server on a spare port
   (127.0.0.1, e.g. 8793), fetch a case page with the real specimen in the store
-  (case-cotw-levels-20261121T215534-01), and quote the rendered text of all six sections. If any
+  (case-demo-product-levels-20261121T215534-01), and quote the rendered text of all six sections. If any
   section is missing, contradicts another, or would confuse someone who has never heard of TestOps,
   that is a finding.
 - Check AC2 and AC3 by reading the HTML: the permalink's commit must equal the claim's own commit, and

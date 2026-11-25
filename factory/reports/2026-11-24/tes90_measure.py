@@ -32,16 +32,16 @@ OUT = Path(__file__).with_name("tes90-measurement.json")
 # Ten cases from the stored run of 2026-11-24: five from each of the two level-fitness runs, and
 # including 123451-05, the case whose rejected reply is the ticket's evidence.
 CASES = (
-    "case-restfulbooker-levels-20261124T123451-01",
-    "case-restfulbooker-levels-20261124T123451-02",
-    "case-restfulbooker-levels-20261124T123451-03",
-    "case-restfulbooker-levels-20261124T123451-04",
-    "case-restfulbooker-levels-20261124T123451-05",
-    "case-restfulbooker-levels-20261124T114627-01",
-    "case-restfulbooker-levels-20261124T114627-02",
-    "case-restfulbooker-levels-20261124T114627-03",
-    "case-restfulbooker-levels-20261124T114627-04",
-    "case-restfulbooker-levels-20261124T114627-05",
+    "case-demo-booking-levels-20261124T123451-01",
+    "case-demo-booking-levels-20261124T123451-02",
+    "case-demo-booking-levels-20261124T123451-03",
+    "case-demo-booking-levels-20261124T123451-04",
+    "case-demo-booking-levels-20261124T123451-05",
+    "case-demo-booking-levels-20261124T114627-01",
+    "case-demo-booking-levels-20261124T114627-02",
+    "case-demo-booking-levels-20261124T114627-03",
+    "case-demo-booking-levels-20261124T114627-04",
+    "case-demo-booking-levels-20261124T114627-05",
 )
 
 

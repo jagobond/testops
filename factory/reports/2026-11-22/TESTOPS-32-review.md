@@ -9,7 +9,7 @@ the duplication corpus arms (`test_duplication_v2.py`, `test_duplication_tables.
 
 ## Criteria
 
-- **AC1 — HOLDS.** Rendered `case-reqoverflow-dup-20261122T115216-18`: section 3, "The copy this
+- **AC1 — HOLDS.** Rendered `case-demo-service-dup-20261122T115216-18`: section 3, "The copy this
   claim names", opens with `QuestionSuggestions.feature:17`, names the scenario, shows its steps
   verbatim, and renders "The step definition that runs the copy's step there:". Order on the page:
   1 asserted / 2 step / **3 copy** / 4 context / 5 unchecked / 6 decision.
@@ -21,13 +21,13 @@ the duplication corpus arms (`test_duplication_v2.py`, `test_duplication_tables.
   does hold and a line it does not, and the page still resolved honestly (probe 2 below). No
   corpus re-parse at read time.
 - **AC4 — HOLDS.** Both sections present, copy first (`html.index` check, and on the live page).
-  A distinct-verdict case (`case-cotw-levels-20261121T165925`) rendered under the old branch
+  A distinct-verdict case (`case-demo-product-levels-20261121T165925`) rendered under the old branch
   (`factory/testops-31-tables`) and the new tree is **byte-identical**.
 - **AC5 — HOLDS.** `tests/test_duplicate_counterpart.py` renders a real corpus run and asserts the
   copy's file:line, its row inside the copy's own figure, the marked line, and the copy-before-context
   order. 3 tests, all pass.
-- **AC6 — HOLDS.** Level fitness re-run `cotw-levels-20261122T120603`: 94 claims = 90 distinct /
-  1 gap / 2 review / 1 unplaced — exactly 94/90/1/1/2. Duplication on reqoverflow is pinned at
+- **AC6 — HOLDS.** Level fitness re-run `demo-product-levels-20261122T120603`: 94 claims = 90 distinct /
+  1 gap / 2 review / 1 unplaced — exactly 94/90/1/1/2. Duplication on demo-service is pinned at
   17 claims / 17 cases / 17 findings by the TESTOPS-31 corpus tests, which still pass; the 18-claim
   run in the store is the pre-31 run this ticket was raised against, untouched.
 

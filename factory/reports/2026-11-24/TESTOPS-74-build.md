@@ -31,8 +31,8 @@ assertions moved because the premise moved (listed at the end).
 
 ## AC5 — the corpus, read again
 
-The corpus is `mwinteringham/restful-booker-platform@efe2deb8`, as fetched by the TESTOPS-70 run
-`restfulbooker-levels-20261124T100624` and stored — 190 artefacts, of which **169 are product files
+The corpus is `example-org/demo-booking-platform@efe2deb8`, as fetched by the TESTOPS-70 run
+`demo-booking-levels-20261124T100624` and stored — 190 artefacts, of which **169 are product files
 and 142 are `.java`**. The re-read took those files from the run's own blob store (the store is the
 product's memory; no live source, no network, no token, therefore no `.env` to place or delete) and
 ran this branch's `surface_discovery.discover` over them:
@@ -84,7 +84,7 @@ regression-free fix should look like. That the *shapes* work is pinned by the fi
 - `tests/test_skipped_is_not_consulted.py::test_a_kotlin_product_run_says_which_files_it_skipped_and_whose_code_it_did_not_read`
   — `test code was consulted and returned 2 files`.
 
-The stored-snapshot pins (`COTW_SENTENCE` 95 items, `REQOVERFLOW_SENTENCE` 158 items) are untouched
+The stored-snapshot pins (`DEMO_SENTENCE` 95 items, `DEMO_SERVICE_SENTENCE` 158 items) are untouched
 and pass: those snapshots predate the noun.
 
 ## Amendment — the review's three concerns

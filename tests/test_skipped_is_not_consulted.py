@@ -15,7 +15,7 @@ What these tests pin, criterion by criterion:
 - AC3: a surface reader that cannot parse the language returns `not_assessable` with the language
   and the file count, and the run's stats distinguish "found none" from "could not look".
 - AC4: a Java product's run page names the skipped `.java` files and says no product code file was
-  fetched - proven here on an in-memory product, and against the stored restfulbooker run when the
+  fetched - proven here on an in-memory product, and against the stored demo-booking run when the
   build store is present.
 - AC5: a registry record written before this change reads back with exactly the sentence it had.
 - AC6: the kind list is configuration: widening it is a data change, and whatever it holds, the
@@ -39,7 +39,7 @@ from testops.surfaces import discover as surface_discovery
 ROOT = Path(__file__).resolve().parents[1]
 STORED = ROOT / "data" / "testops.db"
 
-PINNED_COTW_RUN = "cotw-levels-20261122T011316"
+PINNED_DEMO_RUN = "demo-product-levels-20261122T011316"
 
 
 # --------------------------------------------------------------------------- a repository in memory
@@ -309,17 +309,17 @@ def test_a_registry_record_written_before_this_change_reads_exactly_as_it_did():
 # The run this probe describes. Pinned, not "the latest": TESTOPS-70 made the Java reader part of the
 # surface reader, so the run after this one reads `.java` and the sentence below is history. A probe
 # that silently follows the newest run stops describing the snapshot it was written for.
-PINNED_RESTFULBOOKER_RUN = "restfulbooker-levels-20261123T132456"
+PINNED_DEMO_BOOKING_RUN = "demo-booking-levels-20261123T132456"
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
-def test_the_cotw_run_still_says_ninety_five_items():
+def test_the_demo_product_run_still_says_ninety_five_items():
     conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        run = queries.run_read(conn, PINNED_COTW_RUN)
+        run = queries.run_read(conn, PINNED_DEMO_RUN)
     finally:
         conn.close()
-    assert run is not None, f"the pinned run {PINNED_COTW_RUN} is not in the store"
+    assert run is not None, f"the pinned run {PINNED_DEMO_RUN} is not in the store"
     assert run["assessment"]["sentence"] == \
         "Assessed: code and test code were consulted and returned 95 items."
 
@@ -328,18 +328,18 @@ def test_the_cotw_run_still_says_ninety_five_items():
 # build store now also holds a later run whose product arm was read (the Java reader landed after
 # this run), and that run is the honest subject of a different criterion. Pinning keeps this test
 # about the fact it exists to prove: a run whose `.java` was skipped says so in words.
-PINNED_RB_RUN = PINNED_RESTFULBOOKER_RUN   # the older name, kept for the tests that still use it
+PINNED_RB_RUN = PINNED_DEMO_BOOKING_RUN   # the older name, kept for the tests that still use it
 
 
 @pytest.mark.skipif(not STORED.exists(), reason="the product store is a build artefact")
-def test_the_restfulbooker_run_names_the_java_it_could_not_read():
+def test_the_demo_booking_run_names_the_java_it_could_not_read():
     conn = sqlite3.connect(f"file:{STORED.as_posix()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        run = queries.run_read(conn, PINNED_RESTFULBOOKER_RUN)
+        run = queries.run_read(conn, PINNED_DEMO_BOOKING_RUN)
     finally:
         conn.close()
-    assert run is not None, f"the pinned run {PINNED_RESTFULBOOKER_RUN} is not in the store"
+    assert run is not None, f"the pinned run {PINNED_DEMO_BOOKING_RUN} is not in the store"
     sentence = run["assessment"]["sentence"]
     assert "code was not read" in sentence, sentence
     assert "142 .java files" in sentence, sentence

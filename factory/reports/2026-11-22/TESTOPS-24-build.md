@@ -38,8 +38,8 @@ ordinary runs appended to the store.
 
 **The real store, four runs.** The blob directory held **274 files / 2,215,928 bytes** before the
 first run and was unchanged after every one of the four runs below (`files` 274 and
-`bytes - db_bytes` 2,215,928 at each reading). The two runs over `cotw@a3f19853` and the two over
-`Sample-ReqOverflow@78153818` each added **zero blob files and zero blob bytes**.
+`bytes - db_bytes` 2,215,928 at each reading). The two runs over `demo-product@a3f19853` and the two over
+`demo-service@78153818` each added **zero blob files and zero blob bytes**.
 
 **The test** (`test_two_runs_over_an_unchanged_commit_add_no_blob_files_and_no_blob_bytes`) wires
 the real duplication pipeline to the real 108-file corpus with a collector that calls
@@ -58,10 +58,10 @@ Store before the measurements: **7,906 rows, 3,952,640 B database, 2,215,928 B i
 
 | run | snapshot | rows added | database bytes added | blob bytes added | blob files added |
 |---|---|---:|---:|---:|---:|
-| levels 1 — `cotw-levels-20261122T111027` | `cotw-levels-20261122-a3f19853-r7` | 486 | 311,296 | 0 | 0 |
-| levels 2 — `cotw-levels-20261122T111056` (same commit) | `cotw-levels-20261122-a3f19853-r8` | 486 | 327,680 | 0 | 0 |
-| duplication 1 — `reqoverflow-dup-20261122T111139` | `reqoverflow-20261122-78153818-r4` | 385 | 167,936 | 0 | 0 |
-| duplication 2 — `reqoverflow-dup-20261122T111222` (same commit) | `reqoverflow-20261122-78153818-r5` | 385 | 167,936 | 0 | 0 |
+| levels 1 — `demo-product-levels-20261122T111027` | `demo-product-levels-20261122-a3f19853-r7` | 486 | 311,296 | 0 | 0 |
+| levels 2 — `demo-product-levels-20261122T111056` (same commit) | `demo-product-levels-20261122-a3f19853-r8` | 486 | 327,680 | 0 | 0 |
+| duplication 1 — `demo-service-dup-20261122T111139` | `demo-service-20261122-78153818-r4` | 385 | 167,936 | 0 | 0 |
+| duplication 2 — `demo-service-dup-20261122T111222` (same commit) | `demo-service-20261122-78153818-r5` | 385 | 167,936 | 0 | 0 |
 
 Store after all four: **9,648 rows, 4,927,488 B database, 2,215,928 B in 274 blobs**.
 
@@ -89,9 +89,9 @@ one line per snapshot):
 store      9648 rows · 4.70 MB in the database · 2.11 MB in 274 blob files
 
 snapshot                                   project      age          rows      bytes  decision suppression
-reqoverflow-20261120-78153818              reqoverflow  1d 19h        240   742.5 KB  no       no
-cotw-levels-20261121-a3f19853              cotw         13h 18m      1693    1.29 MB  yes      no
-cotw-levels-20261121-a3f19853-r2           cotw         12h 08m       486    1.43 MB  no       no
+demo-service-20261120-78153818              demo-service  1d 19h        240   742.5 KB  no       no
+demo-product-levels-20261121-a3f19853              demo-product         13h 18m      1693    1.29 MB  yes      no
+demo-product-levels-20261121-a3f19853-r2           demo-product         12h 08m       486    1.43 MB  no       no
 ...
 ```
 
@@ -108,15 +108,15 @@ On a copy of the real store, `--keep 2`:
 
 ```
 prune plan — keep 2 most recent per project
-  delete reqoverflow-20261120-78153818 (reqoverflow, age 1d 19h, 240 rows, 742.5 KB)
-  delete cotw-levels-20261120-a3f19853 (cotw, age 1d 15h, 546 rows, 1.03 MB)
+  delete demo-service-20261120-78153818 (demo-service, age 1d 19h, 240 rows, 742.5 KB)
+  delete demo-product-levels-20261120-a3f19853 (demo-product, age 1d 15h, 546 rows, 1.03 MB)
   ... 10 more ...
   delete 0 blob files: every blob is still referenced by a surviving artefact
   kept:
       1  a case referencing it has a decision
       1  a surviving finding still names one of its claims
-      2  one of the 2 most recent in cotw
-      2  one of the 2 most recent in reqoverflow
+      2  one of the 2 most recent in demo-product
+      2  one of the 2 most recent in demo-service
       2  the newest duplication run
       1  the newest level_fitness run
 
@@ -149,14 +149,14 @@ finding, 0 case_state). Seven snapshots remain. Three cases rendered through
 `testops.web.app.case_page` before and after, byte for byte:
 
 ```
-case-cotw-dup-20261120T153507   5,679 bytes   identical: True
-case-cotw-dup-20261120T194032   5,679 bytes   identical: True
+case-demo-product-dup-20261120T153507   5,679 bytes   identical: True
+case-demo-product-dup-20261120T194032   5,679 bytes   identical: True
 rev-duplicate                  11,015 bytes   identical: True
 ```
 
 One snapshot survived solely because of the third protection rule, and it is a real reference, not
-a fixture: `case-rev-duplicate` in snapshot `cotw-20261120-a3f19853` carries claim id 1606 in its
-finding, and that claim lives in `reqoverflow-20261122-78153818-r3`. Deleting r3 would have left a
+a fixture: `case-rev-duplicate` in snapshot `demo-product-20261120-a3f19853` carries claim id 1606 in its
+finding, and that claim lives in `demo-service-20261122-78153818-r3`. Deleting r3 would have left a
 surviving page with a claim it could not render, so the plan kept it. That is the defect AC5
 guards against, found and prevented on the store's own data.
 

@@ -26,7 +26,7 @@ HARD RULES
 - **Carried item B:** confirm the inventory now says the stem rule matches 0 of 5 (not 5 of 5), that the Corrections
   section preserves the old sentence, and that §7's costed estimate was not quietly changed to fit.
 - **No placement:** analysers/pipeline unchanged, `supported is False`, corpus still `not_assessable`, zero claims.
-- **.NET parity:** `test_the_reqnroll_module_is_the_old_extractor` row-for-row equality, CotW 94/90/1/1/2, ReqOverflow
+- **.NET parity:** `test_the_reqnroll_module_is_the_old_extractor` row-for-row equality, Demo Product 94/90/1/1/2, DemoService
   17/17, goldens byte-identical. The `Binding` grew two fields - confirm .NET rows are unaffected.
 - Do not edit product code or the ticket. Write exactly one file:
   factory/reports/2026-11-23/TESTOPS-42C-2-review.md with: ## Verdict; ## The command table, re-derived; ## The 11

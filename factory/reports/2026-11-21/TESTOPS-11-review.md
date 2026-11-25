@@ -142,7 +142,7 @@ talks to the engine" clause, so a label and a statement cannot name different in
 
 **How we know it works.** I ran both checks myself this session, in the stripped environment.
 `pytest -q`: 94 passed. `replay_levels.py --acceptance` on
-cotw-levels-20261121-a3f19853: PASS — 94 claims, 1 unplaced (the meta claim, max 3), gap 1 and
+demo-product-levels-20261121-a3f19853: PASS — 94 claims, 1 unplaced (the meta claim, max 3), gap 1 and
 review 2 unchanged, distinct 90. Compared with the stored pre-TESTOPS-10 baseline run, 46
 claims moved from unplaced to distinct; 39 claims carry newly instrument-derived labels. The
 two canon_verification wordings that disagreed in TESTOPS-10 now share one label while keeping

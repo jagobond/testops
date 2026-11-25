@@ -1,7 +1,7 @@
 # TESTOPS-42C-1 build — the cucumber-js parsing floor
 
 Branch `factory/testops-42c1-bindings`. Part 1 of 3: declarations and matcher only. Claim placement is
-not wired; the ecosystem still reports unsupported, so the restfulbooker run is still `not_assessable`
+not wired; the ecosystem still reports unsupported, so the demo-booking run is still `not_assessable`
 with zero claims. Analysers and pipeline are untouched.
 
 ## Changes
@@ -29,7 +29,7 @@ with zero claims. Analysers and pipeline are untouched.
 
 ## Corpus counts
 
-`python tools/ecosystem_inventory_counts.py` (read-only, store `restfulbooker-20261122-262404a9`):
+`python tools/ecosystem_inventory_counts.py` (read-only, store `demo-booking-20261122-262404a9`):
 44 declarations in 5 files; When 26, Then 13, Given 5; single-quoted 44; same-line 28, next-line 16;
 43 distinct patterns; one duplicate in two files; 6 features. The parser's own counts match these
 exactly (asserted in tests, not by eye).
@@ -78,7 +78,7 @@ features. This is a measurement of the claim, not a change to it in the report.
 - **AC7** — no claim placed. `detect().supported is False`, `drivers()` still raises, and the
   existing real-corpus test still sees `assessment.state == "not_assessable"` with `claims == []`.
   The pipeline and analysers have no diff.
-- **AC8** — .NET and Python unchanged: CotW 94 claims, ReqOverflow 17/17 and case-page goldens are
+- **AC8** — .NET and Python unchanged: Demo Product 94 claims, DemoService 17/17 and case-page goldens are
   covered by the suite and all pass. Full suite: **596 passed in 137.97s** (from the project `.venv`
   with `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_ENV`, `CONDA_PREFIX` stripped and `PYTHONNOUSERSITE=1`).
 

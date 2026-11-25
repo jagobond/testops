@@ -9,12 +9,12 @@ data-collection gap outside this ticket's scope, not a rendering defect.
 
 ## Criteria
 
-- **AC1 HOLDS.** Live render of `case-cotw-levels-20261121T215534-01` and `-02` (server on 127.0.0.1:8793)
+- **AC1 HOLDS.** Live render of `case-demo-product-levels-20261121T215534-01` and `-02` (server on 127.0.0.1:8793)
   shows all six numbered sections in order, no `<script`, no fetch, HTML only. `test_every_v2_case_
   renders_all_six_sections_in_order` and `test_the_page_is_server_rendered_with_no_javascript_and_no_
   network` enforce it.
 - **AC2 HOLDS.** The rendered permalink is
-  `https://github.com/jagobond/cotw-bdd/blob/a3f19853ebfab.../features/canon_query_api.feature#L59`,
+  `https://github.com/example-org/demo-product-tests/blob/a3f19853ebfab.../features/canon_query_api.feature#L59`,
   and the store row for claim 768 carries exactly that commit and path. `blob_permalink` takes the
   commit as a parameter and returns None without one; tests prove an older-commit claim never links
   to the snapshot tip, HEAD or main.
@@ -31,21 +31,21 @@ data-collection gap outside this ticket's scope, not a rendering defect.
   a browser." — no JSON, no list reprs.
 - **AC8 HOLDS.** "1 finding rides on this decision, and it applies to this case only"; the reopen
   form and copy say reopening deletes the suppression and the case reports again.
-- **AC9 HOLDS.** Rendered `case-reqoverflow-dup-20261120T153431` (18 v1 claims) and
-  `case-cotw-levels-20261120T195330` (41 v1 claims): every claim renders "recorded before provenance
+- **AC9 HOLDS.** Rendered `case-demo-service-dup-20261120T153431` (18 v1 claims) and
+  `case-demo-product-levels-20261120T195330` (41 v1 claims): every claim renders "recorded before provenance
   was captured", plus honest "not recorded" sentences for span/evidence/label/rule/action. No
   exception, no blanks.
 - **AC10 HOLDS.** The 0-finding duplication case renders "This case is resolved: the analysis raised
   nothing to act on… not a claim that the code is clean"; the home page leads with "Last analysed
-  38 minutes ago at cotw-bdd@a3f19853, cotw-continuity@b901ea4d".
+  38 minutes ago at demo-product-tests@a3f19853, demo-product@b901ea4d".
 - **AC11 HOLDS.** The home list carries full claim statements; nothing is cut mid-sentence, and
   `finding.title` is no longer read by any screen.
 
 ## The page as a reader sees it
 
-Quoted render of `case-cotw-levels-20261121T215534-01` (verbatim, tags stripped):
+Quoted render of `case-demo-product-levels-20261121T215534-01` (verbatim, tags stripped):
 
-> cotw · Level fitness — Open — Analysed 37 minutes ago at cotw-bdd@a3f19853, cotw-continuity@b901ea4d
+> demo-product · Level fitness — Open — Analysed 37 minutes ago at demo-product-tests@a3f19853, demo-product@b901ea4d
 > **Never actually proved**
 > **1. What is asserted** — "each fact's citation is in an element reachable by an accessible name" —
 > Test source: features/canon_query_api.feature:59 at commit a3f19853 — the commit this claim was read at.
@@ -75,9 +75,9 @@ tripping over is section 3's second sentence (see below).
 ## Three sharpest concerns
 
 1. **Section 3's evidence sentence is true but nearly always the only thing it can say on real data.**
-   In the specimen's snapshot, all 45 artefacts are `cotw-continuity` source files, every one with
+   In the specimen's snapshot, all 45 artefacts are `demo-product` source files, every one with
    zero observations, and no artefact exists at the claim's own coordinates
-   (`cotw-bdd@a3f19853:features/canon_query_api.feature`). The lookup is exact, so it correctly finds
+   (`demo-product-tests@a3f19853:features/canon_query_api.feature`). The lookup is exact, so it correctly finds
    nothing — but the levels collector recorded no per-file observations at all, so every v2 case page
    will render the same "no observations at these coordinates" line. **Ruling: honest limitation of
    this ticket, not a gap in what the page claims.** The page asserts only what the store holds and
@@ -112,14 +112,14 @@ absent field renders as a stated absence, never a blank and never an exception, 
 **How we know it works.** 111 tests pass from a stripped environment (`env -u PYTHONPATH …
 PYTHONNOUSERSITE=1 .venv/Scripts/python.exe -m pytest -q`). I also started the server on
 127.0.0.1:8793 against the real store and read the rendered HTML: the specimen v2 case
-(`case-cotw-levels-20261121T215534-01`), the review case `-02`, an 18-claim v1 duplication case and a
+(`case-demo-product-levels-20261121T215534-01`), the review case `-02`, an 18-claim v1 duplication case and a
 41-claim v1 levels case all render their sections; the permalink's commit in the href equals the
 claim row's `assertion_commit`; the store holds no artefact at the specimen's coordinates, matching
 the honest empty-evidence sentence.
 
 **What it does not solve.** The collectors still record (near-)zero observations, so the evidence
 section is currently proven by tests rather than fed by runs; nothing on the page verifies the
-linked commit actually contains the quoted line; the reqoverflow v1 claims render honest "not
+linked commit actually contains the quoted line; the demo-service v1 claims render honest "not
 recorded" sentences but remain essentially undecidable — that needs a provenance backfill, not a
 page change.
 

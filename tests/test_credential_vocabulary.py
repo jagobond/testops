@@ -238,7 +238,7 @@ def test_a_settings_field_named_as_a_key_holds_a_slot_not_a_secret():
 def test_the_honest_key_settings_still_hold_their_values():
     """The value rule must not swallow the settings this product really has (T63's boundary)."""
     for settings in ({"sort_keys": "True"}, {"sorting_keys": "asc"}, {"primary_key": "id"},
-                     {"board_keys": "COTW"}, {"jira_key": "TOPS"}, {"key_metrics": "latency"}):
+                     {"board_keys": "DEMO"}, {"jira_key": "TOPS"}, {"key_metrics": "latency"}):
         assert services.validate_settings(settings) == settings
         for value in settings.values():
             assert services._looks_like_secret(value) is None, f"{value!r} was refused"

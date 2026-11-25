@@ -11,8 +11,8 @@ depends_on: TESTOPS-37
 
 ## Why (Product Owner, 22 Nov)
 
-> "The two CotW repos, the CotW Jira board, and the ADO pipelines for the two repos should all be grouped into the
-> CotW Project. When I eventually clone the TestOps repo at work, I need to be able to set up other projects that
+> "The two Demo Product repos, the Demo Product Jira board, and the ADO pipelines for the two repos should all be grouped into the
+> Demo Product Project. When I eventually clone the TestOps repo at work, I need to be able to set up other projects that
 > will be groupings of other repos, Jira boards and pipelines… a configuration page allows a user to set up
 > 'projects', and then to add services to that project."
 
@@ -22,7 +22,7 @@ Read `docs/ADR-1-projects-and-services.md` first; it is the decision this ticket
 
 | id | criterion |
 |----|-----------|
-| AC1 | The store represents a project (slug, name) and its services (type, role, settings) in their own tables, with the existing `project` column on runs and cases holding the slug. A migration brings `cotw` and `reqoverflow` across with their current resources registered as services. |
+| AC1 | The store represents a project (slug, name) and its services (type, role, settings) in their own tables, with the existing `project` column on runs and cases holding the slug. A migration brings `demo-product` and `demo-service` across with their current resources registered as services. |
 | AC2 | **Every existing case page renders byte-identically after the migration.** A test renders a sample of pages before and after and compares. |
 | AC3 | A configuration page lists projects and their services and can add, edit and remove a service without a code change and without restarting the server. Adding a whole project is the same operation. |
 | AC4 | Each service records its own last-consulted state and reason, and the page's "what could not be checked" section names the service and the reason (not connected / policy / absent). A project with no Jira board says so per service. |
