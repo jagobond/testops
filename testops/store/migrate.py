@@ -165,12 +165,13 @@ def prepare(conn: sqlite3.Connection, schema_text: str) -> int:
 
 
 def _seed_projects(conn: sqlite3.Connection) -> None:
-    """Carry the projects this build knew as Python literals into the store, once.
+    """Carry any legacy projects into a pre-TESTOPS-38 store, once.
 
-    TESTOPS-38 AC1. The migration reads :data:`testops.config.LEGACY_PROJECTS`, which existed only
-    so that a store written before the model could be brought forward without a second source of
-    truth; it is not consulted at run time. A store that already holds a project is not touched:
-    a second team's rows are their configuration, and a migration may not overwrite configuration.
+    TESTOPS-104. This build ships with no projects, so :data:`testops.config.LEGACY_PROJECTS` is
+    empty and this upgrade is a legitimate no-op on an old store: the loop below runs and inserts
+    nothing. A project is added through ``/config``, as rows. A store that already holds a project
+    is not touched either: a second team's rows are their configuration, and a migration may not
+    overwrite configuration.
     """
     already = conn.execute("SELECT COUNT(*) FROM project").fetchone()[0]
     if already:

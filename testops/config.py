@@ -175,41 +175,12 @@ class Project:
 
 
 
-# The seed for the one forward migration that carried this build's projects out of Python and into
-# the store. It is data a migration reads once (``store/migrate.py``), not configuration a running
-# build resolves: after the migration, adding or changing a project is a row, never an edit here.
-LEGACY_PROJECTS: dict[str, Project] = {
-    "demo-product": Project(
-        key="demo-product",
-        product=Repo("example-org", "demo-product"),
-        test=Repo("example-org", "demo-product-tests"),
-        jira_key="DEMO",
-        ado_org="ExampleAndCo",
-        ado_project="demo-product",
-        ado_pipeline_ids=(2, 4),
-    ),
-    "testops": Project(
-        key="testops",
-        product=Repo("example-org", "testops"),
-        test=Repo("example-org", "testops"),
-        jira_key="TOPS",
-    ),
-    # External positive control: the answer is known to be "nine WebUI scenarios duplicate lower layers".
-    "demo-service": Project(
-        key="demo-service",
-        product=Repo("reqnroll", "demo-service"),
-        test=Repo("reqnroll", "demo-service"),
-        jira_key="",
-    ),
-    # TESTOPS-39 second specimen: a different ecosystem and separate repositories. JavaScript
-    # Cypress + Cucumber tests against a Java multi-service product, both public.
-    "demo-booking": Project(
-        key="demo-booking",
-        product=Repo("example-org", "demo-booking-platform"),
-        test=Repo("m-pujic-levi9-com", "cypress-cucumber-e2e-tests"),
-        jira_key="",
-    ),
-}
+# TESTOPS-104: this build ships with no projects. A project is added through ``/config``, which
+# writes rows to the store's ``project`` and ``service`` tables; there is no in-code list to edit.
+# The mapping below stays (deliberately empty) because ``store/migrate.py`` reads it when it carries
+# a pre-TESTOPS-38 store forward: with nothing here, that upgrade is a legitimate no-op and creates
+# no projects, leaving any project rows the store already holds exactly as they are.
+LEGACY_PROJECTS: dict[str, Project] = {}
 
 
 def project(name: str, conn=None) -> Project:

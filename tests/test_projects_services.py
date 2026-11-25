@@ -17,10 +17,11 @@ from pathlib import Path
 
 import pytest
 
+import v1_store
 from testops import cli, config, pipeline, services, sources
 from testops.collectors import github
 from testops.config import Repo
-from testops.store import db
+from testops.store import db, migrate
 from testops.web import app
 
 FIXTURES = Path(__file__).parent / "fixtures" / "projects_services"
@@ -84,17 +85,66 @@ def _fake_collect(files=None):
     return lambda repo, token, role="": collected
 
 
+def _add_service(conn, slug: str, kind: str, role: str, name: str, settings: dict) -> None:
+    services.add_service(conn, slug, kind, role, name, settings)
+
+
+def _add_legacy_projects(conn) -> None:
+    """Configure the four projects the pre-ticket store carried, through the store's own API.
+
+    TESTOPS-104. The build ships with no projects, so nothing is inherited after the migration.
+    A test that needs one adds it the way ``/config`` does - a project row, then its service rows -
+    with the coordinates the old seed used, so a page captured before the change still matches.
+    """
+    services.add_project(conn, "demo-product", "demo-product")
+    _add_service(conn, "demo-product", "git_repo", "product", "example-org/demo-product (product)",
+                 {"repo": "example-org/demo-product"})
+    _add_service(conn, "demo-product", "git_repo", "test",
+                 "example-org/demo-product-tests (test)", {"repo": "example-org/demo-product-tests"})
+    _add_service(conn, "demo-product", "jira_board", "", "Jira board DEMO", {"board": "DEMO"})
+    for pipeline_id in (2, 4):
+        _add_service(conn, "demo-product", "ado_pipeline", "",
+                     f"demo-product pipeline #{pipeline_id}",
+                     {"org": "ExampleAndCo", "project": "demo-product", "pipeline_id": pipeline_id})
+
+    services.add_project(conn, "testops", "testops")
+    _add_service(conn, "testops", "git_repo", "product", "example-org/testops (product)",
+                 {"repo": "example-org/testops"})
+    _add_service(conn, "testops", "git_repo", "test", "example-org/testops (test)",
+                 {"repo": "example-org/testops"})
+    _add_service(conn, "testops", "jira_board", "", "Jira board TOPS", {"board": "TOPS"})
+
+    services.add_project(conn, "demo-service", "demo-service")
+    for role in ("product", "test"):
+        _add_service(conn, "demo-service", "git_repo", role, f"reqnroll/demo-service ({role})",
+                     {"repo": "reqnroll/demo-service"})
+
+    services.add_project(conn, "demo-booking", "demo-booking")
+    _add_service(conn, "demo-booking", "git_repo", "product",
+                 "example-org/demo-booking-platform (product)",
+                 {"repo": "example-org/demo-booking-platform"})
+    _add_service(conn, "demo-booking", "git_repo", "test",
+                 "m-pujic-levi9-com/cypress-cucumber-e2e-tests (test)",
+                 {"repo": "m-pujic-levi9-com/cypress-cucumber-e2e-tests"})
+
+
 # --------------------------------------------------------------------------- AC1 / AC2
 
-def test_the_migration_brings_the_projects_across_with_their_services(tmp_path):
+def test_the_migration_seeds_no_projects_and_services_are_added_through_the_store(tmp_path):
     store = _migrated_store(tmp_path)
     conn = db.connect(store)
     try:
+        # TESTOPS-104: the seed is empty, so the upgrade writes no project and no service row.
+        assert services.list_projects(conn) == []
+        assert conn.execute("SELECT COUNT(*) FROM service").fetchone()[0] == 0
+        # Existing rows keep their project column and it holds the slug - nothing rewritten.
+        assert conn.execute("SELECT DISTINCT project FROM case_ ORDER BY project").fetchall()
+
+        # The projects a reader wants are configuration: add them through the same API /config uses.
+        _add_legacy_projects(conn)
         projects = {row["slug"]: row for row in services.list_projects(conn)}
         demo_product = services.list_services(conn, "demo-product")
         req = services.list_services(conn, "demo-service")
-        # Existing rows keep their project column and it holds the slug - nothing rewritten.
-        assert conn.execute("SELECT DISTINCT project FROM case_ ORDER BY project").fetchall()
     finally:
         conn.close()
 
@@ -110,6 +160,26 @@ def test_the_migration_brings_the_projects_across_with_their_services(tmp_path):
     assert not [s for s in req if s.type in ("jira_board", "ado_pipeline")]
 
 
+def test_a_pre_testsops_38_store_migrates_with_an_empty_seed_and_creates_no_projects(tmp_path):
+    """AC1/AC2: the no-op is a real run of the migration, not a branch that is skipped."""
+    path = tmp_path / "v1.db"
+    v1_store.build(path)
+
+    conn = db.connect(path)
+    try:
+        counts = {table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                  for table in ("project", "service")}
+        version = conn.execute(
+            "SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()[0]
+        # The store is at the current version and its own rows are still there: it migrated.
+        assert int(version) == migrate.CURRENT_VERSION
+        assert conn.execute("SELECT COUNT(*) FROM case_").fetchone()[0] == 1
+    finally:
+        conn.close()
+
+    assert counts == {"project": 0, "service": 0}
+
+
 def test_every_case_page_and_the_indexes_are_byte_identical_after_the_migration(tmp_path,
                                                                                monkeypatch):
     store = _migrated_store(tmp_path)
@@ -120,6 +190,9 @@ def test_every_case_page_and_the_indexes_are_byte_identical_after_the_migration(
     monkeypatch.setattr(app, "age", lambda iso: "a fixed time ago")
     conn = db.connect(store)
     try:
+        # TESTOPS-104: the pages were captured with the four projects configured. Recreate them
+        # through the store's own API; the migration no longer seeds them.
+        _add_legacy_projects(conn)
         assert app.index(conn) == (FIXTURES / "index.html").read_bytes()
         assert app.runs_index(conn) == (FIXTURES / "runs.html").read_bytes()
         for case_id in manifest["cases"]:
@@ -146,6 +219,11 @@ def test_the_migration_does_not_seed_over_a_store_that_already_has_projects(tmp_
 def test_the_cli_resolves_a_project_from_the_store_and_refuses_an_unknown_slug_by_name(
         tmp_path, monkeypatch, capsys):
     path = _migrated_store(tmp_path)
+    conn = db.connect(path)
+    try:
+        _add_legacy_projects(conn)          # /config's path: the project is a row, not a seed
+    finally:
+        conn.close()
     monkeypatch.setattr(cli.db, "connect", _connect_factory(path))
     assert cli.main(["runs", "--project", "demo-product"]) == 0
 
